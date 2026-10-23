@@ -32,6 +32,7 @@ packages:
   Export: { path: Packages/Export }
   DesignSystem: { path: Packages/DesignSystem }
   Perf: { path: Packages/Perf }
+  Fixtures: { path: Packages/Fixtures }
 
 targets:
   Notespace:
@@ -104,6 +105,12 @@ targets:
     sources: [Tests/PerfTests]
     dependencies:
       - target: Notespace
+      # Builds fixture libraries in the runner; never linked into the app (§12).
+      - package: Fixtures
+        product: FixtureGen
+      - package: Library
+      - package: Document
+      - package: InkModel
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.abhey.notespace.perftests

@@ -1,11 +1,15 @@
 import Foundation
+import Library
 import Tools
 
-/// DEBUG launch arguments for screenshots and UI tests. Release builds always get the defaults.
+/// DEBUG launch arguments for screenshots and UI tests. Release builds always get the defaults, except
+/// `-libraryRoot`, which simulator Release builds also honor (perf tests run Release).
 ///
 /// - `-sampleLibrary YES`: in-memory mock notebooks (`SampleLibrary`) instead of the on-disk library.
 /// - `-emptyLibrary YES`: in-memory library with no notebooks.
 /// - `-resetLibrary YES`: erase the on-disk library (index, packages, trash) before launch.
+/// - `-libraryRoot <path>`: use the library under path (`Documents/Notebooks`, `Application Support/Library`)
+///   instead of the container's. Perf tests point it at fixture libraries the test runner builds (#15).
 /// - `-seedNotebooks <n>`: if the on-disk library is empty, fill it with n mock-shaped notebooks.
 /// - `-openNotebook <title>`: start in the editor for that notebook (`first` = most recent).
 /// - `-focusMode YES`: with `-openNotebook`, start with the chrome collapsed.
@@ -36,6 +40,11 @@ enum LaunchOptions {
             }
             if flag("resetLibrary") {
                 StoreLibrary.erase()
+            }
+        #endif
+        #if DEBUG || targetEnvironment(simulator)
+            if let root = UserDefaults.standard.string(forKey: "libraryRoot") {
+                return StoreLibrary(locations: LibraryLocations(root: URL(filePath: root, directoryHint: .isDirectory)))
             }
         #endif
         return StoreLibrary()

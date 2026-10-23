@@ -1,0 +1,56 @@
+{
+  "devices": {
+    "iPad-Pro-13-inch-M5-12GB": {
+      "recorded": "2026-10-23",
+      "runtime": "iOS-27.0",
+      "tests": {
+        "LaunchPerfTests/testColdLaunch()": {
+          "com.apple.dt.XCTMetric_ApplicationLaunch-ApplicationFirstFramePresentationResponsive.duration": {
+            "median": 3.52355,
+            "name": "Duration (ApplicationFirstFramePresentationResponsive)",
+            "polarity": "prefers smaller",
+            "unit": "s"
+          }
+        },
+        "LaunchPerfTests/testLaunchToLibraryFirstFrame()": {
+          "com.apple.dt.XCTMetric_OSSignpost-launch.firstFrame.duration": {
+            "median": 2.08734,
+            "name": "Duration (launch.firstFrame)",
+            "polarity": "prefers smaller",
+            "unit": "s"
+          }
+        },
+        "LaunchPerfTests/testLibraryMemory()": {
+          "com.apple.dt.XCTMetric_Memory-com.abhey.notespace.physical": {
+            "median": 52529.6,
+            "name": "Memory Physical (notespace)",
+            "polarity": "prefers smaller",
+            "unit": "kB"
+          },
+          "com.apple.dt.XCTMetric_Memory-com.abhey.notespace.physical_absolute": {
+            "median": 52529.6,
+            "name": "Absolute Memory Physical (notespace)",
+            "polarity": "prefers smaller",
+            "unit": "kB"
+          },
+          "com.apple.dt.XCTMetric_Memory-com.abhey.notespace.physical_peak": {
+            "median": 52562.4,
+            "name": "Memory Peak Physical (notespace)",
+            "polarity": "prefers smaller",
+            "unit": "kB"
+          }
+        },
+        "LaunchPerfTests/testOpenNotebook()": {
+          "com.apple.dt.XCTMetric_OSSignpost-notebook.open.duration": {
+            "median": 0.0182131,
+            "name": "Duration (notebook.open)",
+            "polarity": "prefers smaller",
+            "unit": "s"
+          }
+        }
+      }
+    }
+  },
+  "overrides": {},
+  "tolerance": 0.1
+}

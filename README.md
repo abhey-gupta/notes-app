@@ -23,12 +23,35 @@ make open           # gen + open in Xcode
 make build          # build app for the iPad simulator
 make test           # app UI tests + every package's tests on the simulator
 make test-packages  # headless packages via `swift test` (no simulator)
-make perf           # launch perf tests (Release)
+make perf           # perf tests (Release), no gate
+make perf-gate      # perf tests vs Tests/PerfTests/baselines.json, fails on > 10 % regression
+make perf-baseline  # rewrite this simulator model's baselines
 make fixtures       # Fixtures/{1,10,100,300}-pages.nb, deterministic (notespace-fixtures --help)
 make lint / format
 ```
 
-CI: GitHub Actions on a self-hosted runner on the dev Mac (`runs-on: [self-hosted, macOS, xcode27]`), service in `~/actions-runner/notespace` (`./svc.sh status/start/stop`). Jobs: lint, packages, ios. Label a PR `run-perf` for launch perf.
+CI: GitHub Actions on a self-hosted runner on the dev Mac (`runs-on: [self-hosted, macOS, xcode27]`), service in `~/actions-runner/notespace` (`./svc.sh status/start/stop`). Jobs: lint, packages, ios. Perf gate runs nightly and on PRs labeled `run-perf`; it comments the summary on the PR.
+
+## Perf gate
+
+`NotespacePerfTests` (Release): cold launch, `launch.firstFrame` with 200 notebooks, `notebook.open` on the
+100-page fixture, memory with 1 000 notebooks. The test runner builds the fixture libraries with `FixtureGen`
+(cached per simulator) and points the app at them with `-libraryRoot` (DEBUG and simulator builds only).
+`scripts/perf-gate.sh` takes the median of `PERF_ITERATIONS` (5) runs after a warm-up, compares with the
+baseline for the simulator model, and re-runs regressed tests once (`PERF_RETRIES`), keeping the better
+median, before failing. Tolerance: `tolerance` (0.10) in `baselines.json`, per metric in `overrides`
+(`{"<metric id>": {"tolerance": 0.15, "slack": 0.002}}`, slack in the metric's unit). Summary:
+`build/perf/summary.md`.
+
+Simulator numbers are relative only, and the shared Mac is noisy. Refresh baselines on a quiet machine
+(no agents, CI runner stopped: `~/actions-runner/notespace/svc.sh stop`, other simulators shut down):
+
+```
+make perf-baseline SIM="iPad Pro 13 (M5)" PERF_ITERATIONS=10
+make perf-gate SIM="iPad Pro 13 (M5)"   # should pass; commit Tests/PerfTests/baselines.json
+```
+
+Refresh after intended perf changes, or when the Xcode/simulator runtime changes.
 
 ## Layout
 
