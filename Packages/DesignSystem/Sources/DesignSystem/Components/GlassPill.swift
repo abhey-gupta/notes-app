@@ -1,0 +1,91 @@
+import SwiftUI
+
+/// Small glass label, e.g. the "3 of 11" page indicator (mock §02).
+public struct GlassPill: View {
+    private let text: String
+
+    public init(_ text: String) {
+        self.text = text
+    }
+
+    /// "3 of 11".
+    public static func pageIndicator(current: Int, total: Int) -> GlassPill {
+        GlassPill("\(current) of \(total)")
+    }
+
+    public var body: some View {
+        Text(text)
+            .font(.pill)
+            .tracking(0.12)
+            .foregroundStyle(Tokens.Colors.pillText)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .glassEffect(.regular, in: .capsule)
+            .contentTransition(.numericText())
+    }
+}
+
+/// Compact chrome while writing (mock §05): current tool, current color, expand.
+/// Chain `.glassEffectID(_:in:)` with the tools capsule's ID so collapsing is a morph, not a fade.
+public struct FocusPill: View {
+    private let tool: Symbol
+    private let ink: Color
+    private let onTool: () -> Void
+    private let onExpand: () -> Void
+
+    public init(tool: Symbol, ink: Color, onTool: @escaping () -> Void = {}, onExpand: @escaping () -> Void) {
+        self.tool = tool
+        self.ink = ink
+        self.onTool = onTool
+        self.onExpand = onExpand
+    }
+
+    public var body: some View {
+        GlassCapsule(height: Tokens.Size.focusPillHeight, leading: 5, trailing: 5, spacing: 0) {
+            ToolButton(
+                tool,
+                "Current tool",
+                isActive: true,
+                ink: ink,
+                size: Tokens.Size.focusToolButton,
+                iconSize: 17,
+                showsDot: false,
+                action: onTool
+            )
+            ColorSwatch(ink, label: "Current color", isSelected: true, diameter: Tokens.Size.focusSwatch)
+                .allowsHitTesting(false)
+                .padding(.horizontal, Tokens.Spacing.xs)
+            ChromeSeparator(height: 18)
+                .padding(.horizontal, -Tokens.Spacing.xs)
+            Button(action: onExpand) {
+                Image(systemName: Symbol.disclosure.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Tokens.Colors.textSecondary)
+                    .frame(width: 34, height: 34)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show toolbar")
+        }
+    }
+}
+
+#Preview("Pills · light") {
+    PillsPreview()
+}
+
+#Preview("Pills · dark") {
+    PillsPreview()
+        .preferredColorScheme(.dark)
+}
+
+private struct PillsPreview: View {
+    var body: some View {
+        PreviewDesk {
+            VStack(spacing: 28) {
+                GlassPill.pageIndicator(current: 3, total: 11)
+                FocusPill(tool: .pen, ink: PaperTheme.night.ink(.blue).color) {}
+            }
+        }
+    }
+}
