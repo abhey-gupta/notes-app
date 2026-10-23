@@ -1,12 +1,13 @@
 .DS_Store
+# Xcode project is generated from project.yml
+*.xcodeproj/
+*.xcworkspace/
 xcuserdata/
 *.xcuserstate
 DerivedData/
 build/
 .build/
+.swiftpm/
 *.ipa
 *.dSYM.zip
 *.dSYM
-.swiftpm/
-Packages/
-*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/

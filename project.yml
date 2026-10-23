@@ -1,0 +1,145 @@
+name: Notespace
+options:
+  bundleIdPrefix: com.abhey
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_APPROACHABLE_CONCURRENCY: NO
+    TARGETED_DEVICE_FAMILY: "2"
+    SUPPORTS_MACCATALYST: NO
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    DEVELOPMENT_TEAM: 7SBKK4A99S
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+
+packages:
+  InkModel: { path: Packages/InkModel }
+  InkGeometry: { path: Packages/InkGeometry }
+  InkEngine: { path: Packages/InkEngine }
+  InkEngineMetal: { path: Packages/InkEngineMetal }
+  InkEnginePencilKit: { path: Packages/InkEnginePencilKit }
+  Tools: { path: Packages/Tools }
+  Canvas: { path: Packages/Canvas }
+  Document: { path: Packages/Document }
+  Library: { path: Packages/Library }
+  Export: { path: Packages/Export }
+  DesignSystem: { path: Packages/DesignSystem }
+  Perf: { path: Packages/Perf }
+
+targets:
+  Notespace:
+    type: application
+    platform: iOS
+    sources:
+      - App/Sources
+      - App/Resources
+    dependencies:
+      - package: InkModel
+      - package: InkGeometry
+      - package: InkEngine
+      - package: InkEngineMetal
+      - package: InkEnginePencilKit
+      - package: Tools
+      - package: Canvas
+      - package: Document
+      - package: Library
+      - package: Export
+      - package: DesignSystem
+      - package: Perf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.abhey.notespace
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Notespace
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIFileSharingEnabled: false
+        LSSupportsOpeningDocumentsInPlace: false
+        ITSAppUsesNonExemptEncryption: false
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.abhey.notespace.notebook
+            UTTypeDescription: Notespace Notebook
+            UTTypeConformsTo: [com.apple.package, public.composite-content]
+            UTTypeTagSpecification:
+              public.filename-extension: [nb]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Notespace Notebook
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSTypeIsPackage: true
+            LSItemContentTypes: [com.abhey.notespace.notebook]
+
+  NotespaceUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests/UITests]
+    dependencies:
+      - target: Notespace
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.abhey.notespace.uitests
+        GENERATE_INFOPLIST_FILE: YES
+
+  NotespacePerfTests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests/PerfTests]
+    dependencies:
+      - target: Notespace
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.abhey.notespace.perftests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Notespace:
+    build:
+      targets:
+        Notespace: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - NotespaceUITests
+        - package: InkModel/InkModelTests
+        - package: InkGeometry/InkGeometryTests
+        - package: InkEngine/InkEngineTests
+        - package: InkEngineMetal/InkEngineMetalTests
+        - package: InkEnginePencilKit/InkEnginePencilKitTests
+        - package: Tools/ToolsTests
+        - package: Canvas/CanvasTests
+        - package: Document/DocumentTests
+        - package: Library/LibraryTests
+        - package: Export/ExportTests
+        - package: DesignSystem/DesignSystemTests
+        - package: Perf/PerfTests
+    profile:
+      config: Release
+  NotespacePerf:
+    build:
+      targets:
+        Notespace: all
+    test:
+      config: Release
+      targets:
+        - NotespacePerfTests

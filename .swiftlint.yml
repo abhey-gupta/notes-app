@@ -1,0 +1,36 @@
+included:
+  - App
+  - Packages
+  - Tests
+excluded:
+  - "**/.build"
+  - DerivedData
+opt_in_rules:
+  - force_unwrapping
+  - empty_count
+  - first_where
+  - contains_over_first_not_nil
+  - sorted_first_last
+  - discouraged_optional_boolean
+  - fatal_error_message
+  - unowned_variable_capture
+  - private_swiftui_state
+disabled_rules:
+  - trailing_comma        # swiftformat owns commas
+  - opening_brace         # swiftformat owns wrapping
+  - todo
+identifier_name:
+  min_length: 1
+  excluded: [x, y, t, id, i, j, dx, dy]
+type_name:
+  min_length: 2
+line_length:
+  warning: 140
+  error: 160
+  ignores_comments: true
+custom_rules:
+  no_print:
+    name: "No print"
+    regex: "\\bprint\\("
+    message: "Use os.Logger, not print"
+    severity: error
