@@ -1,23 +1,30 @@
 import SwiftUI
 
-/// Floating Liquid Glass capsule for editor chrome (mock §02): 52 pt tall, r26, tight horizontal rhythm.
+/// Floating Liquid Glass capsule for editor chrome (mock §02): 52 pt thick, r26, tight rhythm along `axis`.
 ///
 /// Put neighbouring capsules in one `GlassChrome` so they blend and morph together.
-/// Chain `.glassEffectID(_:in:)` on the capsule to take part in morph transitions.
+/// Chain `.glassEffectID(_:in:)` on the capsule to take part in morph transitions. Changing `axis` re-flows
+/// the same children through one `AnyLayout`, so a dock change animates instead of swapping views.
 public struct GlassCapsule<Content: View>: View {
+    private let axis: Axis
     private let height: CGFloat
     private let leading: CGFloat
     private let trailing: CGFloat
     private let spacing: CGFloat
     private let content: Content
 
+    /// - Parameters:
+    ///   - height: thickness across `axis` (the width of a vertical capsule).
+    ///   - leading, trailing: end padding along `axis` (top and bottom when vertical).
     public init(
+        axis: Axis = .horizontal,
         height: CGFloat = Tokens.Size.capsuleHeight,
         leading: CGFloat = Tokens.Spacing.s,
         trailing: CGFloat = Tokens.Spacing.s,
         spacing: CGFloat = Tokens.Spacing.hairline,
         @ViewBuilder content: () -> Content
     ) {
+        self.axis = axis
         self.height = height
         self.leading = leading
         self.trailing = trailing
@@ -26,12 +33,19 @@ public struct GlassCapsule<Content: View>: View {
     }
 
     public var body: some View {
-        HStack(spacing: spacing) {
+        let horizontal = axis == .horizontal
+        let layout = horizontal ? AnyLayout(HStackLayout(spacing: spacing)) : AnyLayout(VStackLayout(spacing: spacing))
+        layout {
             content
         }
-        .padding(.leading, leading)
-        .padding(.trailing, trailing)
-        .frame(height: height)
+        .padding(
+            horizontal
+                ? EdgeInsets(top: 0, leading: leading, bottom: 0, trailing: trailing)
+                : EdgeInsets(top: leading, leading: 0, bottom: trailing, trailing: 0)
+        )
+        .frame(width: horizontal ? nil : height, height: horizontal ? height : nil)
+        // Keeps content inside the glass while the capsule resizes (expanded ⇄ compact, axis re-flow).
+        .clipShape(.capsule)
         .glassEffect(.regular, in: .capsule)
     }
 }
@@ -53,19 +67,29 @@ public struct GlassChrome<Content: View>: View {
     }
 }
 
-/// 1×22 hairline between tool groups.
+/// 1×22 hairline between tool groups, drawn across `axis` (a horizontal rule in a vertical capsule).
 public struct ChromeSeparator: View {
+    private let axis: Axis
     private let height: CGFloat
 
-    public init(height: CGFloat = Tokens.Size.separator.height) {
+    /// - Parameter height: length across the capsule.
+    public init(axis: Axis = .horizontal, height: CGFloat = Tokens.Size.separator.height) {
+        self.axis = axis
         self.height = height
     }
 
     public var body: some View {
+        let horizontal = axis == .horizontal
+        let thin = Tokens.Size.separator.width
+        let gap = Tokens.Spacing.s
         Capsule()
             .fill(Tokens.Colors.separator)
-            .frame(width: Tokens.Size.separator.width, height: height)
-            .padding(.horizontal, Tokens.Spacing.s)
+            .frame(width: horizontal ? thin : height, height: horizontal ? height : thin)
+            .padding(
+                horizontal
+                    ? EdgeInsets(top: 0, leading: gap, bottom: 0, trailing: gap)
+                    : EdgeInsets(top: gap, leading: 0, bottom: gap, trailing: 0)
+            )
             .accessibilityHidden(true)
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Tools
 
 /// DEBUG launch arguments for screenshots and UI tests. Release builds always get the defaults.
 ///
@@ -9,7 +10,9 @@ import Foundation
 /// - `-openNotebook <title>`: start in the editor for that notebook (`first` = most recent).
 /// - `-focusMode YES`: with `-openNotebook`, start with the chrome collapsed.
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
-/// - `-toolbarDock top|bottom|left|right`: editor toolbar dock, rendered statically (#26 adds drag/snap).
+/// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
+/// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
+/// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests).
 /// - `-DesignSystemGallery YES`: DesignSystem gallery (#12).
 @MainActor
 enum LaunchOptions {
@@ -48,6 +51,27 @@ enum LaunchOptions {
             return [EditorRoute(id: notebook.id, startsFocused: flag("focusMode"))]
         #else
             return []
+        #endif
+    }
+
+    /// Persisted `ToolState` with app defaults; DEBUG launch arguments override dock and compact.
+    static func makeToolState() -> ToolState {
+        #if DEBUG
+            let defaults = UserDefaults.standard
+            if flag("resetToolState") {
+                defaults.removeObject(forKey: ToolState.defaultsKey)
+            }
+            let tools = ToolState(initial: .notespace)
+            let arguments = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+            if let raw = arguments["toolbarDock"] as? String, let dock = ToolbarDock(rawValue: raw) {
+                tools.dock = dock
+            }
+            if arguments["toolbarCompact"] != nil {
+                tools.isCompact = flag("toolbarCompact")
+            }
+            return tools
+        #else
+            return ToolState(initial: .notespace)
         #endif
     }
 

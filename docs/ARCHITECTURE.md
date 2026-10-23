@@ -249,6 +249,7 @@ enum ToolbarDock: String, Codable { case top, bottom, left, right }   // left/ri
 - Drag the toolbar → it tracks the finger, then springs to the nearest dock on release; dock persists.
 - Pinch-in on the expanded toolbar → compact pill (current tool + color) at the same dock; tap the pill → expand. Focus mode reuses the compact pill.
 - All transitions are `glassEffectID` morphs inside one `GlassEffectContainer` with interactive springs; Reduce Motion → crossfade. Toolbar gestures are finger-only and never reach the canvas; Pencil input is unaffected. Tracked in #26.
+- As built (#26): drag and pinch are UIKit recognizers (`UIGestureRecognizerRepresentable`, `allowedTouchTypes = [.direct]`); SwiftUI's `MagnifyGesture` never fires over the tool buttons. The toolbar is one `GlassCapsule` whose axis (`AnyLayout`), thickness and content change, so dock changes and expanded ⇄ compact animate the glass itself instead of swapping views. Nearest dock = nearest edge with distances normalized by screen size, plus a short flick projection. `ToolState` persists dock + compact.
 
 Chrome pieces (mock §02): left capsule (back, title, menu), center capsule (tools), right capsule (pages grid, share, more), bottom-right "3 of 11" pill. **Focus mode**: on `engineDidBeginStroke` the capsules fade to a single compact pill (mock §05) after 1.5 s of continuous inking; any tap on chrome or a scroll gesture restores. Dark mode follows system appearance; the paper theme (Night) is per-notebook and independent of system dark mode.
 

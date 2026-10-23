@@ -1,58 +1,29 @@
 import CoreGraphics
 import DesignSystem
+import InkModel
 import Observation
+import Tools
 
-/// Minimal editor state so the chrome is interactive. Stand-in for `Tools.ToolState` (§6); keep it
-/// App-local and swap it out when the Tools work lands.
+/// Placeholder ink + focus mode so the chrome is interactive until the canvas lands (#21). Tool choice and
+/// settings live in `Tools.ToolState`.
 @MainActor
 @Observable
 final class EditorState {
-    enum Tool: String, CaseIterable, Identifiable {
-        case pen, highlighter, eraser, lasso
-
-        var id: Self {
-            self
-        }
-
-        var symbol: Symbol {
-            switch self {
-            case .pen: .pen
-            case .highlighter: .highlighter
-            case .eraser: .eraser
-            case .lasso: .lasso
-            }
-        }
-
-        var label: String {
-            rawValue.capitalized
-        }
-
-        /// Tools that put ink down (and so count toward focus mode).
-        var inks: Bool {
-            self == .pen || self == .highlighter
-        }
-    }
-
     /// Placeholder stroke in page-normalized coordinates (0…1 of page width), so it survives rotation.
     struct Stroke: Identifiable {
         let id: Int
         let page: Int
         let tool: Tool
-        let role: InkRole
+        let color: InkColor
+        /// Width in page points.
+        let width: Float
         var points: [CGPoint]
     }
 
-    var tool: Tool = .pen
-    /// Index into `Tokens.quickColors`.
-    var quickColor = 0
     private(set) var isFocused = false
     private(set) var strokes: [Stroke] = []
     private var redoStack: [Stroke] = []
     private var nextID = 0
-
-    var inkRole: InkRole {
-        Tokens.quickColors[quickColor]
-    }
 
     var canUndo: Bool {
         !strokes.isEmpty
@@ -68,9 +39,12 @@ final class EditorState {
 
     // MARK: Strokes
 
-    func commit(page: Int, points: [CGPoint], tool: Tool) {
-        guard points.count > 1 || tool.inks else { return }
-        strokes.append(Stroke(id: nextID, page: page, tool: tool, role: inkRole, points: points))
+    /// Commits a pen or highlighter stroke with the tool's current color and width.
+    func commit(page: Int, points: [CGPoint], tools: ToolState) {
+        let tool = tools.tool
+        guard tool.inks, !points.isEmpty else { return }
+        let width = tool == .highlighter ? tools.highlighter.width : tools.pen.width
+        strokes.append(Stroke(id: nextID, page: page, tool: tool, color: tools.currentColor, width: width, points: points))
         nextID += 1
         redoStack.removeAll()
     }

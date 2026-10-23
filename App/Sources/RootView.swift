@@ -1,12 +1,16 @@
 import InkModel
 import Perf
 import SwiftUI
+import Tools
 
 /// Library → editor navigation (§8). The editor zooms out of the tapped cover or recent card.
 struct RootView: View {
     @State private var library: any LibraryModel
     @State private var path: [EditorRoute]
     @State private var showsNewNotebook: Bool
+    /// App-wide tool choice and toolbar placement (§6); persisted, flushed when the scene backgrounds.
+    @State private var tools = LaunchOptions.makeToolState()
+    @Environment(\.scenePhase) private var scenePhase
     @Namespace private var zoom
 
     #if DEBUG
@@ -29,17 +33,22 @@ struct RootView: View {
             }
             .navigationDestination(for: EditorRoute.self) { route in
                 if let notebook = library.notebook(id: route.id) {
-                    EditorScreen(notebook: notebook, library: library, startsFocused: route.startsFocused)
+                    EditorScreen(notebook: notebook, library: library, tools: tools, startsFocused: route.startsFocused)
                         .navigationTransition(.zoom(sourceID: route.transitionID, in: zoom))
                 }
             }
         }
         // After the first frame: finish a slow/rebuilding index load, purge old trash.
         .task { await library.start() }
-        #if DEBUG
-            .fullScreenCover(isPresented: $showsGallery) {
-                DesignSystemGallery()
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                tools.flush()
             }
+        }
+        #if DEBUG
+        .fullScreenCover(isPresented: $showsGallery) {
+            DesignSystemGallery()
+        }
         #endif
     }
 
