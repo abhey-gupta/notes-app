@@ -7,9 +7,10 @@ let package = Package(
     products: [.library(name: "Library", targets: ["Library"])],
     dependencies: [
         .package(path: "../InkModel"),
+        .package(path: "../Document"),
     ],
     targets: [
-        .target(name: "Library", dependencies: ["InkModel"]),
-        .testTarget(name: "LibraryTests", dependencies: ["Library"]),
+        .target(name: "Library", dependencies: ["InkModel", "Document"]),
+        .testTarget(name: "LibraryTests", dependencies: ["Library", "InkModel", "Document"]),
     ]
 )

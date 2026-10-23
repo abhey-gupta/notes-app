@@ -1,25 +1,43 @@
+import CoreGraphics
 import Foundation
 import InkModel
+import Library
 import Observation
 
-/// What the Library screen needs from storage. `SampleLibrary` (in-memory fixtures) backs it until
-/// `LibraryStore` (#34) lands; screens only see this protocol.
+/// What the Library screen needs from storage. `StoreLibrary` (the on-disk `LibraryStore`, #34) backs the
+/// app; `SampleLibrary` (in-memory fixtures) backs previews and `-sampleLibrary YES`. Screens only see this.
+///
+/// Mutations other than create are fire-and-forget: they apply to `notebooks` immediately and persist in
+/// the background.
 @MainActor
 protocol LibraryModel: AnyObject, Observable {
     /// All notebooks, most recently modified first.
     var notebooks: [NotebookSummary] { get }
     /// One level of folders, display order.
     var folders: [LibraryFolder] { get }
+    /// `false` only while the index is still being read or rebuilt off the main thread; the empty state
+    /// waits for it so a slow load never flashes "No notebooks yet".
+    var isLoaded: Bool { get }
 
-    /// Creates a notebook (one blank page) and returns it. The caller opens it immediately (§8).
-    @discardableResult
-    func createNotebook(_ draft: NotebookDraft) -> NotebookSummary
-    /// Persists metadata edits (title, paper theme, …).
+    /// Post-first-frame work: finish loading if the launch read couldn't, purge old trash.
+    func start() async
+    /// Creates a notebook (package + index entry, one blank page) and returns it. The caller opens it (§8).
+    func createNotebook(_ draft: NotebookDraft) async throws -> NotebookSummary
+    /// Persists metadata edits from the editor (title, cover, paper, theme).
     func update(_ notebook: NotebookSummary)
+    func rename(_ id: NotebookID, to title: String)
+    func move(_ id: NotebookID, to folder: FolderID?)
+    func duplicate(_ id: NotebookID)
+    /// Moves to the trash (purged after 30 days).
+    func delete(_ id: NotebookID)
+    func createFolder(named name: String)
+    func renameFolder(_ id: FolderID, to name: String)
+    /// Removes the folder; its notebooks stay, unfiled.
+    func deleteFolder(_ id: FolderID)
 }
 
 extension LibraryModel {
-    /// "Continue" row: last 6 by modified.
+    /// "Continue" row: last 6 by modified (`notebooks` is already in that order).
     var recents: [NotebookSummary] {
         Array(notebooks.prefix(6))
     }
@@ -28,36 +46,42 @@ extension LibraryModel {
         notebooks.first { $0.id == id }
     }
 
-    func folder(id: LibraryFolder.ID?) -> LibraryFolder? {
+    func folder(id: FolderID?) -> LibraryFolder? {
         id.flatMap { id in folders.first { $0.id == id } }
     }
 
     /// Title search: case/diacritic-insensitive, in memory (§8).
-    func notebooks(in folder: LibraryFolder.ID?, matching query: String) -> [NotebookSummary] {
-        let query = query.trimmingCharacters(in: .whitespaces)
-        return notebooks.filter { notebook in
-            (folder == nil || notebook.folderID == folder) && (query.isEmpty || notebook.title.localizedStandardContains(query))
-        }
+    func notebooks(in folder: FolderID?, matching query: String) -> [NotebookSummary] {
+        notebooks.filtered(folder: folder, matching: query)
     }
 }
 
-/// Index entry: everything the library and the editor's first frame need, nothing from the package.
-struct NotebookSummary: Identifiable, Hashable {
+/// Index entry as the screens see it: everything the library and the editor's first frame need.
+struct NotebookSummary: Identifiable, Hashable, LibraryItem {
     let id: NotebookID
     var title: String
-    var folderID: LibraryFolder.ID?
+    var folderID: FolderID?
     var cover: CoverColor
     var paper: PaperStyle
     var theme: PaperTheme
     var pageCount: Int
+    var createdAt: Date
     var modifiedAt: Date
-    /// Placeholder ink on fixture pages until real documents load (#21/#34). Nil = blank notebook.
+    var pageSize: CGSize = Notebook.a4Portrait
+    /// `thumbs/cover.heic`, when the notebook has one (§5.5). Recents show it over the paper preview.
+    var coverThumbnail: URL?
+    /// Placeholder ink on fixture pages (`SampleLibrary` only). Nil = blank notebook.
     var sampleInk: SampleInk.Kind?
 }
 
-struct LibraryFolder: Identifiable, Hashable {
-    let id: UUID
-    var name: String
+extension NotebookSummary {
+    init(_ entry: LibraryEntry, coverThumbnail: URL?) {
+        self.init(
+            id: entry.id, title: entry.title, folderID: entry.folderID, cover: entry.cover, paper: entry.paper,
+            theme: entry.theme, pageCount: entry.pageCount, createdAt: entry.createdAt, modifiedAt: entry.modifiedAt,
+            pageSize: entry.pageSize, coverThumbnail: coverThumbnail
+        )
+    }
 }
 
 /// New-notebook sheet output (§8).
@@ -66,10 +90,15 @@ struct NotebookDraft {
     var cover: CoverColor = .navy
     var paper: PaperStyle = .dotted
     var theme: PaperTheme = .cream
-    var folderID: LibraryFolder.ID?
+    var folderID: FolderID?
 
     var resolvedTitle: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Untitled" : trimmed
+    }
+
+    /// The notebook to write: A4 portrait, created now.
+    func makeNotebook(now: Date = Date()) -> Notebook {
+        Notebook(title: resolvedTitle, cover: cover, paper: paper, theme: theme, createdAt: now)
     }
 }

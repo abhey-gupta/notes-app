@@ -1,7 +1,8 @@
 import DesignSystem
 import SwiftUI
+import UIKit
 
-/// "Continue" card: live-looking page preview (placeholder ink until `cover.heic` thumbnails, §5.5) + meta.
+/// "Continue" card: `cover.heic` when the notebook has one (§5.5), else a paper preview, + meta.
 struct RecentCard: View {
     let notebook: NotebookSummary
     let zoom: Namespace.ID
@@ -11,6 +12,11 @@ struct RecentCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
                 PagePreview(notebook: notebook)
+                    .overlay {
+                        if let url = notebook.coverThumbnail {
+                            ThumbnailImage(url: url, version: notebook.modifiedAt)
+                        }
+                    }
                     .aspectRatio(Tokens.Size.recentCard.width / Tokens.Size.recentCard.height, contentMode: .fit)
                     .clipShape(.rect(cornerRadius: Tokens.Size.recentRadius))
                     .shadow(color: .black.opacity(0.06), radius: 1, y: 1)
@@ -58,6 +64,56 @@ struct PagePreview: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// A thumbnail file decoded off the main thread; transparent until ready, so the view under it is the
+/// placeholder (§1.4: no spinners).
+struct ThumbnailImage: View {
+    let url: URL
+    /// Changes when the file may have changed (e.g. the notebook's modified date).
+    let version: Date
+    @State private var image: UIImage?
+
+    var body: some View {
+        Color.clear
+            .overlay {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .transition(.opacity)
+                }
+            }
+            .clipped()
+            .task(id: ThumbnailCache.Key(url: url, version: version)) {
+                let key = ThumbnailCache.Key(url: url, version: version)
+                let loaded = await ThumbnailCache.shared.image(for: key)
+                withAnimation(.easeOut(duration: 0.12)) { image = loaded }
+            }
+    }
+}
+
+/// Decoded thumbnails, keyed by file + version. Decodes on the actor, never on main.
+actor ThumbnailCache {
+    struct Key: Hashable {
+        let url: URL
+        let version: Date
+    }
+
+    static let shared = ThumbnailCache()
+    private var images: [Key: UIImage] = [:]
+
+    func image(for key: Key) -> UIImage? {
+        if let image = images[key] {
+            return image
+        }
+        guard let image = UIImage(contentsOfFile: key.url.path(percentEncoded: false))?.preparingForDisplay() else { return nil }
+        if images.count > 64 {
+            images.removeAll()
+        }
+        images[key] = image
+        return image
     }
 }
 
