@@ -10,6 +10,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "Document", dependencies: ["InkModel"]),
-        .testTarget(name: "DocumentTests", dependencies: ["Document"]),
+        .testTarget(name: "DocumentTests", dependencies: ["Document", "InkModel"]),
     ]
 )
