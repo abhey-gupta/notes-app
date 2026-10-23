@@ -146,10 +146,11 @@ Strokes store **raw samples, not outlines**, so improving the tessellation later
 A notebook is a directory package, exported UTType `com.abhey.notespace.notebook` conforming to `com.apple.package`, extension `.nb`. (`.nb` is also Mathematica's extension; harmless on Day 0 since notebooks live in our container, but revisit before exposing in Files.) Lives in `Documents/Notebooks/` (file-provider visible later; not Day 0).
 
 ```
-Thermodynamics.nb/
-  manifest.json          formatVersion, notebook fields above, page metadata array (id, template, rev), pageOrder
+<notebookID>.nb/        named by ID, never by title: renames don't move files
+  manifest.json          formatVersion, notebook fields above, `pages` array of page entries (id, template, rev,
+                         reserved background) in page order; sorted keys, dates as Unix ms
   pages/
-    <pageID>.strokes     binary stroke file (§4.3)
+    <pageID>.strokes     binary stroke file (§4.3); absent until the page has ink
     <pageID>.wal         append-only edit journal, exists only between autosave checkpoints (§4.4)
   thumbs/
     <pageID>.heic        page thumbnail, 176×228 pt @2x
@@ -158,16 +159,18 @@ Thermodynamics.nb/
 
 Per-page files are deliberate: page-scoped loads (open page 1 without reading page 90), page-scoped autosave, page-scoped sync conflicts later.
 
+`Document.NotebookPackage` owns this layout: create (staged in a hidden sibling dir, then renamed into place), open (manifest only), `loadPage` (one stroke file), `savePages` (stroke files, then one manifest write), insert/delete/move page. Every file write is temp + `rename`. Manifest page order is the `pages` array itself (no separate `pageOrder`).
+
 ### 4.3 Stroke codec (`Document`)
 
 Custom little-endian binary, no schema library:
 
 ```
-header: magic "INKS" | u16 formatVersion | u32 strokeCount | u32 flags (bit0: lz4)
-stroke: u128 id | u8 tool | InkColor (u8 kind + rgba8) | f32 width | u32 sampleCount | samples[f32 x,y,force,altitude,azimuth,t]
+header: magic "INKS" | u16 formatVersion | u32 strokeCount | u32 flags (bit0: lz4) | u32 bodyLength (uncompressed) | u32 crc32
+stroke: u128 id | u8 tool | InkColor (u8 kind + 4 B: semantic slot,0,0,0 or r,g,b,a) | f32 width | u32 sampleCount | samples[f32 x,y,force,altitude,azimuth,t]
 ```
 
-Whole body after header compressed with `Compression` framework lz4 (fast decode; 100-page notebook decodes well under 150 ms budget — spike measures). Float32 samples on Day 0; quantize later only if size matters. Headless round-trip and fuzz tests.
+Whole body after header compressed with `Compression` framework lz4 (`COMPRESSION_LZ4`), kept only if smaller. `bodyLength` sizes the decode buffer; CRC-32 covers the header and stored body, so damage is a typed error, never garbage ink. Decoder validates every length before reading and never traps (fuzzed). Measured (M-series, release): 400 × 60-sample page decodes in ~0.4 ms; 100-page notebook manifest + page 1 in ~0.9 ms. Raw Float32 samples barely compress (~2 %); quantize/delta-code later only if size matters.
 
 ### 4.4 Autosave and crash safety
 
@@ -180,9 +183,9 @@ Whole body after header compressed with `Compression` framework lz4 (fast decode
 
 - `formatVersion` in `manifest.json` and in each stroke file header. Integer, bumped on any incompatible change. `Document/Migrations/` holds `V1→V2` steps run on open, writing a backup `manifest.v1.json` once.
 - Open refuses newer `formatVersion` with a clear message (not a crash).
-- Unknown JSON keys are preserved round-trip (`extra: [String: JSONValue]` on manifest types).
+- Unknown JSON keys are preserved round-trip (`extra: [String: JSONValue]` on `Manifest` and `PageEntry`).
 - **Sync-ready without sync**: every entity has a stable ID (UUIDv7, time-ordered); per-notebook and per-page `rev` counters; edits are already an append-only journal of `PageEdit`s. Adding iCloud later means shipping the journal, not changing the model. No file paths stored anywhere; IDs only.
-- **PDF-import-ready**: `Page` gets an optional `background: PageBackground` later (`.template` today, `.pdf(file, pageIndex)` tomorrow); the Metal background pass becomes a texture draw. No model rewrite.
+- **PDF-import-ready**: `Page` gets an optional `background: PageBackground` later (`.template` today, `.pdf(file, pageIndex)` tomorrow); the Metal background pass becomes a texture draw. No model rewrite. The slot already exists on the manifest's `PageEntry` (omitted from JSON while `.template`).
 
 ## 5. Canvas: multi-page scroll, virtualization, tiles
 
@@ -225,13 +228,16 @@ Whole body after header compressed with `Compression` framework lz4 (fast decode
 
 ## 7. Toolbar and chrome
 
-`ToolbarContent` (tools, quick colors, undo/redo) is placement-agnostic SwiftUI. `ToolbarHost(placement:)` lays it out:
+`ToolbarContent(axis:)` (tools, quick colors, undo/redo) is axis-agnostic SwiftUI. `ToolbarHost` makes it **dynamic** (user decision):
 
 ```swift
-enum ToolbarPlacement: String, CaseIterable { case topCapsule, sideDock, floatingPuck }
+enum ToolbarDock: String, Codable { case top, bottom, left, right }   // left/right render vertically
 ```
 
-Placement comes from a setting (default TBD, **open decision §15**). All three variants from mockup §07 are built as layouts of the same content so switching is a one-line change; only `topCapsule` needs to be polished for Day 0, the others can be rough.
+- Default: expanded capsule floating top center (mock §02).
+- Drag the toolbar → it tracks the finger, then springs to the nearest dock on release; dock persists.
+- Pinch-in on the expanded toolbar → compact pill (current tool + color) at the same dock; tap the pill → expand. Focus mode reuses the compact pill.
+- All transitions are `glassEffectID` morphs inside one `GlassEffectContainer` with interactive springs; Reduce Motion → crossfade. Toolbar gestures are finger-only and never reach the canvas; Pencil input is unaffected. Tracked in #26.
 
 Chrome pieces (mock §02): left capsule (back, title, menu), center capsule (tools), right capsule (pages grid, share, more), bottom-right "3 of 11" pill. **Focus mode**: on `engineDidBeginStroke` the capsules fade to a single compact pill (mock §05) after 1.5 s of continuous inking; any tap on chrome or a scroll gesture restores. Dark mode follows system appearance; the paper theme (Night) is per-notebook and independent of system dark mode.
 
@@ -329,10 +335,7 @@ Resolved:
 5. **Page size**: fixed A4 portrait on Day 0.
 6. **Night paper + custom colors**: auto lightness remap, "Keep exact colors" per notebook.
 7. **Notebooks location**: `Documents/Notebooks`, file sharing off until the format is stable.
-
-Open:
-
-1. **Toolbar placement**: top capsule / side dock / floating puck (mock §07). `topCapsule` is the working default until decided; all three stay buildable.
+8. **Toolbar**: dynamic — floats top by default, drag to dock top/bottom/left/right, pinch-in to compact pill, tap to expand (§7).
 
 ## 16. Future (not Day 0, designed for)
 

@@ -31,6 +31,15 @@ public enum Tokens {
 
         public static let templateLine = DynamicColor(light: RGBA(0x1E2129, alpha: 0.16), dark: RGBA(0xFFFFFF, alpha: 0.09))
         public static let selection = DynamicColor(light: RGBA(0x2C4FD6), dark: RGBA(0x5FD3C4))
+
+        /// Library folder chips at rest.
+        public static let chipText = DynamicColor(light: RGBA(0x5B5E66), dark: RGBA(0xA9ABB2))
+        /// Subtle selected fill for chips / segmented rows (`rgba(30,33,41,.07)`).
+        public static let subtleFill = DynamicColor(light: RGBA(0x1E2129, alpha: 0.07), dark: RGBA(0xFFFFFF, alpha: 0.10))
+        /// New-notebook sheet: cover preview panel and text field.
+        public static let sheetPanel = DynamicColor(light: RGBA(0xEFECE6), dark: RGBA(0x1C1D21))
+        public static let field = DynamicColor(light: RGBA(0xFFFFFF), dark: RGBA(0x2A2B30))
+        public static let fieldBorder = DynamicColor(light: RGBA(0x000000, alpha: 0.10), dark: RGBA(0xFFFFFF, alpha: 0.12))
     }
 
     // MARK: Ink
@@ -58,6 +67,9 @@ public enum Tokens {
         public static let xl: CGFloat = 18
         public static let xxl: CGFloat = 24
         public static let xxxl: CGFloat = 44
+
+        /// Library page margin.
+        public static let libraryMargin: CGFloat = 44
 
         /// Capsule inset from the screen edge.
         public static let chromeInset: CGFloat = 18
@@ -100,6 +112,9 @@ public enum Tokens {
         public static let focusSwatch: CGFloat = 18
         public static let pageThumb = CGSize(width: 176, height: 228)
         public static let cover = CGSize(width: 150, height: 196)
+        /// Library "Continue" card: 344 wide, 196 tall preview, r12.
+        public static let recentCard = CGSize(width: 344, height: 196)
+        public static let recentRadius: CGFloat = 12
         public static let popoverWidth: CGFloat = 328
         /// A4 portrait in points.
         public static let pageA4 = CGSize(width: 595, height: 842)
@@ -124,8 +139,10 @@ public enum Tokens {
     // MARK: Motion
 
     public enum Motion {
-        /// Toolbar ↔ focus pill morph.
-        public static let morph: Animation = .spring(response: 0.42, dampingFraction: 0.82)
+        /// Toolbar ↔ focus pill morph. ≤ 250 ms (#13 acceptance).
+        public static let morph: Animation = .spring(duration: 0.25, bounce: 0.12)
+        /// Morph replacement under Reduce Motion: a short crossfade.
+        public static let reducedMorph: Animation = .easeInOut(duration: 0.15)
         /// Continuous inking before chrome collapses (§7).
         public static let focusDelay: Duration = .milliseconds(1500)
         public static let thumbnailCrossfade: Animation = .easeOut(duration: 0.12)

@@ -1,25 +1,36 @@
 import SwiftUI
 
-/// Lightweight SwiftUI paper (r4, dotted template, page shadow) for library placeholders, sheets, and previews.
+/// Lightweight SwiftUI paper (r4, template, page shadow) for library placeholders, sheets, and previews.
 /// The editor draws real pages in Metal; this mirrors its look with the same tokens.
 public struct PaperSurface: View {
     private let theme: PaperTheme
-    private let showsDots: Bool
+    private let pattern: PaperPattern
+    private let spacing: CGFloat
+    private let cornerRadius: CGFloat
 
     public init(_ theme: PaperTheme, showsDots: Bool = true) {
+        self.init(theme, pattern: showsDots ? .dotted : .blank)
+    }
+
+    public init(
+        _ theme: PaperTheme,
+        pattern: PaperPattern,
+        spacing: CGFloat = Tokens.Size.templateSpacing,
+        cornerRadius: CGFloat = Tokens.Radius.page
+    ) {
         self.theme = theme
-        self.showsDots = showsDots
+        self.pattern = pattern
+        self.spacing = spacing
+        self.cornerRadius = cornerRadius
     }
 
     public var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Tokens.Radius.page, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         shape
             .fill(theme.paper.color)
             .overlay {
-                if showsDots {
-                    DotGrid(color: theme.templateLine.color)
-                        .clipShape(shape)
-                }
+                PaperPatternView(pattern, color: theme.templateLine.color, spacing: spacing)
+                    .clipShape(shape)
             }
             .overlay(shape.strokeBorder(theme.pageEdge.color, lineWidth: 0.5))
             .shadow(Tokens.Shadows.pageContact)
