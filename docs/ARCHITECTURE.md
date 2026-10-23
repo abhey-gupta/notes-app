@@ -1,8 +1,8 @@
 # Architecture
 
-Day 0 architecture for the notes app. `docs/SCOPE.md` is the authoritative scope and perf budget; this doc says how we hit it. Issues reference sections by number (e.g. "§3").
+Day 0 architecture for **Notespace**. `docs/SCOPE.md` is the authoritative scope and perf budget; this doc says how we hit it. Issues reference sections by number (e.g. "§3").
 
-Targets: latest iPadOS (26 is the newest I can confirm; bump if 27 is out), Xcode matching the installed Swift 6.4 toolchain, Swift 6 strict concurrency, SwiftUI app shell with UIKit/Metal where latency matters. Zero third-party runtime dependencies on Day 0.
+Targets: **iPadOS 26 minimum** (deployment target 26.0), built with Xcode 27.1 / iOS 27.1 SDK / Swift 6.4, Swift 6 strict concurrency, SwiftUI app shell with UIKit/Metal where latency matters. Zero third-party runtime dependencies on Day 0.
 
 ## 1. Principles
 
@@ -10,7 +10,8 @@ Targets: latest iPadOS (26 is the newest I can confirm; bump if 27 is out), Xcod
 2. **Own the ink.** The document model, file format, and rendering are ours. Apple frameworks are used for input delivery, scrolling physics, PDF, and chrome, not for the data.
 3. **Main thread draws, everything else works elsewhere.** Tile rendering, thumbnails, saving, indexing, export all run off main.
 4. **No spinners.** Every async load has a synchronous placeholder already on disk (thumbnail, index snapshot). The user never sees nothing.
-5. **Pure Swift first.** Model, geometry, codec, tools logic are UIKit-free packages that test headlessly with `swift test` (works today, before Xcode is installed).
+5. **Pure Swift first.** Model, geometry, codec, tools logic are UIKit-free packages that test headlessly with `swift test`.
+6. **Liquid Glass chrome.** All floating UI (toolbars, popovers, pills, sheets) uses native iOS 26 Liquid Glass; paper and ink never do. Glass floats over content, content never sits on glass.
 
 ## 2. Module layout
 
@@ -19,7 +20,7 @@ Xcodegen project (`project.yml`), one app target, local Swift packages under `Pa
 ```
 notes-app/
   project.yml                 xcodegen; app target + test targets only
-  App/                        NotesApp (SwiftUI) – thin shell, wiring, screens
+  App/                        Notespace (SwiftUI) – thin shell, wiring, screens
   Packages/
     InkModel/                 Stroke, Sample, Page, Notebook, PageEdit, InkColor (pure Swift, Sendable)
     InkGeometry/              smoothing, outline tessellation, hit-testing, spatial index (pure Swift)
@@ -141,10 +142,10 @@ Strokes store **raw samples, not outlines**, so improving the tessellation later
 
 ### 4.2 On-disk format: notebook package
 
-A notebook is a directory package, UTType `com.<bundleid>.notebook` conforming to `com.apple.package`, extension `.inknb`. Lives in `Documents/Notebooks/` (file-provider visible later; not Day 0).
+A notebook is a directory package, exported UTType `com.abhey.notespace.notebook` conforming to `com.apple.package`, extension `.nb`. (`.nb` is also Mathematica's extension; harmless on Day 0 since notebooks live in our container, but revisit before exposing in Files.) Lives in `Documents/Notebooks/` (file-provider visible later; not Day 0).
 
 ```
-Thermodynamics.inknb/
+Thermodynamics.nb/
   manifest.json          formatVersion, notebook fields above, page metadata array (id, template, rev), pageOrder
   pages/
     <pageID>.strokes     binary stroke file (§4.3)
@@ -233,12 +234,12 @@ Placement comes from a setting (default TBD, **open decision §15**). All three 
 
 Chrome pieces (mock §02): left capsule (back, title, menu), center capsule (tools), right capsule (pages grid, share, more), bottom-right "3 of 11" pill. **Focus mode**: on `engineDidBeginStroke` the capsules fade to a single compact pill (mock §05) after 1.5 s of continuous inking; any tap on chrome or a scroll gesture restores. Dark mode follows system appearance; the paper theme (Night) is per-notebook and independent of system dark mode.
 
-Glass: iOS 26 Liquid Glass (`glassEffect`/`GlassEffectContainer` in SwiftUI) matches the mock's capsules. I'm confident these exist on iOS 26 but not certain of exact modifiers on the current SDK; `DesignSystem` wraps it in `GlassCapsule` so a `Material` fallback is one file.
+Glass: native Liquid Glass, verified in the iOS 27.1 SDK (all `@available(iOS 26.0, *)`): `glassEffect(_ glass: Glass = .regular, in: some Shape)`, `Glass.regular/.clear/.identity` with `.tint(_:)` and `.interactive()`, `GlassEffectContainer(spacing:)` so neighbouring capsules blend/morph, `glassEffectID(_:in:)` + `glassEffectUnion(id:namespace:)` for morph transitions (toolbar → focus pill), `.buttonStyle(.glass / .glassProminent)`. Rules: the three editor capsules live in one `GlassEffectContainer`; tool buttons use `.interactive()`; active tool tinted with the current ink color at low opacity; focus-mode collapse is a `glassEffectID` morph, not a fade; sheets/popovers use system presentation (glass by default on 26). `DesignSystem` wraps these in `GlassCapsule`/`GlassPill` so tokens stay in one place. No `Material` fallback needed (26 minimum).
 
 ## 8. Library
 
 - `LibraryStore` actor over a single index file `Application Support/Library/index.json` (atomic writes). Entries: notebook ID, title, folder ID, cover color, modified, page count, package path relative to the Notebooks root, cover thumb path. Folders: `[Folder {id, name}]`, one level, notebook has at most one `folderID`.
-- Cold launch: read index synchronously on the `LibraryStore` actor while SwiftUI builds the first frame; a 1 000-notebook index decodes in low single-digit ms. If missing or corrupt, rebuild by scanning `Documents/Notebooks/*.inknb/manifest.json` (off main, library shows progressively).
+- Cold launch: read index synchronously on the `LibraryStore` actor while SwiftUI builds the first frame; a 1 000-notebook index decodes in low single-digit ms. If missing or corrupt, rebuild by scanning `Documents/Notebooks/*.nb/manifest.json` (off main, library shows progressively).
 - Views: Recents (last 6 by modified, with `cover.heic` previews), covers grid (all, by folder chip), folder chips (All + folders + "+"). Search field filters by title, case/diacritic-insensitive `localizedStandardContains`, in memory, no debounce needed.
 - New notebook sheet (mock §06): title, cover color (8), paper (Blank/Lined/Dotted/Grid), paper style (White/Cream/Night), A4 portrait fixed. Create → write package + index entry → push editor on page 1 in the same transaction (no interim library state).
 - Management: rename, move to folder, delete (trash to `Library/Trash/`, purged after 30 days), duplicate. Context menu on covers.
@@ -312,20 +313,25 @@ Geometry: capsule height 52, radius 26, blur 24 + saturate 180 %; tool button 44
 | Metal engine misses latency/quality parity | Headline feature | Week-1 spike with hard numbers vs PencilKit; PencilKit adapter is the fallback behind the seam; decision point end of week 3 |
 | Fountain/brush look worse than Apple's inks | Beauty | Iterate pen profiles against golden handwriting samples; ship fountain + ballpoint polished, brush can be P1 |
 | 120 Hz scroll with tiles + live stroke on 8 GB iPads | Budget | Memory budgets scaled by device, eviction tested under `didReceiveMemoryWarning`, 300-page fixture in CI |
-| Liquid Glass API/SDK drift | Chrome | `GlassCapsule` wrapper, `Material` fallback |
+| Liquid Glass legibility over busy ink | Chrome | `.regular` (not `.clear`) glass over the canvas; capsules sit over the desk margin where possible; snapshot tests in light/dark |
 | Swift 6 strict concurrency friction with UIKit/Metal callbacks | Velocity | Clear actor boundaries (§2); `Sendable` value model; review any `nonisolated(unsafe)` |
-| Xcode not installed | Blocks everything simulator-side | Headless packages first (model, codec, geometry, tools) so week 1 is productive without Xcode |
 | Partial eraser on dense strokes feels slow | Tool feel | Spatial index + per-gesture batching; measure on 400-stroke page |
 
-## 15. Open decisions (need the user)
+## 15. Decisions
 
-1. **Toolbar placement**: top capsule / side dock / floating puck (mock §07). Built as a configurable component; default is unset. Pick before polish.
-2. **Minimum iPadOS**: 26 only (Liquid Glass, simplest) vs 18+ (`Material` fallback, more devices). Recommendation: 26 only.
-3. **Finger drawing**: Pencil-only by default (recommended) or finger draws when no Pencil is paired.
-4. **Page size**: fixed A4 portrait per notebook on Day 0, or expose Letter/landscape in the new-notebook sheet. Recommendation: fixed A4, add later.
-5. **Night paper and custom colors**: auto-lightness remap (recommended) vs exact colors.
-6. **Notebooks location**: `Documents/Notebooks` (visible in Files with file sharing on) vs `Application Support` (hidden). Recommendation: `Documents`, file sharing off until the format is stable.
-7. **Bundle ID / org name** for the `.inknb` UTType and signing.
+Resolved:
+
+1. **Name**: Notespace. Bundle ID `com.abhey.notespace` (one line in `project.yml` if it changes).
+2. **Minimum iPadOS**: 26. UI uses Liquid Glass throughout (§7).
+3. **Notebook extension**: `.nb`, UTType `com.abhey.notespace.notebook`.
+4. **Finger drawing**: Pencil-only by default; setting to allow finger.
+5. **Page size**: fixed A4 portrait on Day 0.
+6. **Night paper + custom colors**: auto lightness remap, "Keep exact colors" per notebook.
+7. **Notebooks location**: `Documents/Notebooks`, file sharing off until the format is stable.
+
+Open:
+
+1. **Toolbar placement**: top capsule / side dock / floating puck (mock §07). `topCapsule` is the working default until decided; all three stay buildable.
 
 ## 16. Future (not Day 0, designed for)
 
