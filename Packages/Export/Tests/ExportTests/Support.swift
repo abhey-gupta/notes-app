@@ -155,11 +155,12 @@ struct PDF {
         return CGPDFDictionaryGetDictionary(resources, key, &sub)
     }
 
-    /// Counts of content-stream operators: text (`BT`), fills (`f`, `f*`), images (`Do`).
+    /// Counts of content-stream operators: text (`BT`), fills (`f`, `f*`), strokes (`S`), images (`Do`).
     func operatorCounts(_ index: Int) throws -> OperatorCounts {
         final class Counts {
             var text = 0
             var fills = 0
+            var strokes = 0
             var images = 0
         }
         guard let table = CGPDFOperatorTableCreate() else { return OperatorCounts() }
@@ -171,6 +172,9 @@ struct PDF {
         }
         CGPDFOperatorTableSetCallback(table, "f*") { _, info in
             info.map { Unmanaged<Counts>.fromOpaque($0).takeUnretainedValue().fills += 1 }
+        }
+        CGPDFOperatorTableSetCallback(table, "S") { _, info in
+            info.map { Unmanaged<Counts>.fromOpaque($0).takeUnretainedValue().strokes += 1 }
         }
         CGPDFOperatorTableSetCallback(table, "Do") { _, info in
             info.map { Unmanaged<Counts>.fromOpaque($0).takeUnretainedValue().images += 1 }
@@ -186,7 +190,7 @@ struct PDF {
         CGPDFScannerRelease(scanner)
         CGPDFContentStreamRelease(stream)
         CGPDFOperatorTableRelease(table)
-        return OperatorCounts(text: counts.text, fills: counts.fills, images: counts.images)
+        return OperatorCounts(text: counts.text, fills: counts.fills, strokes: counts.strokes, images: counts.images)
     }
 
     /// Renders a page at 1 px/pt into sRGB RGBA8.
@@ -205,6 +209,7 @@ struct PDF {
 struct OperatorCounts {
     var text = 0
     var fills = 0
+    var strokes = 0
     var images = 0
 }
 

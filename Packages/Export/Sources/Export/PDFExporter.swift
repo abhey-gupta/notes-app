@@ -8,8 +8,10 @@ import os
 ///
 /// One PDF page per notebook page at the notebook's page size. Per page, bottom to top: paper, template
 /// (vector lines/dots), highlighter strokes (multiply), brush strokes (raster image from the
-/// ``BrushRasterizer`` if any), pen ink as filled `InkGeometry` outline contours, fitted with cubic Béziers
-/// (within 0.15 pt) to keep files small. No text, no fonts.
+/// ``BrushRasterizer`` if any), pen ink. Ink is fitted with cubic Béziers within ~4 % of the stroke width
+/// (0.05–0.15 pt): centerlines stroked with round caps/joins in near-constant-width pieces, or filled
+/// `InkGeometry` outlines where that doesn't fit (``StrokeShape``). Realistic notes come to ~80 KB per
+/// dense page. No text, no fonts.
 ///
 /// Works from in-memory model values (no file format dependency) and runs off the main actor: outlines
 /// are computed for batches of pages in parallel, then drawn in order. Cancelling the calling task stops
@@ -167,7 +169,7 @@ public struct PDFExporter: Sendable {
 
         if !art.highlights.isEmpty {
             context.setBlendMode(.multiply)
-            fill(art.highlights, in: context)
+            paint(art.highlights, in: context)
             context.setBlendMode(.normal)
         }
 
@@ -181,35 +183,70 @@ public struct PDFExporter: Sendable {
             context.restoreGState()
         }
 
-        fill(art.ink, in: context)
+        paint(art.ink, in: context)
 
         context.restoreGState()
         context.endPDFPage()
     }
 
-    /// Fills each run (nonzero winding). Coordinates go out as integers in 0.1 pt units under a 0.1 scale:
+    /// Paints each run: outlines filled (nonzero), centerlines stroked with round joins, one stroke
+    /// operation per distinct width. Coordinates go out as integers in 0.1 pt units under a 0.1 scale:
     /// shorter numbers in the content stream, ~0.05 pt rounding.
-    private func fill(_ runs: [FillRun], in context: CGContext) {
+    private func paint(_ runs: [InkRun], in context: CGContext) {
         guard !runs.isEmpty else { return }
-        func q(_ p: Point2) -> CGPoint {
-            CGPoint(x: (CGFloat(p.x) * Self.coordinateScale).rounded(), y: (CGFloat(p.y) * Self.coordinateScale).rounded())
-        }
+        let scale = Self.coordinateScale
         context.saveGState()
-        context.scaleBy(x: 1 / Self.coordinateScale, y: 1 / Self.coordinateScale)
+        context.scaleBy(x: 1 / scale, y: 1 / scale)
+        context.setLineJoin(.round)
+        var cap = CGLineCap.round
+        context.setLineCap(cap)
         for run in runs {
-            let path = CGMutablePath()
-            for contour in run.contours {
-                path.move(to: q(contour.start))
-                for s in contour.segments {
-                    path.addCurve(to: q(s.end), control1: q(s.c1), control2: q(s.c2))
+            if !run.fills.isEmpty {
+                let path = CGMutablePath()
+                for contour in run.fills {
+                    Self.add(contour, to: path)
+                    path.closeSubpath()
                 }
-                path.closeSubpath()
+                context.setFillColor(run.color)
+                context.addPath(path)
+                context.fillPath(using: .winding)
             }
-            context.setFillColor(run.color)
-            context.addPath(path)
-            context.fillPath(using: .winding)
+            guard !run.strokes.isEmpty else { continue }
+            if run.cap != cap {
+                cap = run.cap
+                context.setLineCap(cap)
+            }
+            context.setStrokeColor(run.color)
+            // Widths in 1/20 pt steps (edge error ≤ 0.0125 pt) so pieces of a pen share one operation.
+            var byWidth: [Int: CGMutablePath] = [:]
+            for piece in run.strokes {
+                let key = Int((piece.width * 20).rounded())
+                let path = byWidth[key] ?? CGMutablePath()
+                Self.add(piece.path, to: path)
+                byWidth[key] = path
+            }
+            for (key, path) in byWidth.sorted(by: { $0.key < $1.key }) {
+                context.setLineWidth(CGFloat(max(key, 1)) * scale / 20)
+                context.addPath(path)
+                context.strokePath()
+            }
         }
         context.restoreGState()
+    }
+
+    /// Appends `contour` as a subpath in ink coordinate units (not closed).
+    private static func add(_ contour: CubicContour, to path: CGMutablePath) {
+        func q(_ p: Point2) -> CGPoint {
+            CGPoint(x: (CGFloat(p.x) * coordinateScale).rounded(), y: (CGFloat(p.y) * coordinateScale).rounded())
+        }
+        path.move(to: q(contour.start))
+        for s in contour.segments {
+            if s.isLine {
+                path.addLine(to: q(s.end))
+            } else {
+                path.addCurve(to: q(s.end), control1: q(s.c1), control2: q(s.c2))
+            }
+        }
     }
 
     /// Ink coordinate units per point.
