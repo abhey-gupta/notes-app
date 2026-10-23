@@ -42,7 +42,8 @@ final class LaunchTests: XCTestCase {
     @MainActor
     func testInkingCollapsesToFocusPillAndTapRestores() {
         let app = XCUIApplication()
-        app.launchArguments += ["-sampleLibrary", "YES", "-openNotebook", "Thermodynamics", "-resetToolState", "YES"]
+        // No Pencil in the simulator: let one finger ink.
+        app.launchArguments += ["-sampleLibrary", "YES", "-openNotebook", "Thermodynamics", "-resetToolState", "YES", "-allowFingerDrawing", "YES"]
         app.launch()
         XCTAssertTrue(app.buttons["Pen"].waitForExistence(timeout: 5))
 

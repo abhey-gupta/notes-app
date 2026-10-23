@@ -218,4 +218,32 @@ struct DocumentStoreTests {
             await #expect(throws: DocumentError.unknownPage(id)) { try await store.page(id) }
         }
     }
+
+    /// Template changes reach the manifest at once and survive a later checkpoint and a crash of a dirty page.
+    @Test func setTemplateUpdatesManifestAndLoadedPages() async throws {
+        try await withPackage(pages: 3) { package in
+            let ids = package.manifest.notebook.pages
+            var rng = SplitMix64(seed: 23)
+            try await session(package.url) { store in
+                try await store.apply(addEdit(store, ids[0], &rng), to: ids[0])
+                try await store.setTemplate(.grid(spacing: 16), for: [ids[0], ids[1]])
+                #expect(try await store.page(ids[0]).template == .grid(spacing: 16))
+                #expect(try await store.page(ids[1]).template == .grid(spacing: 16))
+                #expect(try await store.page(ids[2]).template == .lined(spacing: 24))
+                let manifest = try NotebookPackage.readManifest(at: package.url)
+                #expect(manifest.entry(for: ids[1])?.template == .grid(spacing: 16))
+                #expect(manifest.entry(for: ids[2])?.template == .lined(spacing: 24))
+            }
+            // Dropped without a flush: page 0's ink comes back from its journal, the template from the manifest.
+            let reopened = try manualStore(package.url)
+            let page = try await reopened.page(ids[0])
+            #expect(page.template == .grid(spacing: 16))
+            #expect(page.strokes.count == 1)
+            try await reopened.setTemplate(.dotted(spacing: 20))
+            try await reopened.flush()
+            #expect(try NotebookPackage.open(at: package.url).manifest.pages.allSatisfy { $0.template == .dotted(spacing: 20) })
+            let stranger = PageID()
+            await #expect(throws: DocumentError.unknownPage(stranger)) { try await reopened.setTemplate(.blank, for: [stranger]) }
+        }
+    }
 }

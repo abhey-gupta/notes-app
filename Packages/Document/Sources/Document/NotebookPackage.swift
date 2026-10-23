@@ -285,6 +285,17 @@ public struct NotebookPackage: Sendable {
         try commit(next)
     }
 
+    /// Sets the background template of `ids` (all pages if `nil`) and writes the manifest.
+    public mutating func setTemplate(_ template: PageTemplate, for ids: [PageID]? = nil) throws(DocumentError) {
+        var next = manifest
+        for id in ids ?? next.notebook.pages {
+            guard var entry = next.entry(for: id) else { throw .unknownPage(id) }
+            entry.template = template
+            try next.updateEntry(entry)
+        }
+        try commit(next)
+    }
+
     /// Changes notebook metadata (title, cover, paper, theme…) and writes the manifest.
     public mutating func updateNotebook(_ change: (inout Notebook) -> Void) throws(DocumentError) {
         var next = manifest

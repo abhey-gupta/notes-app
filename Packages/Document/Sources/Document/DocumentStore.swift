@@ -270,6 +270,15 @@ public actor DocumentStore {
         try package.movePage(from: source, to: destination)
     }
 
+    /// Sets the background template of `ids` (all pages if `nil`), in the manifest and in loaded pages.
+    /// Templates aren't journaled: the manifest is written before this returns.
+    public func setTemplate(_ template: PageTemplate, for ids: [PageID]? = nil) throws(DocumentError) {
+        try package.setTemplate(template, for: ids)
+        for id in ids ?? package.manifest.notebook.pages {
+            loaded[id]?.page.template = template
+        }
+    }
+
     /// Changes notebook metadata and writes the manifest.
     public func updateNotebook(_ change: @Sendable (inout Notebook) -> Void) throws(DocumentError) {
         try package.updateNotebook(change)

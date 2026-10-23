@@ -1,6 +1,6 @@
 SIM ?= iPad Pro 13 (M5)
 DEST := platform=iOS Simulator,name=$(SIM)
-HEADLESS := InkModel InkGeometry Document Library Tools Export Fixtures
+HEADLESS := InkModel InkGeometry Document Library Tools Export Fixtures Canvas
 XCB := $(shell command -v xcbeautify >/dev/null && echo "| xcbeautify" )
 
 .PHONY: gen lint format test-packages build test perf perf-gate perf-baseline fixtures open clean
