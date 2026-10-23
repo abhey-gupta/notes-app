@@ -161,23 +161,30 @@ public enum StrokeCodec {
         strokes.reserveCapacity(strokeCount)
         var ids = Set<StrokeID>(minimumCapacity: strokeCount)
         for _ in 0 ..< strokeCount {
-            guard reader.remaining >= strokeHeaderLength else { throw .truncated }
-            let id = StrokeID(uuid: UUID(uuid: reader.read(uuid_t.self)))
-            let toolByte = reader.read(UInt8.self)
-            guard let tool = PenKind(rawValue: toolByte) else { throw .unknownTool(toolByte) }
-            let color = try readColor(&reader)
-            let width = Float(bitPattern: UInt32(littleEndian: reader.read(UInt32.self)))
-            let sampleCount = Int(UInt32(littleEndian: reader.read(UInt32.self)))
-            guard sampleCount <= reader.remaining / sampleLength else { throw .truncated }
-            let samples = readSamples(&reader, count: sampleCount)
-            guard ids.insert(id).inserted else { throw .duplicateStrokeID(id) }
-            strokes.append(Stroke(id: id, tool: tool, color: color, width: width, samples: samples))
+            let stroke = try readStroke(&reader)
+            guard ids.insert(stroke.id).inserted else { throw .duplicateStrokeID(stroke.id) }
+            strokes.append(stroke)
         }
         guard reader.remaining == 0 else { throw .trailingBytes }
         return strokes
     }
 
-    private static func readColor(_ reader: inout ByteReader) throws(StrokeCodecError) -> InkColor {
+    /// Reads one stroke in the body layout, bounds-checked. Shared with the journal codec.
+    static func readStroke(_ reader: inout ByteReader) throws(StrokeCodecError) -> Stroke {
+        guard reader.remaining >= strokeHeaderLength else { throw .truncated }
+        let id = StrokeID(uuid: UUID(uuid: reader.read(uuid_t.self)))
+        let toolByte = reader.read(UInt8.self)
+        guard let tool = PenKind(rawValue: toolByte) else { throw .unknownTool(toolByte) }
+        let color = try readColor(&reader)
+        let width = Float(bitPattern: UInt32(littleEndian: reader.read(UInt32.self)))
+        let sampleCount = Int(UInt32(littleEndian: reader.read(UInt32.self)))
+        guard sampleCount <= reader.remaining / sampleLength else { throw .truncated }
+        let samples = readSamples(&reader, count: sampleCount)
+        return Stroke(id: id, tool: tool, color: color, width: width, samples: samples)
+    }
+
+    /// Reads a color (u8 kind + 4 B). Caller guarantees 5 bytes remain.
+    static func readColor(_ reader: inout ByteReader) throws(StrokeCodecError) -> InkColor {
         let kind = reader.read(UInt8.self)
         let (c0, c1, c2, c3) = reader.read((UInt8, UInt8, UInt8, UInt8).self)
         switch kind {
@@ -243,8 +250,8 @@ public enum StrokeCodec {
     }
 }
 
-/// Little-endian appender.
-private struct ByteWriter {
+/// Little-endian appender (stroke codec and journal).
+struct ByteWriter {
     var bytes: [UInt8] = []
 
     init(capacity: Int) {
@@ -255,15 +262,24 @@ private struct ByteWriter {
         withUnsafeBytes(of: value.littleEndian) { bytes.append(contentsOf: $0) }
     }
 
-    mutating func append(_ stroke: Stroke) {
-        withUnsafeBytes(of: stroke.id.uuid.uuid) { bytes.append(contentsOf: $0) }
-        append(stroke.tool.rawValue)
-        switch stroke.color {
+    mutating func append(_ id: StrokeID) {
+        withUnsafeBytes(of: id.uuid.uuid) { bytes.append(contentsOf: $0) }
+    }
+
+    /// u8 kind + 4 B: semantic `0, slot, 0, 0, 0`; custom `1, r, g, b, a`.
+    mutating func append(_ color: InkColor) {
+        switch color {
         case let .semantic(slot):
             bytes.append(contentsOf: [0, slot.rawValue, 0, 0, 0])
         case let .custom(c):
             bytes.append(contentsOf: [1, c.r, c.g, c.b, c.a])
         }
+    }
+
+    mutating func append(_ stroke: Stroke) {
+        append(stroke.id)
+        append(stroke.tool.rawValue)
+        append(stroke.color)
         append(stroke.width.bitPattern)
         append(UInt32(stroke.samples.count))
         if StrokeCodec.samplesMatchDiskLayout {
@@ -279,7 +295,7 @@ private struct ByteWriter {
 }
 
 /// Bounds-unchecked reader; callers check ``remaining`` first.
-private struct ByteReader {
+struct ByteReader {
     let buffer: UnsafeRawBufferPointer
     var offset = 0
 
