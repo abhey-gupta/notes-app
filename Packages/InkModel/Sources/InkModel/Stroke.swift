@@ -91,7 +91,10 @@ public struct Stroke: Hashable, Sendable, Codable, Identifiable {
         copy.width = width * scale
         if var rendering, scale != 1 {
             rendering.points = rendering.points.map { p in
-                PointRendering(width: p.width * scale, height: p.height * scale, opacity: p.opacity)
+                var scaled = p
+                scaled.width *= scale
+                scaled.height *= scale
+                return scaled
             }
             copy.rendering = rendering
         }

@@ -76,24 +76,40 @@ public enum PencilKitConversion {
         var points: [PKStrokePoint] = []
         points.reserveCapacity(stroke.samples.count)
         for (s, r) in zip(stroke.samples, rendering.points) {
-            let width = CGFloat(r.width)
-            points.append(PKStrokePoint(
-                location: CGPoint(x: CGFloat(s.x), y: CGFloat(s.y)),
-                timeOffset: TimeInterval(s.t),
-                size: CGSize(width: width, height: Quantum.height(CGFloat(r.height), width: width)),
-                opacity: CGFloat(r.opacity) + Quantum.opacity / 4,
-                force: pencilKitForce(s.force),
-                azimuth: CGFloat(s.azimuth) + Quantum.azimuth / 4,
-                altitude: CGFloat(s.altitude) - Quantum.altitude / 4 // rounds up, unlike the others
-            ))
+            points.append(pkPoint(s, r))
         }
         let path = PKStrokePath(controlPoints: points, creationDate: Date(timeIntervalSinceReferenceDate: 0))
-        return PKStroke(
-            ink: PKInk(inkType(rendering.ink, fallback: stroke.tool), color: color),
-            path: path,
-            transform: .identity,
-            mask: nil,
-            randomSeed: rendering.randomSeed
+        let ink = PKInk(inkType(rendering.ink, fallback: stroke.tool), color: color)
+        if #available(iOS 27, *), rendering.renderGroupID != nil || rendering.grainOffset != nil {
+            return PKStroke(
+                ink: ink, path: path, transform: .identity, mask: nil, randomSeed: rendering.randomSeed,
+                renderGroupID: rendering.renderGroupID,
+                renderState: rendering.grainOffset.map { PKStroke.RenderState(grainOffset: $0) }
+            )
+        }
+        return PKStroke(ink: ink, path: path, transform: .identity, mask: nil, randomSeed: rendering.randomSeed)
+    }
+
+    private static func pkPoint(_ s: Sample, _ r: PointRendering) -> PKStrokePoint {
+        let width = CGFloat(r.width)
+        let location = CGPoint(x: CGFloat(s.x), y: CGFloat(s.y))
+        let size = CGSize(width: width, height: Quantum.height(CGFloat(r.height), width: width))
+        let opacity = CGFloat(r.opacity) + Quantum.opacity / 4
+        let azimuth = CGFloat(s.azimuth) + Quantum.azimuth / 4
+        let altitude = CGFloat(s.altitude) - Quantum.altitude / 4 // rounds up, unlike the others
+        let force = pencilKitForce(s.force)
+        let secondary = CGFloat(r.secondaryScale) // kept unquantized (Float32 or Double by ink)
+        let threshold = CGFloat(r.threshold) + Quantum.threshold / 4
+        if #available(iOS 27, *) {
+            return PKStrokePoint(
+                location: location, timeOffset: TimeInterval(s.t), size: size, opacity: opacity, force: force, azimuth: azimuth,
+                altitude: altitude, secondaryScale: secondary, threshold: threshold,
+                lateralJitter: CGFloat(r.lateralJitter) + Quantum.lateralJitter / 4
+            )
+        }
+        return PKStrokePoint(
+            location: location, timeOffset: TimeInterval(s.t), size: size, opacity: opacity, force: force, azimuth: azimuth,
+            altitude: altitude, secondaryScale: secondary, threshold: threshold
         )
     }
 
@@ -130,13 +146,23 @@ public enum PencilKitConversion {
                 azimuth: Float(point.azimuth) + rotation,
                 t: Float(point.timeOffset)
             ))
-            points.append(PointRendering(
+            var rendered = PointRendering(
                 width: Float(point.size.width * scale),
                 height: Float(point.size.height * scale),
-                opacity: Float(point.opacity)
-            ))
+                opacity: Float(point.opacity),
+                secondaryScale: Double(point.secondaryScale),
+                threshold: Float(point.threshold)
+            )
+            if #available(iOS 27, *) {
+                rendered.lateralJitter = Float(point.lateralJitter)
+            }
+            points.append(rendered)
         }
-        let rendering = StrokeRendering(ink: pk.ink.inkType.rawValue, randomSeed: pk.randomSeed, points: points)
+        var rendering = StrokeRendering(ink: pk.ink.inkType.rawValue, randomSeed: pk.randomSeed, points: points)
+        if #available(iOS 27, *) {
+            rendering.renderGroupID = pk.renderGroupID
+            rendering.grainOffset = pk.renderState?.grainOffset
+        }
         let baseWidth = width ?? median(points.map(\.width)) ?? 2
         return Stroke(
             id: id, tool: kind, color: color ?? .custom(RGBA8(pk.ink.color)), width: baseWidth, samples: samples, rendering: rendering
@@ -160,6 +186,8 @@ public enum PencilKitConversion {
         static let altitude: CGFloat = .pi / 2 / 65535
         static let azimuth: CGFloat = 2 * .pi / 65535
         static let force: CGFloat = 0.001
+        static let threshold: CGFloat = 1 / 65535
+        static let lateralJitter: CGFloat = 0.1
         /// Height is stored as a multiple of width in this step.
         static let aspect: CGFloat = 0.001
 

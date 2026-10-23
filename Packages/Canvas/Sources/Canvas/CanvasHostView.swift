@@ -128,6 +128,7 @@
                 delegate?.canvasHostDidLiftAllTouches(self)
             }
             scrollView.addGestureRecognizer(touchObserver)
+            scrollView.pinchGestureRecognizer?.addTarget(scrollView, action: #selector(CanvasScrollView.applyPinch(_:)))
             updateNavigationGestures()
         }
 

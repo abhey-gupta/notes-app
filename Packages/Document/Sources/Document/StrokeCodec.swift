@@ -40,10 +40,10 @@ public enum StrokeCodecError: Error, Hashable, Sendable {
 /// stroke:        u128 id | u8 tool | u8 colorKind + 4 B (semantic: slot,0,0,0 · custom: r,g,b,a)
 ///                | f32 width | u32 sampleCount | sampleCount × (f32 x, y, force, altitude, azimuth, t)
 ///                | rendering                                                     (v2; absent in v1)
-/// rendering:     u8 flags (bit0 present, bit1 square: heights = widths, bit2 uniform opacity)
-///                if present: u8 inkLength (1...255) | ink UTF-8 | u32 randomSeed
-///                | f32 opacity (if uniform) | sampleCount × (f32 width [, f32 height unless square]
-///                [, f32 opacity unless uniform])
+/// rendering:     u8 flags (bit0 present, bit1 square, bit2 uniform opacity, bit3 group, bit4 grain)
+///                if present: u8 inkLength | ink UTF-8 | u32 randomSeed | [u128 renderGroupID]
+///                | [f64 grain x, y] | [f32 opacity if uniform] | sampleCount × (f32 width
+///                [, f32 height unless square] [, f32 opacity unless uniform])   (see RenderingLayout)
 /// ```
 /// The rendering block is ``InkModel/StrokeRendering``: PencilKit's per-point size and opacity, ink and
 /// seed, so a stroke renders exactly as captured (#71). Version 1 files (no rendering block) still

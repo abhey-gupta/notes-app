@@ -28,21 +28,36 @@ struct LosslessRoundTripTests {
             let points = (0 ..< n).map { j -> PKStrokePoint in
                 let u = CGFloat(j) / CGFloat(n - 1)
                 let w = CGFloat.random(in: 1 ... 14, using: &rng)
+                let location = CGPoint(x: 40 + 480 * u, y: y0 + 30 * sin(u * 9) + CGFloat.random(in: -2 ... 2, using: &rng))
+                let size = CGSize(width: w, height: i.isMultiple(of: 2) ? w : w * CGFloat.random(in: 0.3 ... 1.5, using: &rng))
+                let (opacity, force) = (CGFloat.random(in: 0.4 ... 1, using: &rng), CGFloat.random(in: 0 ... 4, using: &rng))
+                let (azimuth, altitude) = (CGFloat.random(in: -3 ... 3, using: &rng), CGFloat.random(in: 0.3 ... 1.57, using: &rng))
+                // Ink-specific fields, as live watercolor strokes set them (wash scale ~0.83).
+                let secondary = CGFloat.random(in: 0.6 ... 1, using: &rng)
+                let (threshold, jitter) = (CGFloat.random(in: 0 ... 1, using: &rng), CGFloat.random(in: 0 ... 1, using: &rng))
+                guard #available(iOS 27, *) else {
+                    return PKStrokePoint(
+                        location: location, timeOffset: TimeInterval(j) / 240, size: size, opacity: opacity, force: force,
+                        azimuth: azimuth, altitude: altitude, secondaryScale: secondary, threshold: threshold
+                    )
+                }
                 return PKStrokePoint(
-                    location: CGPoint(x: 40 + 480 * u, y: y0 + 30 * sin(u * 9) + CGFloat.random(in: -2 ... 2, using: &rng)),
-                    timeOffset: TimeInterval(j) / 240,
-                    size: CGSize(width: w, height: i.isMultiple(of: 2) ? w : w * CGFloat.random(in: 0.3 ... 1.5, using: &rng)),
-                    opacity: CGFloat.random(in: 0.4 ... 1, using: &rng),
-                    force: CGFloat.random(in: 0 ... 4, using: &rng),
-                    azimuth: CGFloat.random(in: -3 ... 3, using: &rng),
-                    altitude: CGFloat.random(in: 0.3 ... 1.57, using: &rng)
+                    location: location, timeOffset: TimeInterval(j) / 240, size: size, opacity: opacity, force: force,
+                    azimuth: azimuth, altitude: altitude, secondaryScale: secondary, threshold: threshold, lateralJitter: jitter
                 )
             }
-            let stroke = PKStroke(
+            var stroke = PKStroke(
                 ink: PKInk(type, color: colors[i % colors.count]),
                 path: PKStrokePath(controlPoints: points, creationDate: Date()),
                 randomSeed: UInt32.random(in: 0 ... .max, using: &rng)
             )
+            // Live watercolor strokes come with a render group; textured inks may carry a grain offset.
+            if #available(iOS 27, *), [.watercolor, .crayon, .pencil].contains(type) {
+                stroke.renderGroupID = UUID()
+                if type != .watercolor {
+                    stroke.renderState = PKStroke.RenderState(grainOffset: CGPoint(x: 3.25, y: -7.5))
+                }
+            }
             // What PencilKit hands back after storing (it quantizes some fields).
             return PKDrawing(strokes: [stroke]).strokes[0]
         }
@@ -52,15 +67,21 @@ struct LosslessRoundTripTests {
         PencilKitConversion.stroke(from: pk, color: .custom(RGBA8(pk.ink.color)), width: 2.5)
     }
 
+    /// The stroke as PencilKit holds it in a drawing (the canvas and rasters draw `PKDrawing`s, which
+    /// quantize some fields only when they take the stroke).
     private static func back(_ stroke: Stroke) -> PKStroke {
         guard case let .custom(rgba) = stroke.color else { return PencilKitConversion.pkStroke(from: stroke, color: .black) }
-        return PencilKitConversion.pkStroke(from: stroke, color: UIColor(rgba))
+        return PKDrawing(strokes: [PencilKitConversion.pkStroke(from: stroke, color: UIColor(rgba))]).strokes[0]
     }
 
     private static func expectSamePoints(_ a: PKStroke, _ b: PKStroke) {
         #expect(a.ink.inkType == b.ink.inkType)
         #expect(a.randomSeed == b.randomSeed)
         #expect(a.transform == b.transform)
+        if #available(iOS 27, *) {
+            #expect(a.renderGroupID == b.renderGroupID)
+            #expect(a.renderState == b.renderState)
+        }
         #expect(a.path.count == b.path.count)
         for (p, q) in zip(a.path, b.path) {
             #expect(p.location == q.location)
@@ -70,6 +91,11 @@ struct LosslessRoundTripTests {
             #expect(p.azimuth == q.azimuth)
             #expect(p.altitude == q.altitude)
             #expect(p.timeOffset == q.timeOffset)
+            #expect(p.secondaryScale == q.secondaryScale)
+            #expect(p.threshold == q.threshold)
+            if #available(iOS 27, *) {
+                #expect(p.lateralJitter == q.lateralJitter)
+            }
         }
     }
 

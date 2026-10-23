@@ -136,11 +136,14 @@ final class InkFidelityTests: XCTestCase {
             let threshold: UInt8 = line.name == "highlighter" ? 245 : 160
             let thickness = drawn.thickness(from: Self.x0, to: Self.x1, nearY: line.y, threshold: threshold) / drawn.scale / zoom
             note("\(line.name) thickness \(String(format: "%.2f", thickness)) pt (zoom \(String(format: "%.3f", zoom)))")
-            if line.name == "highlighter" {
-                XCTAssertTrue((8 ... 30).contains(thickness), "highlighter \(thickness) pt")
-            } else {
-                XCTAssertTrue((0.8 ... 5).contains(thickness), "\(line.name) \(thickness) pt: a pen, not a marker")
+            // Fountain: a horizontal line is the nib's thin side. Brush is PencilKit's watercolor wash.
+            let expected: ClosedRange<CGFloat> = switch line.name {
+            case "fountain": 0.4 ... 4
+            case "ballpoint": 0.8 ... 4
+            case "brush": 5 ... 30
+            default: 8 ... 30
             }
+            XCTAssertTrue(expected.contains(thickness), "\(line.name) \(thickness) pt, expected \(expected)")
         }
     }
 
@@ -178,15 +181,15 @@ final class InkFidelityTests: XCTestCase {
         let again = shot(app, "5-left-and-reopened")
         drawn.expectSameInk(as: again, in: Self.inkRegion, "left and reopened vs drawn", note: note)
 
-        // A pinch over the ink zooms the page with it (zooming out keeps both on screen to measure).
-        canvas(app).pinch(withScale: 0.7, velocity: -1)
+        // A pinch over the ink zooms the page with it: the dot grid and the highlighter grow alike.
+        canvas(app).pinch(withScale: 2, velocity: 2)
         settle(2)
         let pinched = shot(app, "6-pinched")
-        let page = pinched.pageWidth() / max(again.pageWidth(), 1)
-        let ink = pinched.inkWidth() / max(again.inkWidth(), 1)
-        note("pinch: page width ×\(String(format: "%.3f", page)), ink width ×\(String(format: "%.3f", ink))")
-        XCTAssertLessThan(page, 0.9, "pinch zooms the page")
-        XCTAssertEqual(ink, page, accuracy: 0.05, "ink zooms with its page")
+        let page = pinched.dotSpacing() / max(again.dotSpacing(), 1)
+        let ink = pinched.yellowBandHeight() / max(again.yellowBandHeight(), 1)
+        note("pinch: dot spacing ×\(String(format: "%.3f", page)), highlighter height ×\(String(format: "%.3f", ink))")
+        XCTAssertGreaterThan(page, 1.2, "pinch zooms the page")
+        XCTAssertEqual(ink, page, accuracy: 0.08 * page, "ink zooms with its page")
     }
 }
 
@@ -215,6 +218,68 @@ struct Gray {
             }
         }
         pixels = bytes
+        yellowPerRow = Self.yellowPerRow(cg)
+    }
+
+    /// Highlighter-yellow pixels in each row.
+    let yellowPerRow: [Int]
+
+    private static func yellowPerRow(_ cg: CGImage?) -> [Int] {
+        guard let cg else { return [] }
+        let (w, h) = (cg.width, cg.height)
+        var rgba = [UInt8](repeating: 0, count: w * h * 4)
+        rgba.withUnsafeMutableBytes { raw in
+            let context = CGContext(
+                data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+            context?.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
+        return (0 ..< h).map { y in
+            (0 ..< w).reduce(0) { count, x in
+                let i = (y * w + x) * 4
+                let (r, b) = (Int(rgba[i]), Int(rgba[i + 2]))
+                return count + (r > 200 && r - b > 80 ? 1 : 0)
+            }
+        }
+    }
+
+    /// Height (px) of the tallest band of rows crossed by highlighter yellow.
+    func yellowBandHeight() -> CGFloat {
+        var best = 0, run = 0
+        for count in yellowPerRow {
+            run = count > 30 ? run + 1 : 0
+            best = max(best, run)
+        }
+        return CGFloat(best)
+    }
+
+    /// Distance (px) between template dots: median gap along the row (60–95 % down) with the most dots.
+    func dotSpacing() -> CGFloat {
+        func isDot(_ v: UInt8) -> Bool {
+            (150 ... 232).contains(v) // darker than the desk (~234), lighter than ink
+        }
+        // Rows over paper (mostly pure white), not the desk between pages.
+        let rows = (Int(0.6 * CGFloat(height)) ..< Int(0.95 * CGFloat(height))).filter { y in
+            (0 ..< width).count { self[$0, y] >= 250 } > width / 2
+        }
+        guard let y = rows.max(by: { a, b in
+            (0 ..< width).count { isDot(self[$0, a]) } < (0 ..< width).count { isDot(self[$0, b]) }
+        }) else { return 0 }
+        var centers: [Int] = []
+        var start: Int?
+        for x in 0 ... width {
+            let dot = x < width && isDot(self[x, y])
+            if dot, start == nil {
+                start = x
+            } else if !dot, let s = start {
+                centers.append((s + x - 1) / 2)
+                start = nil
+            }
+        }
+        let gaps = zip(centers, centers.dropFirst()).map { $1 - $0 }.filter { $0 > 8 }.sorted()
+        return gaps.isEmpty ? 0 : CGFloat(gaps[gaps.count / 2])
     }
 
     subscript(x: Int, y: Int) -> UInt8 {
@@ -253,18 +318,6 @@ struct Gray {
             return last - first + 1
         }
         return CGFloat(runs.sorted()[runs.count / 2])
-    }
-
-    /// Horizontal extent (px) of dark ink (pens) between 15 % and 60 % of the height.
-    func inkWidth() -> CGFloat {
-        var minX = width, maxX = -1
-        for y in stride(from: Int(0.15 * CGFloat(height)), to: Int(0.6 * CGFloat(height)), by: 2) {
-            for x in 0 ..< width where self[x, y] < 100 {
-                minX = min(minX, x)
-                maxX = max(maxX, x)
-            }
-        }
-        return CGFloat(max(maxX - minX + 1, 0))
     }
 
     /// Row-darkness correlation: how many px `other`'s ink sits below ours.

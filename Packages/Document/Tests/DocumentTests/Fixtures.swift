@@ -77,11 +77,19 @@ enum Fixtures {
                 PointRendering(
                     width: width * Float.random(in: 0.2 ... 2, using: &rng),
                     height: width * Float.random(in: 0.2 ... 2, using: &rng),
-                    opacity: Float.random(in: 0.5 ... 1, using: &rng)
+                    opacity: Float.random(in: 0.5 ... 1, using: &rng),
+                    secondaryScale: Double.random(in: 0.5 ... 1, using: &rng),
+                    threshold: Float.random(in: 0 ... 1, using: &rng),
+                    lateralJitter: Float.random(in: 0 ... 1, using: &rng)
                 )
             }
         }
-        return StrokeRendering(ink: StrokeRendering.Ink.for(tool), randomSeed: UInt32.random(in: 0 ... .max, using: &rng), points: points)
+        let ink = StrokeRendering.Ink.for(tool)
+        let seed = UInt32.random(in: 0 ... .max, using: &rng)
+        guard kind == .full else { return StrokeRendering(ink: ink, randomSeed: seed, points: points) }
+        let group = UUID(uuid: withUnsafeBytes(of: (rng.next(), rng.next())) { $0.load(as: uuid_t.self) })
+        let grain = CGPoint(x: Double.random(in: -50 ... 50, using: &rng), y: Double.random(in: -50 ... 50, using: &rng))
+        return StrokeRendering(ink: ink, randomSeed: seed, points: points, renderGroupID: group, grainOffset: grain)
     }
 
     static func strokes(_ rng: inout SplitMix64, count: Int, samples: Int? = nil, rendering: Rendering = .none) -> [Stroke] {

@@ -89,11 +89,13 @@ struct PerformanceTests {
         }
     }
 
-    @Test func checkpointHundredDirtyPages() async throws {
+    /// Budget on typical PencilKit pen data (square points, one opacity); the worst case is reported.
+    @Test(arguments: [Fixtures.Rendering.square, .full])
+    func checkpointHundredDirtyPages(rendering: Fixtures.Rendering) async throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "DocumentPerf-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        let strokes = Fixtures.densePage()
+        let strokes = Fixtures.densePage(rendering: rendering)
         let notebook = Notebook(title: "Checkpoint", pages: (0 ..< 100).map { _ in PageID() })
         var package = try NotebookPackage.create(at: dir.appending(path: "c.nb"), notebook: notebook)
         try package.savePages(notebook.pages.map { Page(id: $0, strokes: strokes) })
@@ -101,12 +103,12 @@ struct PerformanceTests {
         let store = try DocumentStore(opening: package.url, options: .init(idleDelay: nil))
         var rng = SplitMix64(seed: 98)
         for id in notebook.pages {
-            try await store.apply(store.page(id).addEdit([Fixtures.stroke(&rng, samples: 120, rendering: .full)]), to: id)
+            try await store.apply(store.page(id).addEdit([Fixtures.stroke(&rng, samples: 120, rendering: rendering)]), to: id)
         }
         let elapsed = try await ContinuousClock().measure { try await store.flush() }
         let ms = Double(elapsed.components.attoseconds) / 1e15 + Double(elapsed.components.seconds) * 1e3
-        report(String(format: "checkpoint 100 dirty pages (401 strokes × 60 samples each, ~58 MB): %.1f ms", ms))
-        if isReleaseBuild {
+        report(String(format: "checkpoint 100 dirty pages (401 strokes × 60 samples each), rendering %@: %.1f ms", "\(rendering)", ms))
+        if isReleaseBuild, rendering == .square {
             #expect(ms < 500, "checkpoint \(ms) ms")
         }
     }

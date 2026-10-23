@@ -1,4 +1,7 @@
-/// Exactly how PencilKit draws a stroke (format v2, #71): its ink, random seed and, parallel to
+import CoreGraphics
+import Foundation
+
+/// Exactly how PencilKit draws a stroke (format v2, #71): its ink, random seed, render group and, parallel to
 /// ``Stroke/samples``, each control point's rendered size and opacity.
 ///
 /// Strokes captured by PencilKit carry this so they render identically after reload or when their page
@@ -13,12 +16,19 @@ public struct StrokeRendering: Hashable, Sendable, Codable {
     public var randomSeed: UInt32
     /// One per sample.
     public var points: [PointRendering]
+    /// `PKStroke.renderGroupID` (iOS 27): strokes of a group composite together, e.g. a watercolor
+    /// stroke's overlapping dabs don't darken each other. `nil` if none.
+    public var renderGroupID: UUID?
+    /// `PKStroke.renderState.grainOffset` (iOS 27, textured inks). `nil` if none.
+    public var grainOffset: CGPoint?
 
     /// Creates rendering data. `points` must be parallel to the stroke's samples.
-    public init(ink: String, randomSeed: UInt32, points: [PointRendering]) {
+    public init(ink: String, randomSeed: UInt32, points: [PointRendering], renderGroupID: UUID? = nil, grainOffset: CGPoint? = nil) {
         self.ink = ink
         self.randomSeed = randomSeed
         self.points = points
+        self.renderGroupID = renderGroupID
+        self.grainOffset = grainOffset
     }
 
     /// Largest point extent (width or height), 0 if none.
@@ -49,15 +59,31 @@ public struct StrokeRendering: Hashable, Sendable, Codable {
     }
 }
 
-/// One control point's rendered size (`PKStrokePoint.size`, page points) and opacity.
+/// One control point's rendered size (`PKStrokePoint.size`, page points), opacity, and the ink-specific
+/// `PKStrokePoint` fields: `secondaryScale` (e.g. watercolor wash), `threshold`, `lateralJitter`.
+/// Defaults are PencilKit's for points made without them.
 public struct PointRendering: Hashable, Sendable, Codable, BitwiseCopyable {
     public var width: Float
     public var height: Float
     public var opacity: Float
+    /// Double: some inks (pencil) keep it at full precision. Stored as f32 on disk when exact.
+    public var secondaryScale: Double = 1
+    public var threshold: Float = 0
+    public var lateralJitter: Float = 0
 
-    public init(width: Float, height: Float, opacity: Float = 1) {
+    public init(
+        width: Float, height: Float, opacity: Float = 1, secondaryScale: Double = 1, threshold: Float = 0, lateralJitter: Float = 0
+    ) {
         self.width = width
         self.height = height
         self.opacity = opacity
+        self.secondaryScale = secondaryScale
+        self.threshold = threshold
+        self.lateralJitter = lateralJitter
+    }
+
+    /// Whether the ink-specific fields are all at their defaults.
+    public var hasDefaultExtras: Bool {
+        secondaryScale.bitPattern == Double(1).bitPattern && threshold.bitPattern == 0 && lateralJitter.bitPattern == 0
     }
 }
