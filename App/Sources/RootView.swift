@@ -46,9 +46,9 @@ struct RootView: View {
             }
         }
         #if DEBUG
-            .fullScreenCover(isPresented: $showsGallery) {
-                DesignSystemGallery()
-            }
+        .fullScreenCover(isPresented: $showsGallery) {
+            DesignSystemGallery()
+        }
         #endif
     }
 
