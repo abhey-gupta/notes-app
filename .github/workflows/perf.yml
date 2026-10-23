@@ -28,3 +28,6 @@ jobs:
           export PATH="$PATH_PREFIX:$PATH"
           SIM=$(scripts/ci-sim.sh CI-iPad)
           make perf SIM="$SIM"
+      - name: Shut down simulator
+        if: always()
+        run: xcrun simctl shutdown CI-iPad 2>/dev/null || true
