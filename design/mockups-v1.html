@@ -1,0 +1,420 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FCFBF7; --desk:#EDEAE4; --ink:#1E2129; --blue:#2C4FD6; --red:#D2402F;
+    --glass:rgba(255,255,255,.72); --glass-b:rgba(0,0,0,.07);
+    --ui:-apple-system,"SF Pro Text","SF Pro Display",system-ui,sans-serif;
+  }
+  .wrap{display:flex;flex-direction:column;gap:44px;padding:4px 0 8px}
+  .cap{display:flex;align-items:baseline;gap:10px;margin:0 0 12px 2px;font-family:var(--font-sans,-apple-system,system-ui)}
+  .cap .n{font-family:var(--font-mono);font-size:11px;color:var(--muted-foreground);letter-spacing:.04em}
+  .cap .t{font-size:15px;font-weight:600;color:var(--foreground)}
+  .cap{flex-wrap:wrap;row-gap:3px}
+  .cap .d{font-size:13px;color:var(--muted-foreground);flex-basis:100%;padding-left:1px}
+  .fit{width:100%;position:relative}
+  .device{position:absolute;top:0;left:0;transform-origin:0 0;width:1226px;height:866px;padding:16px;box-sizing:border-box;
+    background:#0E0E10;border-radius:44px;box-shadow:0 30px 60px -20px rgba(0,0,0,.35),inset 0 0 0 1.5px #2a2a2e}
+  .screen{position:relative;width:1194px;height:834px;border-radius:28px;overflow:hidden;font-family:var(--ui);color:var(--ink);
+    -webkit-font-smoothing:antialiased}
+  .status{position:absolute;top:0;left:0;right:0;height:26px;display:flex;justify-content:space-between;align-items:center;
+    padding:0 26px;font:600 13px var(--ui);z-index:20}
+  .status .r{display:flex;gap:6px;align-items:center}
+  .batt{width:24px;height:11px;border:1.2px solid currentColor;border-radius:3.5px;opacity:.9;position:relative}
+  .batt:after{content:"";position:absolute;left:1.5px;top:1.5px;bottom:1.5px;width:70%;background:currentColor;border-radius:1.5px}
+  .glass{background:var(--glass);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+    border:.5px solid var(--glass-b);box-shadow:0 10px 30px -8px rgba(20,20,30,.16),0 1px 0 rgba(255,255,255,.6) inset}
+  .ico{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .hw{font-family:"Caveat",cursive}
+  .serif{font-family:"Instrument Serif",serif}
+
+  /* ---------- editor ---------- */
+  .desk{position:absolute;inset:0;background:var(--desk)}
+  .page{position:absolute;left:217px;top:74px;width:760px;height:1000px;background:var(--paper);border-radius:4px;
+    box-shadow:0 1px 2px rgba(0,0,0,.06),0 12px 40px -12px rgba(40,30,10,.18)}
+  .dots{background-image:radial-gradient(circle,rgba(30,33,41,.16) 1.05px,transparent 1.35px);background-size:24px 24px;background-position:12px 12px}
+  .tb{position:absolute;top:30px;height:52px;border-radius:26px;display:flex;align-items:center;padding:0 6px;gap:2px;z-index:10}
+  .btn{width:44px;height:40px;border-radius:20px;display:grid;place-items:center;color:#3a3d45;position:relative}
+  .btn.on{background:rgba(30,33,41,.08);color:var(--ink)}
+  .btn.on:after{content:"";position:absolute;bottom:3px;width:4px;height:4px;border-radius:2px;background:var(--c,var(--ink))}
+  .sep{width:1px;height:22px;background:rgba(0,0,0,.1);margin:0 6px}
+  .sw{width:22px;height:22px;border-radius:50%;margin:0 5px;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.15)}
+  .sw.on{box-shadow:0 0 0 2px var(--paper),0 0 0 3.5px currentColor}
+  .pill{position:absolute;font:600 12px var(--ui);padding:7px 12px;border-radius:14px;color:#55585f;letter-spacing:.01em}
+  .hl{background:linear-gradient(transparent 22%,rgba(255,214,51,.55) 22%,rgba(255,214,51,.55) 86%,transparent 86%);padding:0 4px;margin:0 -2px;border-radius:2px}
+  .ln{position:absolute;font-size:31px;line-height:48px;white-space:nowrap}
+
+  /* ---------- library ---------- */
+  .lib{position:absolute;inset:0;background:#F3F1EC}
+  .cover{position:relative;width:150px;height:196px;border-radius:5px 12px 12px 5px;overflow:hidden;
+    box-shadow:0 1px 1px rgba(0,0,0,.08),0 14px 28px -12px rgba(30,20,10,.35)}
+  .cover:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 2px,transparent 2px 4px),
+    linear-gradient(160deg,rgba(255,255,255,.18),rgba(0,0,0,.08))}
+  .cover:after{content:"";position:absolute;left:10px;top:0;bottom:0;width:1px;background:rgba(0,0,0,.18);box-shadow:1px 0 0 rgba(255,255,255,.15)}
+  .label{position:absolute;left:28px;right:16px;top:30px;background:rgba(252,251,247,.92);border-radius:3px;padding:7px 9px 8px;
+    font:400 15px/1.1 "Instrument Serif",serif;color:#2a2a2a}
+  .label small{display:block;font:500 9px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:#888;margin-top:4px}
+  .chip{font:500 13px var(--ui);padding:7px 14px;border-radius:16px;color:#5b5e66}
+  .chip.on{background:var(--ink);color:#fff}
+  .recent{width:344px}
+  .rthumb{height:196px;border-radius:12px;background:var(--paper);position:relative;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,.06),0 10px 30px -14px rgba(30,20,10,.3)}
+  .meta{font:600 14px var(--ui);margin-top:12px}
+  .meta span{display:block;font-weight:400;font-size:12.5px;color:#8a8c92;margin-top:3px}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap"></div>
+
+<script>
+const I = {
+  back:'<path d="M14.5 5l-7 7 7 7"/>',
+  pen:'<path d="M4.5 19.5l1.2-4.6L16 4.6a2 2 0 012.9 0l.5.5a2 2 0 010 2.9L9.1 18.3z"/><path d="M14.3 6.3l3.4 3.4"/>',
+  hl:'<path d="M4 20.5h6"/><path d="M8.6 15.4l-2.1 3.8 3.4-.6"/><path d="M8.6 15.4L17 5a1.8 1.8 0 012.6-.2l.6.6a1.8 1.8 0 01-.2 2.6l-10.4 8.4z"/>',
+  eraser:'<path d="M9 20h11"/><path d="M4.8 14.6l8.6-8.9a2 2 0 012.9 0l2.9 2.9a2 2 0 010 2.9L11 20H8.6z"/><path d="M9.5 9.8l5.6 5.6"/>',
+  lasso:'<ellipse cx="12" cy="9.5" rx="8" ry="5.2" stroke-dasharray="2.2 2.6"/><path d="M8.3 14.2c-.9 1.6-.2 3.2 1.6 3.3 1.8.1 2 2 .3 3"/>',
+  undo:'<path d="M9 14.5L4.5 10 9 5.5"/><path d="M4.5 10H15a5 5 0 010 10h-3"/>',
+  redo:'<path d="M15 14.5l4.5-4.5L15 5.5"/><path d="M19.5 10H9a5 5 0 000 10h3"/>',
+  grid:'<rect x="4" y="4" width="6.5" height="7.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="7.5" rx="1.6"/><rect x="4" y="14.5" width="6.5" height="6" rx="1.6"/><rect x="13.5" y="14.5" width="6.5" height="6" rx="1.6"/>',
+  more:'<circle cx="5.5" cy="12" r=".9" fill="currentColor"/><circle cx="12" cy="12" r=".9" fill="currentColor"/><circle cx="18.5" cy="12" r=".9" fill="currentColor"/>',
+  search:'<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  down:'<path d="M7 10l5 5 5-5"/>',
+  up:'<path d="M7 14l5-5 5 5"/>',
+  share:'<path d="M12 3.5v11"/><path d="M8 7.5l4-4 4 4"/><path d="M7 11H6a1.5 1.5 0 00-1.5 1.5v6A1.5 1.5 0 006 20h12a1.5 1.5 0 001.5-1.5v-6A1.5 1.5 0 0018 11h-1"/>',
+  star:'<path d="M12 4.5l2.3 4.7 5.2.7-3.8 3.6.9 5.1L12 16.2l-4.6 2.4.9-5.1-3.8-3.6 5.2-.7z"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M6 18l1.4-1.4M16.6 7.4L18 6"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  focus:'<path d="M4 9V5.5A1.5 1.5 0 015.5 4H9M15 4h3.5A1.5 1.5 0 0120 5.5V9M20 15v3.5a1.5 1.5 0 01-1.5 1.5H15M9 20H5.5A1.5 1.5 0 014 18.5V15"/>',
+};
+const ico = (k, s=22, extra='') => `<svg class="ico" style="width:${s}px;height:${s}px;${extra}" viewBox="0 0 24 24">${I[k]}</svg>`;
+const status = (dark) => `<div class="status" style="color:${dark?'#e8e8ea':'#1E2129'}"><span>9:41</span><span class="r">
+  <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M8 2.2c2.3 0 4.3.9 5.8 2.4l1.1-1.1A9.8 9.8 0 008 .7a9.8 9.8 0 00-6.9 2.8l1.1 1.1A8.2 8.2 0 018 2.2zm0 3.2c1.4 0 2.6.5 3.6 1.4l1.1-1.1A6.6 6.6 0 008 3.9a6.6 6.6 0 00-4.7 1.8l1.1 1.1c1-.9 2.2-1.4 3.6-1.4zm0 3.1c.6 0 1.1.2 1.5.6L8 10.6 6.5 9.1c.4-.4.9-.6 1.5-.6z"/></svg>
+  <span style="font-weight:500">100%</span><span class="batt"></span></span></div>`;
+
+/* ---------- editor building blocks ---------- */
+const toolbar = (opts={}) => {
+  const dark = opts.dark;
+  return `
+  <div class="tb glass" style="left:18px;padding:0 14px 0 4px;${dark?darkGlass:''}">
+    <div class="btn" style="${dark?'color:#d6d7db':''}">${ico('back')}</div>
+    <div style="font:600 15px var(--ui);${dark?'color:#ececee':''}">Thermodynamics</div>
+    <div style="margin-left:4px;color:#9a9ca3">${ico('down',15)}</div>
+  </div>
+  <div class="tb glass" style="left:50%;transform:translateX(-50%)">
+    <div class="btn on" style="--c:var(--ink)">${ico('pen')}</div>
+    <div class="btn">${ico('hl')}</div>
+    <div class="btn">${ico('eraser')}</div>
+    <div class="btn">${ico('lasso')}</div>
+    <div class="sep"></div>
+    <div class="sw on" style="background:#1E2129;color:#1E2129"></div>
+    <div class="sw" style="background:#2C4FD6"></div>
+    <div class="sw" style="background:#D2402F"></div>
+    <div class="sep"></div>
+    <div class="btn" style="width:40px">${ico('undo')}</div>
+    <div class="btn" style="width:40px;opacity:.35">${ico('redo')}</div>
+  </div>
+  <div class="tb glass" style="right:18px">
+    <div class="btn">${ico('grid')}</div>
+    <div class="btn">${ico('share')}</div>
+    <div class="btn">${ico('more')}</div>
+  </div>`;
+};
+const darkGlass = '';
+
+const thermoPage = () => `
+  <div class="page dots">
+    <div class="hw" style="position:absolute;right:56px;top:34px;font-size:24px;color:#9a9890">Thu, Oct 23</div>
+    <div class="hw" style="position:absolute;left:64px;top:52px;font-size:50px;font-weight:600;letter-spacing:-.5px">Thermodynamics — Lecture 7</div>
+    <svg style="position:absolute;left:62px;top:118px" width="440" height="16" viewBox="0 0 440 16" fill="none" stroke="#2C4FD6" stroke-width="3.2" stroke-linecap="round">
+      <path d="M2 9 C 80 4, 170 12, 250 7 S 390 5, 436 8"/></svg>
+
+    <div class="ln hw" style="left:72px;top:168px">• First law — energy is conserved</div>
+    <div class="ln hw" style="left:104px;top:222px;font-size:36px;color:#C2392A;font-weight:600">ΔU = Q − W</div>
+    <svg style="position:absolute;left:90px;top:220px" width="196" height="56" viewBox="0 0 196 56" fill="none" stroke="#C2392A" stroke-width="2.4" stroke-linecap="round">
+      <path d="M8 6 C 60 2, 130 4, 188 5 C 192 20, 191 36, 189 50 C 130 53, 60 52, 6 51 C 4 36, 5 20, 9 4"/></svg>
+    <div class="ln hw" style="left:72px;top:288px">• Isothermal → T constant, so <span class="hl">ΔU = 0</span></div>
+    <div class="ln hw" style="left:72px;top:336px">• Work = area under the P–V curve</div>
+    <div class="ln hw" style="left:96px;top:384px;color:#55606f;font-size:28px">W = ∫ P dV = nRT ln(V₂/V₁)</div>
+
+    <svg style="position:absolute;left:420px;top:430px" width="320" height="250" viewBox="0 0 320 250" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(40)">
+        <line x1="0" y1="0" x2="0" y2="8" stroke="#2C4FD6" stroke-width="1.4" opacity=".35"/></pattern></defs>
+      <path d="M64 44 C 92 140, 160 178, 270 188 L 270 214 L 64 214 Z" fill="url(#hatch)"/>
+      <g stroke="#1E2129" stroke-width="2.6">
+        <path d="M32 16 Q 30 120 33 216 Q 160 218 302 213"/>
+        <path d="M25 27 L32 14 L39 26"/><path d="M291 206 L304 213 L291 220"/>
+        <path d="M64 44 L 64 214" stroke-dasharray="4 6" stroke-width="1.6" opacity=".5"/>
+        <path d="M270 188 L 270 214" stroke-dasharray="4 6" stroke-width="1.6" opacity=".5"/>
+      </g>
+      <path d="M64 44 C 92 140, 160 178, 270 188" stroke="#2C4FD6" stroke-width="3.4"/>
+      <path d="M64 44 C 78 150, 130 196, 220 205" stroke="#C2392A" stroke-width="2.6" stroke-dasharray="7 7"/>
+      <circle cx="64" cy="44" r="4.5" fill="#1E2129"/><circle cx="270" cy="188" r="4.5" fill="#1E2129"/>
+      <g font-family="Caveat" font-size="26" fill="#1E2129" stroke="none">
+        <text x="6" y="30">P</text><text x="296" y="244">V</text>
+        <text x="74" y="40">A</text><text x="276" y="180">B</text>
+        <text x="160" y="146" fill="#2C4FD6" font-size="24">isotherm</text>
+        <text x="96" y="238" fill="#C2392A" font-size="22">adiabat</text>
+      </g>
+    </svg>
+
+    <div class="ln hw" style="left:72px;top:480px;color:#2C4FD6;font-size:30px">Q: why is the adiabat</div>
+    <div class="ln hw" style="left:72px;top:524px;color:#2C4FD6;font-size:30px">steeper? → no heat in,</div>
+    <div class="ln hw" style="left:72px;top:568px;color:#2C4FD6;font-size:30px">so T must drop as V ↑</div>
+    <svg style="position:absolute;left:330px;top:540px" width="120" height="60" viewBox="0 0 120 60" fill="none" stroke="#2C4FD6" stroke-width="2.4" stroke-linecap="round">
+      <path d="M4 40 C 40 50, 80 40, 112 14"/><path d="M98 12 L113 13 L109 28"/></svg>
+
+    <div class="ln hw" style="left:72px;top:650px">• Next: Carnot cycle + efficiency</div>
+    <svg style="position:absolute;left:30px;top:654px" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#E0A400" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3.5l2.4 5 5.4.7-4 3.8 1 5.4L12 15.9l-4.8 2.5 1-5.4-4-3.8 5.4-.7z"/></svg>
+  </div>`;
+
+const scrollbar = (dark) => `<div style="position:absolute;right:6px;top:250px;width:4px;height:120px;border-radius:2px;background:${dark?'rgba(255,255,255,.25)':'rgba(0,0,0,.18)'}"></div>`;
+
+/* ---------- screens ---------- */
+const S = {};
+
+S.library = () => {
+  const covers = [
+    ['#8E9F87','Thermo&shy;dynamics','Physics II'],
+    ['#C07F5E','Studio Journal','Personal'],
+    ['#2F3B57','Product Specs','Work'],
+    ['#D9C9AC','Sketchbook','Personal'],
+    ['#6B4A5E','Linear Algebra','Semester 3'],
+    ['#3B3C40','Meeting Notes','Work'],
+  ];
+  const mini = (lines) => `<div class="dots" style="position:absolute;inset:0;background-size:14px 14px"></div>` + lines;
+  const recents = [
+    ['Thermodynamics','Edited 2 min ago · 11 pages', mini(`
+      <div class="hw" style="position:absolute;left:26px;top:22px;font-size:30px;font-weight:600">Thermodynamics — Lecture 7</div>
+      <div class="hw" style="position:absolute;left:30px;top:66px;font-size:20px">• First law — energy is conserved</div>
+      <div class="hw" style="position:absolute;left:52px;top:96px;font-size:24px;color:#C2392A;font-weight:600">ΔU = Q − W</div>
+      <div class="hw" style="position:absolute;left:30px;top:132px;font-size:20px">• Isothermal → <span class="hl">ΔU = 0</span></div>
+      <svg style="position:absolute;right:26px;top:84px" width="110" height="90" viewBox="0 0 110 90" fill="none" stroke-linecap="round"><path d="M10 6 V80 H104" stroke="#1E2129" stroke-width="2"/><path d="M22 14 C 34 54, 60 68, 98 72" stroke="#2C4FD6" stroke-width="2.4"/></svg>`)],
+    ['Product Specs','Yesterday · 4 pages', mini(`
+      <div class="hw" style="position:absolute;left:26px;top:22px;font-size:30px;font-weight:600">Onboarding v2</div>
+      <svg style="position:absolute;left:26px;top:72px" width="300" height="110" viewBox="0 0 300 110" fill="none" stroke="#1E2129" stroke-width="2" stroke-linecap="round">
+        <rect x="2" y="6" width="70" height="96" rx="10"/><rect x="112" y="6" width="70" height="96" rx="10"/><rect x="222" y="6" width="70" height="96" rx="10"/>
+        <path d="M76 54 H106 M100 48 l7 6 -7 6 M186 54 H216 M210 48 l7 6 -7 6" stroke="#2C4FD6"/>
+        <path d="M14 26 h46 M14 38 h30 M124 26 h46 M124 38 h36 M234 26 h40" stroke-width="2.6" opacity=".55"/>
+        <rect x="14" y="80" width="46" height="12" rx="6" stroke="#C2392A"/></svg>`)],
+    ['Studio Journal','Mon · 31 pages', mini(`
+      <div class="hw" style="position:absolute;left:26px;top:22px;font-size:30px;font-weight:600">Morning pages</div>
+      <div class="hw" style="position:absolute;left:28px;top:66px;font-size:21px;line-height:30px;color:#3b3e47;width:290px;white-space:normal">Slept well. Want to finish the chair drawing today — the light from the east window is perfect around 9.</div>
+      <svg style="position:absolute;right:30px;top:20px" width="44" height="44" viewBox="0 0 44 44" fill="none" stroke="#E0A400" stroke-width="2.2" stroke-linecap="round"><circle cx="22" cy="22" r="8"/><path d="M22 4v6M22 34v6M4 22h6M34 22h6M9 9l4 4M31 31l4 4M9 35l4-4M31 13l4-4"/></svg>`)],
+  ];
+  return `<div class="lib">${status()}
+    <div class="serif" style="position:absolute;left:44px;top:44px;font-size:46px;letter-spacing:-.5px">Library</div>
+    <div style="position:absolute;right:40px;top:50px;display:flex;gap:10px;align-items:center">
+      <div class="glass" style="height:40px;width:250px;border-radius:20px;display:flex;align-items:center;gap:8px;padding:0 14px;color:#8a8c92;font-size:15px;background:rgba(255,255,255,.7)">${ico('search',18)} Search notebooks</div>
+      <div class="glass" style="width:40px;height:40px;border-radius:20px;display:grid;place-items:center;color:#55585f">${ico('gear',19)}</div>
+      <div style="height:40px;padding:0 16px 0 12px;border-radius:20px;display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;font:600 15px var(--ui)">${ico('plus',18)} New</div>
+    </div>
+
+    <div style="position:absolute;left:44px;top:126px;font:600 13px var(--ui);color:#8a8c92;letter-spacing:.06em;text-transform:uppercase">Continue</div>
+    <div style="position:absolute;left:44px;top:156px;display:flex;gap:31px">
+      ${recents.map(r=>`<div class="recent"><div class="rthumb">${r[2]}</div><div class="meta">${r[0]}<span>${r[1]}</span></div></div>`).join('')}
+    </div>
+
+    <div style="position:absolute;left:44px;top:446px;right:44px;display:flex;align-items:center;gap:6px">
+      <div style="font:600 13px var(--ui);color:#8a8c92;letter-spacing:.06em;text-transform:uppercase;margin-right:14px">Notebooks</div>
+      <div class="chip on">All</div><div class="chip">Semester 3</div><div class="chip">Work</div><div class="chip">Personal</div>
+      <div class="chip" style="color:#a0a2a8">+ Folder</div>
+      <div style="margin-left:auto;font:500 13px var(--ui);color:#8a8c92">Sorted by recent ⌄</div>
+    </div>
+    <div style="position:absolute;left:44px;top:500px;display:flex;gap:39px">
+      ${covers.map(c=>`<div><div class="cover" style="background:${c[0]}"><div class="label">${c[1]}<small>${c[2]}</small></div></div>
+        <div class="meta" style="font-size:13.5px">${c[1].replace('&shy;','')}<span>${[11,31,4,48,9,22][covers.indexOf(c)]} pages</span></div></div>`).join('')}
+    </div>
+  </div>`;
+};
+
+S.editor = () => `<div class="desk"></div>${status()}${thermoPage()}${toolbar()}${scrollbar()}
+  <div class="pill glass" style="right:18px;bottom:18px">3 of 11</div>`;
+
+S.popover = () => {
+  const colors=['#1E2129','#5D6470','#2C4FD6','#1E8E6E','#D2402F','#E07A1F','#7E4FD8','#C2457E','#0FA3B1','#8D6E4C','#E8B800'];
+  return `<div class="desk"></div>${status()}${thermoPage()}${toolbar()}${scrollbar()}
+  <div class="pill glass" style="right:18px;bottom:18px">3 of 11</div>
+  <svg style="position:absolute;left:432px;top:84px;z-index:12" width="24" height="12" viewBox="0 0 24 12"><path d="M0 12 L12 0 L24 12Z" fill="rgba(255,255,255,.92)"/></svg>
+  <div class="glass" style="position:absolute;left:330px;top:95px;width:328px;border-radius:24px;padding:16px;z-index:11;background:rgba(255,255,255,.88)">
+    <div style="display:flex;background:rgba(30,33,41,.06);border-radius:12px;padding:3px;font:500 13px var(--ui)">
+      <div style="flex:1;text-align:center;padding:7px 0;border-radius:9px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Fountain</div>
+      <div style="flex:1;text-align:center;padding:7px 0;color:#6b6e75">Ballpoint</div>
+      <div style="flex:1;text-align:center;padding:7px 0;color:#6b6e75">Brush</div>
+    </div>
+    <div style="height:72px;margin:12px 0 6px;border-radius:14px;background:var(--paper);display:grid;place-items:center;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.06)">
+      <svg width="250" height="46" viewBox="0 0 250 46"><path d="M8 30 C 30 6, 50 6, 62 24 S 92 44, 108 22 S 140 4, 156 22 S 188 40, 204 20 S 232 10, 242 16
+        L 242 19 C 232 14, 210 24, 204 25 S 186 46, 154 27 S 140 10, 110 27 S 90 50, 60 28 S 32 12, 10 33 Z" fill="#1E2129"/></svg>
+    </div>
+    <div style="font:600 11.5px var(--ui);color:#8a8c92;letter-spacing:.06em;text-transform:uppercase;margin:14px 2px 10px">Thickness</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 10px">
+      ${[3,5,8,11,15].map((s,i)=>`<div style="width:40px;height:40px;border-radius:20px;display:grid;place-items:center;${i==1?'background:rgba(30,33,41,.08)':''}"><div style="width:${s}px;height:${s}px;border-radius:50%;background:#1E2129"></div></div>`).join('')}
+    </div>
+    <div style="font:600 11.5px var(--ui);color:#8a8c92;letter-spacing:.06em;text-transform:uppercase;margin:16px 2px 10px">Color</div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px 0;justify-items:center">
+      ${colors.map((c,i)=>`<div style="width:30px;height:30px;border-radius:50%;background:${c};${i==0?'box-shadow:0 0 0 2.5px #fff,0 0 0 4.5px #1E2129':'box-shadow:inset 0 0 0 .5px rgba(0,0,0,.15)'}"></div>`).join('')}
+      <div style="width:30px;height:30px;border-radius:50%;background:conic-gradient(#f44,#fb3,#4c6,#3bf,#66f,#c4c,#f44);display:grid;place-items:center"><div style="width:16px;height:16px;border-radius:50%;background:#fff;display:grid;place-items:center;color:#333">${ico('plus',12,'stroke-width:2.6')}</div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding:12px 4px 2px;border-top:.5px solid rgba(0,0,0,.08);font:500 14px var(--ui)">
+      <span>Pressure sensitivity</span>
+      <div style="width:44px;height:26px;border-radius:13px;background:#34C759;position:relative"><div style="position:absolute;right:2px;top:2px;width:22px;height:22px;border-radius:11px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div></div>
+    </div>
+  </div>`;
+};
+
+S.pages = () => {
+  const thumb = (n, body, cur) => `<div style="text-align:center">
+    <div class="dots" style="position:relative;width:176px;height:228px;border-radius:6px;background-color:var(--paper);background-size:10px 10px;overflow:hidden;
+      box-shadow:${cur?'0 0 0 3px #2C4FD6,':''}0 1px 2px rgba(0,0,0,.08),0 10px 24px -12px rgba(30,20,10,.35)">${body}</div>
+    <div style="font:${cur?'600':'500'} 12.5px var(--ui);margin-top:10px;color:${cur?'#2C4FD6':'#7b7e85'}">${n}</div></div>`;
+  const t = (title, lines) => `<div class="hw" style="position:absolute;left:14px;top:12px;font-size:17px;font-weight:600">${title}</div>` +
+    lines.map((l,i)=>`<div class="hw" style="position:absolute;left:16px;top:${40+i*18}px;font-size:12px;color:${l[1]||'#1E2129'}">${l[0]}</div>`).join('');
+  const P = [
+    t('Lecture 6 — Entropy',[['• S is a state function'],['• dS = δQ_rev / T'],['• ΔS_universe ≥ 0','#C2392A'],['  (2nd law)'],[''],['• examples: ideal gas'],['  free expansion']]),
+    t('Problem set 4',[['1) n=2 mol, T=300K'],['   V: 10L → 20L'],['   W = nRT ln 2'],['   = 3.46 kJ ✓','#2C4FD6'],[''],['2) adiabatic case'],['   PV^γ = const']]),
+    t('Lecture 7',[['• First law'],['  ΔU = Q − W','#C2392A'],['• Isothermal → ΔU=0'],['• Work = area'],[''],['Q: adiabat steeper?','#2C4FD6']]) + `<svg style="position:absolute;right:14px;bottom:30px" width="70" height="56" viewBox="0 0 70 56" fill="none" stroke-linecap="round"><path d="M6 2 V50 H66" stroke="#1E2129" stroke-width="1.4"/><path d="M14 8 C 22 32, 38 42, 62 44" stroke="#2C4FD6" stroke-width="1.8"/></svg>`,
+    t('Carnot cycle',[['4 steps:'],['  1. iso expansion'],['  2. adia expansion'],['  3. iso compression'],['  4. adia compression'],[''],['η = 1 − Tc/Th','#C2392A']]),
+    t('Review',[['★ exam: Nov 14','#E0A400'],['• ch. 18–20'],['• all problem sets'],['• formula sheet ok']]),
+    '',
+  ];
+  return `<div class="desk"></div>${status()}${thermoPage()}
+  <div style="position:absolute;inset:0;background:rgba(243,241,236,.78);backdrop-filter:blur(28px) saturate(150%);-webkit-backdrop-filter:blur(28px) saturate(150%)"></div>
+  <div style="position:absolute;left:44px;right:40px;top:44px;display:flex;align-items:center">
+    <div><div class="serif" style="font-size:38px;letter-spacing:-.3px">Thermodynamics</div>
+      <div style="font:500 13px var(--ui);color:#8a8c92;margin-top:2px">11 pages · Physics II</div></div>
+    <div style="margin-left:auto;display:flex;gap:10px">
+      <div class="glass" style="padding:10px 16px;border-radius:20px;font:600 14px var(--ui)">Select</div>
+      <div style="padding:10px 18px;border-radius:20px;font:600 14px var(--ui);background:var(--ink);color:#fff">Done</div>
+    </div>
+  </div>
+  <div style="position:absolute;left:44px;right:44px;top:150px;display:flex;justify-content:space-between">
+    ${P.slice(0,5).map((b,i)=>thumb(i+1,b,i==2)).join('')}
+    <div style="text-align:center"><div style="width:176px;height:228px;border-radius:6px;border:1.5px dashed #bdbab2;display:grid;place-items:center;color:#9a9890">
+      <div style="text-align:center">${ico('plus',28)}<div style="font:500 13px var(--ui);margin-top:6px">New page</div></div></div>
+      <div style="font:500 12.5px var(--ui);margin-top:10px;color:#7b7e85">&nbsp;</div></div>
+  </div>
+  <div style="position:absolute;left:44px;right:44px;top:450px;display:flex;justify-content:space-between;opacity:.9">
+    ${[6,7,8,9,10,11].map(n=>thumb(n, t(['Lecture 8','Lecture 9','Problem set 5','Lab: calorimetry','Lecture 10','Notes'][n-6],[]) + [70,52,64,40,58].slice(0,3+n%3).map((w,j)=>`<div style="position:absolute;left:16px;top:${46+j*18}px;width:${w}%;height:2px;border-radius:1px;background:#1E2129;opacity:.22"></div>`).join(''),false)).join('')}
+  </div>
+  <div class="glass" style="position:absolute;left:50%;transform:translateX(-50%);bottom:24px;height:56px;border-radius:28px;display:flex;align-items:center;gap:6px;padding:0 8px 0 18px;font:500 13.5px var(--ui)">
+    <span style="color:#8a8c92;margin-right:6px">New page</span>
+    ${['Blank','Lined','Dotted','Grid','Cornell'].map((n,i)=>`<div style="display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:18px;${i==2?'background:rgba(30,33,41,.08);font-weight:600':''}">
+      <span style="width:16px;height:20px;border-radius:3px;background:#fff;box-shadow:inset 0 0 0 .8px rgba(0,0,0,.25);
+      ${n=='Lined'?'background-image:repeating-linear-gradient(transparent 0 4px,#aab 4px 5px)':n=='Dotted'?'background-image:radial-gradient(circle,#889 .8px,transparent 1px);background-size:4px 4px':n=='Grid'?'background-image:linear-gradient(#ccd 1px,transparent 1px),linear-gradient(90deg,#ccd 1px,transparent 1px);background-size:4px 4px':n=='Cornell'?'background-image:linear-gradient(90deg,transparent 4px,#d99 4px 5px,transparent 5px),linear-gradient(transparent 15px,#aab 15px 16px,transparent 16px)':''}"></span>${n}</div>`).join('')}
+  </div>`;
+};
+
+S.dark = () => {
+  const ink='#E9E8E4', teal='#5FD3C4', pink='#FF8FB1', amber='#FFC764';
+  return `<div class="desk" style="background:#0F1012"></div>${status(true)}
+  <div class="page" style="background:#1B1C1F;background-image:radial-gradient(circle,rgba(255,255,255,.09) 1.05px,transparent 1.35px);background-size:24px 24px;background-position:12px 12px;box-shadow:0 0 0 .5px rgba(255,255,255,.06),0 20px 50px -10px rgba(0,0,0,.6);color:${ink}">
+    <div class="hw" style="position:absolute;left:64px;top:52px;font-size:48px;font-weight:600">Launch plan ✦</div>
+    <svg style="position:absolute;left:0;top:0" width="760" height="760" viewBox="0 0 760 760" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M380 300 C 330 296, 296 318, 300 350 C 304 386, 350 398, 392 396 C 440 394, 470 372, 466 344 C 462 312, 424 298, 376 302" stroke="${ink}" stroke-width="2.8"/>
+      <g stroke="${ink}" stroke-width="2" opacity=".75">
+        <path d="M304 336 C 286 322, 268 312, 246 304"/><path d="M462 332 C 482 320, 500 310, 522 304"/>
+        <path d="M314 380 C 290 420, 266 460, 240 494"/><path d="M450 384 C 480 420, 510 460, 540 494"/>
+      </g>
+      <path d="M90 186 C 120 176, 250 178, 268 190" stroke="${teal}" stroke-width="2.6"/>
+      <path d="M520 186 C 560 178, 660 180, 690 190" stroke="${pink}" stroke-width="2.6"/>
+      <path d="M100 548 C 130 540, 240 542, 262 552" stroke="${amber}" stroke-width="2.6"/>
+      <path d="M520 548 C 560 540, 650 542, 676 552" stroke="${teal}" stroke-width="2.6"/>
+    </svg>
+    <div class="hw" style="position:absolute;left:318px;top:322px;font-size:38px;font-weight:700;width:130px;text-align:center">Ink 1.0</div>
+    <div class="hw" style="position:absolute;left:96px;top:142px;font-size:32px;color:${teal}">Speed</div>
+    <div class="hw" style="position:absolute;left:96px;top:196px;font-size:23px;line-height:30px;opacity:.85">launch &lt; 400ms<br>ink at 120Hz<br>no spinners. ever.</div>
+    <div class="hw" style="position:absolute;left:526px;top:142px;font-size:32px;color:${pink}">Pencil feel</div>
+    <div class="hw" style="position:absolute;left:526px;top:196px;font-size:23px;line-height:30px;opacity:.85">pressure + tilt<br>squeeze → eraser<br>hover preview</div>
+    <div class="hw" style="position:absolute;left:104px;top:504px;font-size:32px;color:${amber}">Calm UI</div>
+    <div class="hw" style="position:absolute;left:104px;top:558px;font-size:23px;line-height:30px;opacity:.85">chrome fades<br>while writing</div>
+    <div class="hw" style="position:absolute;left:526px;top:504px;font-size:32px;color:${teal}">Trust</div>
+    <div class="hw" style="position:absolute;left:526px;top:558px;font-size:23px;line-height:30px;opacity:.85">autosave always<br>PDF out, open files</div>
+  </div>
+  <div class="tb" style="left:50%;transform:translateX(-50%);height:44px;border-radius:22px;padding:0 6px 0 8px;gap:4px;background:rgba(40,41,46,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:.5px solid rgba(255,255,255,.1);box-shadow:0 10px 30px -8px rgba(0,0,0,.5);color:#e8e8ea">
+    <div class="btn" style="height:34px;width:38px;color:#e8e8ea;background:rgba(255,255,255,.1)">${ico('pen',19)}</div>
+    <div style="width:18px;height:18px;border-radius:50%;background:${teal};margin:0 6px;box-shadow:0 0 0 2px #2a2b30,0 0 0 3.5px ${teal}"></div>
+    <div style="width:1px;height:18px;background:rgba(255,255,255,.14);margin:0 4px"></div>
+    <div class="btn" style="height:34px;width:34px;color:#a9abb2">${ico('down',17)}</div>
+  </div>
+  <div style="position:absolute;right:18px;bottom:18px;font:600 12px var(--ui);padding:7px 12px;border-radius:14px;color:#8d8f96;background:rgba(40,41,46,.6)">1 of 3</div>`;
+};
+
+S.newnb = () => {
+  const covers=['#8E9F87','#C07F5E','#2F3B57','#D9C9AC','#6B4A5E','#3B3C40','#9DB4C9','#E3A5A0'];
+  return `${S.library()}
+  <div style="position:absolute;inset:0;background:rgba(20,18,14,.28)"></div>
+  <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:720px;height:470px;border-radius:30px;background:#FBFAF7;
+    box-shadow:0 40px 80px -20px rgba(0,0,0,.4);display:flex;overflow:hidden">
+    <div style="width:290px;background:#EFECE6;display:grid;place-items:center;position:relative">
+      <div class="cover" style="width:180px;height:236px;background:#2F3B57;transform:rotate(-3deg)"><div class="label" style="font-size:19px;top:38px">Organic Chemistry<small>Semester 3</small></div></div>
+    </div>
+    <div style="flex:1;padding:28px 30px;position:relative">
+      <div style="display:flex;justify-content:space-between;align-items:center;font:500 15px var(--ui)">
+        <span style="color:#8a8c92">Cancel</span><span style="font-weight:600">New notebook</span><span style="color:#2C4FD6;font-weight:600">Create</span></div>
+      <div style="margin-top:22px;padding:12px 14px;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.1);font:400 19px 'Instrument Serif',serif">Organic Chemistry<span style="display:inline-block;width:1.5px;height:20px;background:#2C4FD6;vertical-align:-3px;margin-left:1px"></span></div>
+      <div style="font:600 11.5px var(--ui);color:#8a8c92;letter-spacing:.06em;text-transform:uppercase;margin:22px 0 10px">Cover</div>
+      <div style="display:flex;gap:12px">${covers.map((c,i)=>`<div style="width:30px;height:30px;border-radius:50%;background:${c};${i==2?'box-shadow:0 0 0 2.5px #FBFAF7,0 0 0 4.5px #2F3B57':''}"></div>`).join('')}</div>
+      <div style="font:600 11.5px var(--ui);color:#8a8c92;letter-spacing:.06em;text-transform:uppercase;margin:22px 0 10px">Paper</div>
+      <div style="display:flex;gap:12px">
+        ${['Blank','Lined','Dotted','Grid'].map((n,i)=>`<div style="text-align:center;font:${i==2?600:500} 12px var(--ui);color:${i==2?'#1E2129':'#7b7e85'}">
+          <div style="width:72px;height:92px;border-radius:7px;background-color:#fff;margin-bottom:7px;box-shadow:${i==2?'0 0 0 2.5px #2C4FD6':'inset 0 0 0 .5px rgba(0,0,0,.14)'};
+          ${n=='Lined'?'background-image:repeating-linear-gradient(transparent 0 9px,#c9cbd3 9px 10px)':n=='Dotted'?'background-image:radial-gradient(circle,#9a9ca5 .9px,transparent 1.2px);background-size:9px 9px':n=='Grid'?'background-image:linear-gradient(#dcdde3 1px,transparent 1px),linear-gradient(90deg,#dcdde3 1px,transparent 1px);background-size:9px 9px':''}"></div>${n}</div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:20px;font:500 13px var(--ui)">
+        ${[['White','#fff'],['Cream','#F6F0E1'],['Night','#1B1C1F']].map((p,i)=>`<div style="display:flex;align-items:center;gap:7px;padding:7px 12px 7px 8px;border-radius:16px;${i==1?'background:rgba(30,33,41,.07);font-weight:600':''}"><span style="width:16px;height:16px;border-radius:50%;background:${p[1]};box-shadow:inset 0 0 0 .8px rgba(0,0,0,.2)"></span>${p[0]}</div>`).join('')}
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px;color:#7b7e85">A4 · Portrait</div>
+      </div>
+    </div>
+  </div>`;
+};
+
+/* toolbar placement variants */
+const variant = (label, sub, tb) => `<div style="flex:1;min-width:0">
+  <div style="position:relative;aspect-ratio:4/3;border-radius:14px;background:#EDEAE4;overflow:hidden;box-shadow:0 0 0 6px #0E0E10">
+    <div class="dots" style="position:absolute;left:22%;right:22%;top:8%;bottom:-10%;background-color:#FCFBF7;background-size:7px 7px;border-radius:2px;box-shadow:0 6px 16px -8px rgba(0,0,0,.25)">
+      ${[0,1,2,3,4].map(i=>`<div style="position:absolute;left:12%;top:${18+i*13}%;height:3px;width:${[70,55,62,40,58][i]}%;border-radius:2px;background:#1E2129;opacity:.55"></div>`).join('')}
+    </div>${tb}</div>
+  <div style="font:600 13px var(--font-sans,-apple-system,system-ui);color:var(--foreground);margin-top:14px">${label}</div>
+  <div style="font:12.5px/1.45 var(--font-sans,-apple-system,system-ui);color:var(--muted-foreground);margin-top:3px">${sub}</div></div>`;
+const gb = 'background:rgba(255,255,255,.85);box-shadow:0 4px 12px -4px rgba(0,0,0,.25);position:absolute;border:.5px solid rgba(0,0,0,.08)';
+const variants = `<div style="display:flex;gap:26px;padding:6px">
+  ${variant('A · Top capsule','Shown above. Familiar, out of the writing zone; reach is a stretch on 13″.',
+    `<div style="${gb};left:30%;right:30%;top:4%;height:8%;border-radius:99px;display:flex;align-items:center;justify-content:space-evenly;padding:0 6%">${'<i style="width:6px;height:6px;border-radius:3px;background:#555"></i>'.repeat(7)}</div>`)}
+  ${variant('B · Side dock','Vertical tools on the off-hand edge, next to the thumb. Draggable left/right.',
+    `<div style="${gb};left:3%;top:24%;width:7%;height:52%;border-radius:99px;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:8% 0">${'<i style="width:6px;height:6px;border-radius:3px;background:#555"></i>'.repeat(7)}</div>`)}
+  ${variant('C · Floating puck','Tiny draggable puck; tap to fan out tools. Maximum canvas, most novel.',
+    `<div style="${gb};right:6%;bottom:8%;width:9%;aspect-ratio:1;border-radius:50%;display:grid;place-items:center"><i style="width:9px;height:9px;border-radius:5px;background:#1E2129"></i></div>`)}
+</div>`;
+
+/* ---------- mount ---------- */
+const list = [
+  ['01','Library','Recents with live page previews, notebooks as physical covers, folder chips.', S.library],
+  ['02','Editor','The hero. Paper is centred, chrome is three small glass capsules. Pen · highlighter · eraser · lasso, 3 quick colors, undo.', S.editor],
+  ['03','Pen popover','Tap the active tool again. Pen type, live stroke preview, 5 widths, palette.', S.popover],
+  ['04','Pages','Grid icon → page overview. Drag to reorder, pick a template for the next page.', S.pages],
+  ['05','Focus · dark','Chrome collapses to a pill while you write. Night paper, inks adapt.', S.dark],
+  ['06','New notebook','One sheet: name, cover, paper. Create opens straight to page one.', S.newnb],
+];
+const wrap = document.getElementById('wrap');
+wrap.innerHTML = list.map(([n,t,d,f])=>`<section>
+  <div class="cap"><span class="n">${n}</span><span class="t">${t}</span><span class="d">${d}</span></div>
+  <div class="fit"><div class="device"><div class="screen">${f()}</div></div></div></section>`).join('') +
+  `<section><div class="cap"><span class="n">07</span><span class="t">Toolbar placement</span><span class="d">Pick one before we build.</span></div>${variants}</section>`;
+
+const only=location.hash.slice(1); if(only) [...wrap.children].forEach((c,i)=>{ if(String(i)!==only) c.remove(); });
+function layout(){
+  document.querySelectorAll('.fit').forEach(el=>{
+    const s = el.clientWidth/1226;
+    el.firstElementChild.style.transform = `scale(${s})`;
+    el.style.height = (866*s)+'px';
+  });
+}
+layout(); addEventListener('resize', layout);
+</script>
+</body>
+</html>
