@@ -131,14 +131,15 @@ Latency measurement: timestamp of the touch (`UITouch.timestamp`) vs `MTLDrawabl
 ### 4.1 Model (`InkModel`)
 
 ```swift
-struct Notebook { id: NotebookID; title; cover: CoverColor; paper: PaperStyle; theme: PaperTheme; pageSize: CGSize; pages: [PageID]; createdAt; modifiedAt; rev: UInt64 }
+struct Notebook { id: NotebookID; title; cover: CoverColor; paper: PaperStyle; theme: PaperTheme; keepsExactColors: Bool; pageSize: CGSize; pages: [PageID]; createdAt; modifiedAt; rev: UInt64 }
 struct Page     { id: PageID; template: PageTemplate; strokes: [Stroke]; rev: UInt64 }
 struct Stroke   { id: StrokeID (UUIDv7); tool: PenKind; color: InkColor; width: Float; samples: [Sample]; bounds: CGRect }
-struct Sample   { x, y: Float; force: Float; altitude: Float; azimuth: Float; t: Float /* s since stroke start */ }
-enum   PageEdit { add([Stroke]); remove([StrokeID]); replace(old: [StrokeID], new: [Stroke]); transform([StrokeID], CGAffineTransform); recolor([StrokeID], InkColor) }
+struct Sample   { x, y: Float; force: Float /* 0...1 */; altitude: Float; azimuth: Float; t: Float /* s since stroke start */ }
+enum   PageEdit { add([PlacedStroke]); remove([PlacedStroke]); replace(old: [PlacedStroke], new: [PlacedStroke]); transform([StrokeID], forward: CGAffineTransform, backward: CGAffineTransform); recolor([ColorChange]) }
+// PlacedStroke = (z-index, Stroke); ColorChange = (id, from, to). Build via Page.addEdit/removeEdit/replaceEdit/transformEdit/recolorEdit.
 ```
 
-Strokes store **raw samples, not outlines**, so improving the tessellation later re-renders old notes better. `PageEdit` is the one edit vocabulary used by tools, undo/redo, autosave journal, and (later) sync. Every `PageEdit` has an inverse.
+Strokes store **raw samples, not outlines**, so improving the tessellation later re-renders old notes better. `PageEdit` is the one edit vocabulary used by tools, undo/redo, autosave journal, and (later) sync. Every `PageEdit` carries the prior state its undo needs (removed strokes with z-index, prior colors, inverse matrix), so `inverse()` is pure and `e.inverse().inverse() == e`.
 
 ### 4.2 On-disk format: notebook package
 
