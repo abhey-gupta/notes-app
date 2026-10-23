@@ -47,6 +47,31 @@ struct NotebookPackageTests {
         }
     }
 
+    @Test func createWithPagesWritesInkAtomically() throws {
+        try withTemporaryDirectory { dir in
+            var rng = SplitMix64(seed: 11)
+            let inked = Page(template: .grid(spacing: 16), strokes: Fixtures.strokes(&rng, count: 7), rev: 3)
+            let empty = Page(template: .cornell)
+            let notebook = Notebook(title: "Imported", paper: .lined, createdAt: Date(unixMilliseconds: 1_700_000_000_000))
+            let url = dir.appending(path: "i.nb")
+            let package = try NotebookPackage.create(at: url, notebook: notebook, pages: [inked, empty])
+            #expect(package.manifest.notebook.pages == [inked.id, empty.id])
+            #expect(package.manifest.notebook.rev == 0 && package.manifest.notebook.modifiedAt == notebook.createdAt)
+            #expect(try contents(of: package.pagesDirectory) == ["\(inked.id).strokes"])
+            let reopened = try NotebookPackage.open(at: url)
+            #expect(reopened.manifest == package.manifest)
+            #expect(try reopened.loadPage(at: 0) == inked)
+            #expect(try reopened.loadPage(at: 1) == empty)
+
+            let twice = dir.appending(path: "dup.nb")
+            #expect(throws: DocumentError.duplicatePage(inked.id)) {
+                try NotebookPackage.create(at: twice, notebook: notebook, pages: [inked, inked])
+            }
+            #expect(!exists(twice))
+            #expect(try contents(of: dir) == ["i.nb"], "no staging left behind")
+        }
+    }
+
     @Test func openMissingPackage() throws {
         try withTemporaryDirectory { dir in
             let url = dir.appending(path: "missing.nb")

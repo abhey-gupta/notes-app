@@ -100,29 +100,58 @@ public struct NotebookPackage: Sendable {
     /// leaves a half-written `.nb`. A notebook with no pages gets one (paper's default template).
     /// - Throws: ``DocumentError/alreadyExists(_:)`` if anything is at `url`.
     public static func create(at url: URL, notebook: Notebook) throws(DocumentError) -> NotebookPackage {
+        try create(at: url, notebook: notebook, pages: EmptyCollection())
+    }
+
+    /// Writes a new package with ink: ``create(at:notebook:)`` plus a stroke file per non-empty page, all
+    /// inside the staging directory, so the package appears complete or not at all (import, duplicate,
+    /// fixtures). Writes only what it is given (no clock, no fresh IDs), so equal inputs give equal bytes.
+    ///
+    /// `pages` is consumed once, in order, one page at a time: a lazy sequence keeps memory at one page.
+    /// - Parameter pages: Page order, templates, revs and strokes. If non-empty it replaces `notebook.pages`.
+    /// - Throws: ``DocumentError/alreadyExists(_:)``, ``DocumentError/duplicatePage(_:)``,
+    ///   ``DocumentError/pageTooLarge(_:)``, ``DocumentError/io(_:reason:)``.
+    public static func create(at url: URL, notebook: Notebook, pages: some Sequence<Page>) throws(DocumentError) -> NotebookPackage {
         let fm = FileManager.default
         guard !fm.fileExists(atPath: url.path(percentEncoded: false)) else { throw .alreadyExists(url) }
-        var notebook = notebook
-        if notebook.pages.isEmpty {
-            notebook.pages = [PageID()]
-        }
-        let manifest = Manifest(notebook: notebook)
-        let data = try manifest.encoded()
         let staging = url.deletingLastPathComponent()
             .appending(path: ".\(UUID().uuidString).staging", directoryHint: .isDirectory)
+        let stagingPages = staging.appending(path: "pages", directoryHint: .isDirectory)
         do {
-            try fm.createDirectory(at: staging.appending(path: "pages"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: stagingPages, withIntermediateDirectories: true)
             try fm.createDirectory(at: staging.appending(path: "thumbs"), withIntermediateDirectories: false)
-            try data.write(to: manifestURL(in: staging))
+            var notebook = notebook
+            var entries: [PageEntry] = []
+            for page in pages {
+                entries.append(PageEntry(id: page.id, template: page.template, rev: page.rev))
+                guard !page.strokes.isEmpty else { continue }
+                let data: Data
+                do {
+                    data = try StrokeCodec.encode(page.strokes)
+                } catch {
+                    throw DocumentError.pageTooLarge(page.id)
+                }
+                try data.write(to: stagingPages.appending(path: "\(page.id).strokes", directoryHint: .notDirectory))
+            }
+            if !entries.isEmpty {
+                notebook.pages = entries.map(\.id)
+            } else if notebook.pages.isEmpty {
+                notebook.pages = [PageID()]
+            }
+            let manifest = Manifest(notebook: notebook, entries: entries)
+            try manifest.encoded().write(to: manifestURL(in: staging))
             try fm.moveItem(at: staging, to: url)
+            return NotebookPackage(url: url, manifest: manifest)
         } catch {
             try? fm.removeItem(at: staging)
+            if let error = error as? DocumentError {
+                throw error
+            }
             if fm.fileExists(atPath: url.path(percentEncoded: false)) {
                 throw .alreadyExists(url)
             }
             throw .io(url, reason: "\(error)")
         }
-        return NotebookPackage(url: url, manifest: manifest)
     }
 
     /// Opens a package, reading only `manifest.json`.

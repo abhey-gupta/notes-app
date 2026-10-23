@@ -24,6 +24,7 @@ make build          # build app for the iPad simulator
 make test           # app UI tests + every package's tests on the simulator
 make test-packages  # headless packages via `swift test` (no simulator)
 make perf           # launch perf tests (Release)
+make fixtures       # Fixtures/{1,10,100,300}-pages.nb, deterministic (notespace-fixtures --help)
 make lint / format
 ```
 
