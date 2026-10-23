@@ -33,7 +33,7 @@ final class StoreLibrary: LibraryModel {
             isLoaded = true
         }
         let elapsed = ContinuousClock.now - start
-        Self.log.debug("library.index launch read \(elapsed, privacy: .public): \(index?.notebooks.count ?? -1) notebooks")
+        Self.log.info("library.index launch read \(elapsed, privacy: .public): \(index?.notebooks.count ?? -1) notebooks")
     }
 
     func start() async {
