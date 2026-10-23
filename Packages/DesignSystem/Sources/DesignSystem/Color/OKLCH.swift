@@ -47,10 +47,11 @@ public extension RGBA {
         )
     }
 
-    /// Night-paper remap: `L' = 1 − L` clamped to [0.55, 0.95], hue and chroma kept (§10).
+    /// Night-paper remap (§10): dark colors mirror to light, light colors stay; never darker.
+    /// `L' = clamp(max(L, 1.2 − L), 0.65, 0.95)`, hue and chroma kept.
     func remappedForNight() -> RGBA {
         var lch = oklch
-        lch.lightness = min(max(1 - lch.lightness, 0.55), 0.95)
+        lch.lightness = min(max(max(lch.lightness, 1.2 - lch.lightness), 0.65), 0.95)
         return RGBA(lch, alpha: alpha)
     }
 }

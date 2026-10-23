@@ -50,8 +50,11 @@ struct TokenTests {
     @Test func nightRemapFollowsSpec() {
         let night = PaperTheme.night.palette
         #expect(night.count == 11)
-        for color in night {
-            #expect((0.549 ... 0.951).contains(color.oklch.lightness))
+        for (original, color) in zip(Tokens.palette, night) {
+            #expect((0.649 ... 0.951).contains(color.oklch.lightness))
+            // Never darker than the original, and readable on Night paper.
+            #expect(color.oklch.lightness >= min(original.oklch.lightness, 0.95) - 0.01)
+            #expect(color.contrastRatio(against: PaperTheme.night.paper) >= 4.5)
         }
         #expect(night[0].contrastRatio(against: PaperTheme.night.paper) >= 4.5)
         #expect(PaperTheme.night.adapt(Tokens.palette[0], keepExact: true) == Tokens.palette[0])
