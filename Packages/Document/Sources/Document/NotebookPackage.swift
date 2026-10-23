@@ -13,8 +13,8 @@ import InkModel
 ///
 /// A value holding the package URL and the manifest as last written. Reads are page-scoped:
 /// ``open(at:)`` reads only `manifest.json`, ``loadPage(_:)`` only that page's stroke file. Every file
-/// write is atomic (temp file + `rename`). Mutating methods write first and update ``manifest`` only on
-/// success. Not synchronized: confine a package to one actor (the future `DocumentStore`).
+/// write is atomic (temp file + barrier `fsync` + `rename`). Mutating methods write first and update
+/// ``manifest`` only on success. Not synchronized: confine a package to one actor (``DocumentStore``).
 public struct NotebookPackage: Sendable {
     /// Package directory extension.
     public static let pathExtension = "nb"
@@ -149,13 +149,18 @@ public struct NotebookPackage: Sendable {
     /// Loads one page: its manifest entry plus `pages/<id>.strokes`, nothing else.
     /// A page with no stroke file yet is empty.
     public func loadPage(_ id: PageID) throws(DocumentError) -> Page {
+        try loadPageAndIdentity(id).page
+    }
+
+    /// ``loadPage(_:)`` plus the identity of the stroke file it read (journal base check).
+    func loadPageAndIdentity(_ id: PageID) throws(DocumentError) -> (page: Page, identity: StrokesIdentity) {
         guard let entry = manifest.entry(for: id) else { throw .unknownPage(id) }
         let file = strokesURL(for: id)
         let data: Data
         do {
             data = try Data(contentsOf: file)
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            return Page(id: id, template: entry.template, rev: entry.rev)
+            return (Page(id: id, template: entry.template, rev: entry.rev), .absent)
         } catch {
             throw .io(file, reason: "\(error)")
         }
@@ -167,7 +172,7 @@ public struct NotebookPackage: Sendable {
         } catch {
             throw .corruptPage(id, error)
         }
-        return Page(id: id, template: entry.template, strokes: strokes, rev: entry.rev)
+        return (Page(id: id, template: entry.template, strokes: strokes, rev: entry.rev), StrokesIdentity(data))
     }
 
     /// Loads the page at `index` in page order.
@@ -186,6 +191,13 @@ public struct NotebookPackage: Sendable {
     /// page's `rev` and template; notebook `rev`/`modifiedAt` bumped). All pages are encoded before
     /// anything is written.
     public mutating func savePages(_ pages: some Collection<Page>) throws(DocumentError) {
+        _ = try checkpoint(pages)
+    }
+
+    /// ``savePages(_:)``, returning the identity of each stroke file written. Stroke files, then the
+    /// manifest, are each barrier-synced and their directories synced, so once this returns the new
+    /// state is ordered on media ahead of anything written after (e.g. journal deletion).
+    mutating func checkpoint(_ pages: some Collection<Page>) throws(DocumentError) -> [PageID: StrokesIdentity] {
         var next = manifest
         var files: [(URL, Data)] = []
         files.reserveCapacity(pages.count)
@@ -200,10 +212,15 @@ public struct NotebookPackage: Sendable {
                 throw .pageTooLarge(page.id)
             }
         }
-        for (file, data) in files {
+        var identities: [PageID: StrokesIdentity] = [:]
+        for (page, (file, data)) in zip(pages, files) {
             try Self.writeAtomically(data, to: file)
+            identities[page.id] = StrokesIdentity(data)
         }
+        FileIO.syncDirectory(pagesDirectory)
         try commit(next)
+        FileIO.syncDirectory(url)
+        return identities
     }
 
     /// Inserts an empty page (no stroke file is written until it has ink).
@@ -260,24 +277,36 @@ public struct NotebookPackage: Sendable {
         manifest = next
     }
 
-    /// Writes `data` to a hidden temp file beside `url`, then `rename`s it over `url`.
+    /// Writes `data` to a hidden temp file beside `url`, barrier-syncs it, then `rename`s it over `url`.
     static func writeAtomically(_ data: Data, to url: URL) throws(DocumentError) {
-        let temp = url.deletingLastPathComponent()
-            .appending(path: ".\(url.lastPathComponent).\(UUID().uuidString).tmp", directoryHint: .notDirectory)
-        do {
-            try data.write(to: temp)
-        } catch {
-            throw .io(url, reason: "\(error)")
+        try FileIO.writeAtomically(data, to: url)
+    }
+}
+
+/// Identifies one version of a page's stroke file: its length and the CRC-32 stored in its header
+/// (which covers the whole file). A journal records the identity of the file it was started on; if the
+/// file on disk no longer matches, a checkpoint already folded the journal in (§4.4).
+struct StrokesIdentity: Hashable, Sendable {
+    /// File length in bytes; `0` if absent.
+    var length: UInt64
+    /// Header CRC-32; `0` if absent.
+    var crc: UInt32
+
+    /// No stroke file (a real one is never shorter than its 22-byte header).
+    static let absent = StrokesIdentity(length: 0, crc: 0)
+
+    init(length: UInt64, crc: UInt32) {
+        self.length = length
+        self.crc = crc
+    }
+
+    /// Identity of stroke-file bytes.
+    init(_ data: Data) {
+        length = UInt64(data.count)
+        guard data.count >= StrokeCodec.headerLength else {
+            crc = 0
+            return
         }
-        let status = temp.withUnsafeFileSystemRepresentation { from in
-            url.withUnsafeFileSystemRepresentation { to in
-                guard let from, let to else { return EINVAL }
-                return rename(from, to) == 0 ? 0 : errno
-            }
-        }
-        guard status == 0 else {
-            try? FileManager.default.removeItem(at: temp)
-            throw .io(url, reason: String(cString: strerror(status)))
-        }
+        crc = data.withUnsafeBytes { UInt32(littleEndian: $0.loadUnaligned(fromByteOffset: 18, as: UInt32.self)) }
     }
 }
