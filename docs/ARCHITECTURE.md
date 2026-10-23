@@ -34,6 +34,7 @@ notes-app/
     Export/                   PDF renderer (CoreGraphics)
     DesignSystem/             tokens, glass capsule, typography, themes (SwiftUI)
     Perf/                     signposts, MetricKit, debug HUD
+    Fixtures/                 dev-only: FixtureGen library + `notespace-fixtures` CLI (depends Document)
   Tests/
     PerfTests/                XCTest perf metrics + baselines (runs on simulator in CI, device by hand)
     UITests/                  smoke: launch, create notebook, open, export
@@ -159,7 +160,7 @@ A notebook is a directory package, exported UTType `com.abhey.notespace.notebook
 
 Per-page files are deliberate: page-scoped loads (open page 1 without reading page 90), page-scoped autosave, page-scoped sync conflicts later.
 
-`Document.NotebookPackage` owns this layout: create (staged in a hidden sibling dir, then renamed into place), open (manifest only), `loadPage` (one stroke file), `savePages` (stroke files, then one manifest write), insert/delete/move page. Every file write is temp + `rename`. Manifest page order is the `pages` array itself (no separate `pageOrder`).
+`Document.NotebookPackage` owns this layout: create (staged in a hidden sibling dir, then renamed into place; optionally with a lazy sequence of inked pages for import/duplicate/fixtures), open (manifest only), `loadPage` (one stroke file), `savePages` (stroke files, then one manifest write), insert/delete/move page. Every file write is temp + `rename`. Manifest page order is the `pages` array itself (no separate `pageOrder`).
 
 ### 4.3 Stroke codec (`Document`)
 
@@ -299,7 +300,7 @@ Geometry: capsule height 52, radius 26, blur 24 + saturate 180 %; tool button 44
 - `Perf` package: `Signpost` enum wrapping `OSSignposter` with fixed names (`launch.firstFrame`, `notebook.open`, `canvas.firstSharpTile`, `canvas.frame`, `tile.render`, `stroke.commit`, `doc.checkpoint`, `thumb.render`, `export.pdf`). MetricKit subscriber logs launch/hang/animation payloads to a local JSON for inspection.
 - Debug HUD (debug builds, 3-finger triple-tap): frame time, hitch count, ink latency p50/p95, resident tiles/MB, WAL size.
 - `PerfTests` target: `measure(metrics:)` with `XCTApplicationLaunchMetric`, `XCTOSSignpostMetric`, `XCTCPUMetric`, `XCTMemoryMetric` over `Fixtures/` notebooks (1, 10, 100, 300 pages). Baselines checked in per simulator model. CI gate: fail on > 10 % regression vs baseline. Simulator numbers are for *relative* regression only; absolute budgets are verified on device, on a checklist in the PR template.
-- Fixture generator (headless CLI in `Document`): synthetic notebooks with realistic stroke density (~400 strokes/page, ~60 samples/stroke).
+- Fixture generator (`Packages/Fixtures`, kept out of `Document` so the app-linked package carries no dev code and the generator can later also depend on `Library` for a matching index): `make fixtures` writes `Fixtures/{1,10,100,300}-pages.nb` (gitignored; regenerate, never commit). Deterministic from `--seed` (byte-identical packages: IDs from a synthetic clock + seeded stream, fixed dates). ~400 strokes/page, ~62 samples/stroke: cursive words in lines with word gaps, i-dots/t-bars, headings, bullets, highlighter swipes, box-and-arrow diagrams, Cornell cues; mixed templates and pens. 300 pages (181 MB) in < 1.5 s release. `FixtureGen` is a library, so simulator perf tests can generate in-process.
 
 ## 13. Testing, CI, lint
 

@@ -1,9 +1,9 @@
 SIM ?= iPad Pro 13 (M5)
 DEST := platform=iOS Simulator,name=$(SIM)
-HEADLESS := InkModel InkGeometry Document Library Tools Export
+HEADLESS := InkModel InkGeometry Document Library Tools Export Fixtures
 XCB := $(shell command -v xcbeautify >/dev/null && echo "| xcbeautify" )
 
-.PHONY: gen lint format test-packages build test perf open clean
+.PHONY: gen lint format test-packages build test perf fixtures open clean
 
 gen:
 	xcodegen generate --quiet
@@ -31,8 +31,18 @@ test: gen
 perf: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme NotespacePerf -destination '$(DEST)' $(XCB)
 
+# Deterministic 1/10/100/300-page notebooks in Fixtures/ (gitignored), ARCHITECTURE.md §12.
+FIXTURE_PAGES ?= 1 10 100 300
+FIXTURE_SEED ?= 1
+FIXTURES_PKG := Packages/Fixtures
+
+fixtures:
+	swift build -c release --quiet --package-path $(FIXTURES_PKG) --product notespace-fixtures
+	@set -e; bin=$$(swift build -c release --package-path $(FIXTURES_PKG) --show-bin-path); \
+	for n in $(FIXTURE_PAGES); do $$bin/notespace-fixtures --pages $$n --seed $(FIXTURE_SEED) --out Fixtures --force; done
+
 open: gen
 	open Notespace.xcodeproj
 
 clean:
-	rm -rf Notespace.xcodeproj DerivedData Packages/*/.build
+	rm -rf Notespace.xcodeproj DerivedData Packages/*/.build Fixtures
