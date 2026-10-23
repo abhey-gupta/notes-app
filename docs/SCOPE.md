@@ -1,4 +1,4 @@
-# Day 0 scope
+# Notespace — Day 0 scope
 
 Handwritten notes for iPad. Headline: ultra-fast, minimal, beautiful.
 
