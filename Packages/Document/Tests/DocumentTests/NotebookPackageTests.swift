@@ -140,18 +140,18 @@ struct NotebookPackageTests {
             let package = try makePackage(in: dir)
             let id = package.manifest.notebook.pages[0]
             var bytes = try [UInt8](StrokeCodec.encode([]))
-            bytes[4] = 2
+            bytes[4] = 99
             try Data(bytes).write(to: package.strokesURL(for: id))
-            #expect(throws: DocumentError.unsupportedFormatVersion(found: 2, supported: 1)) { try package.loadPage(id) }
+            #expect(throws: DocumentError.unsupportedFormatVersion(found: 99, supported: 2)) { try package.loadPage(id) }
         }
     }
 
     @Test func newerManifestIsRefusedAndLeftUntouched() throws {
         try withTemporaryDirectory { dir in
             let package = try makePackage(in: dir)
-            let future = Data(#"{"formatVersion": 2}"#.utf8)
+            let future = Data(#"{"formatVersion": 99}"#.utf8)
             try future.write(to: package.manifestURL)
-            #expect(throws: DocumentError.unsupportedFormatVersion(found: 2, supported: 1)) { try NotebookPackage.open(at: package.url) }
+            #expect(throws: DocumentError.unsupportedFormatVersion(found: 99, supported: 2)) { try NotebookPackage.open(at: package.url) }
             #expect(try Data(contentsOf: package.manifestURL) == future)
         }
     }

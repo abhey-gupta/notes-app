@@ -308,6 +308,19 @@ public actor DocumentStore {
         }
         let state = LoadedPage(page: recovery.page, base: identity, journal: journal, isDirty: recovery.isDirty)
         loaded[id] = state
+        if let version = recovery.header?.version, version < Journal.formatVersion {
+            // Written by an older build: fold it in now so new records never land in an old-format journal.
+            do {
+                if state.isDirty {
+                    try checkpoint([id])
+                } else {
+                    try journal.delete()
+                }
+            } catch {
+                loaded[id] = nil
+                throw error
+            }
+        }
         if state.isDirty {
             armIdleCheckpoint()
         }

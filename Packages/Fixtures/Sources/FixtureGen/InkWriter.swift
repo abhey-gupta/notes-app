@@ -1,4 +1,5 @@
 import Foundation
+import InkGeometry
 import InkModel
 
 /// A ruled (or imagined) line of writing: baseline with slight tilt and drift, x extent, x-height.
@@ -295,7 +296,11 @@ struct InkWriter {
             randA: UInt16(truncatingIfNeeded: strokes.count),
             randB: rng.next()
         ))
-        strokes.append(Stroke(id: id, tool: style.tool, color: style.color, width: style.width, samples: samples))
+        // Format v2: PencilKit rendering data as the app draws it (point sizes from the pen profile).
+        let plain = Stroke(id: id, tool: style.tool, color: style.color, width: style.width, samples: samples)
+        strokes.append(Stroke(
+            id: id, tool: style.tool, color: style.color, width: style.width, samples: samples, rendering: plain.derivedRendering
+        ))
         clock += Float(n) * dt + pause
     }
 }

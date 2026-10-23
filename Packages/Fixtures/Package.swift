@@ -13,9 +13,10 @@ let package = Package(
     dependencies: [
         .package(path: "../InkModel"),
         .package(path: "../Document"),
+        .package(path: "../InkGeometry"),
     ],
     targets: [
-        .target(name: "FixtureGen", dependencies: ["InkModel", "Document"]),
+        .target(name: "FixtureGen", dependencies: ["InkModel", "InkGeometry", "Document"]),
         .executableTarget(name: "notespace-fixtures", dependencies: ["FixtureGen", "InkModel"]),
         .testTarget(name: "FixtureGenTests", dependencies: ["FixtureGen", "Document", "InkModel"]),
     ]

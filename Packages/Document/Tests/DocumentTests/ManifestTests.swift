@@ -57,7 +57,7 @@ struct ManifestTests {
         #expect(positions == positions.sorted())
         let object = try json(manifest)
         #expect(Set(object.keys) == Set(topLevel))
-        #expect(object["formatVersion"] as? Int == 1)
+        #expect(object["formatVersion"] as? Int == 2)
         #expect(object["createdAt"] as? Int64 == 1_792_000_000_123)
         #expect(object["cover"] as? String == "plum")
         #expect((object["pageSize"] as? [String: Double]) == ["width": 595, "height": 842])
@@ -129,12 +129,12 @@ struct ManifestTests {
         #expect(object["x"] as? Int == 1)
     }
 
-    @Test(arguments: [2, 99])
+    @Test(arguments: [3, 99])
     func newerFormatIsRefusedWithClearMessage(version: Int) throws {
         // A future layout: nothing else is guaranteed to parse.
         let data = Data(#"{"formatVersion": \#(version), "notebook": {"renamed": true}}"#.utf8)
-        #expect(throws: DocumentError.unsupportedFormatVersion(found: version, supported: 1)) { try Manifest.decode(data) }
-        let message = DocumentError.unsupportedFormatVersion(found: version, supported: 1).localizedDescription
+        #expect(throws: DocumentError.unsupportedFormatVersion(found: version, supported: 2)) { try Manifest.decode(data) }
+        let message = DocumentError.unsupportedFormatVersion(found: version, supported: 2).localizedDescription
         #expect(message.contains("newer version of Notespace"))
     }
 

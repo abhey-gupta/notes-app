@@ -18,7 +18,7 @@ struct SplitMix64: RandomNumberGenerator {
 }
 
 enum Fixtures {
-    static func stroke(_ rng: inout SplitMix64, samples: Int? = nil) -> Stroke {
+    static func stroke(_ rng: inout SplitMix64, samples: Int? = nil, rendering: Rendering = .none) -> Stroke {
         let n = samples ?? Int.random(in: 0 ... 150, using: &rng)
         var x = Float.random(in: 0 ... 595, using: &rng)
         var y = Float.random(in: 0 ... 842, using: &rng)
@@ -41,23 +41,58 @@ enum Fixtures {
             randA: UInt16.random(in: 0 ... .max, using: &rng),
             randB: rng.next()
         ))
+        let tool = PenKind.allCases.randomElement(using: &rng) ?? .fountain
+        let width = Float.random(in: 0.5 ... 16, using: &rng)
+        let renderingKind = rendering == .random ? [.none, .square, .full].randomElement(using: &rng) ?? .none : rendering
         return Stroke(
-            id: id,
-            tool: PenKind.allCases.randomElement(using: &rng) ?? .fountain,
-            color: color,
-            width: Float.random(in: 0.5 ... 16, using: &rng),
-            samples: samples
+            id: id, tool: tool, color: color, width: width, samples: samples,
+            rendering: Self.rendering(renderingKind, count: n, width: width, tool: tool, &rng)
         )
     }
 
-    static func strokes(_ rng: inout SplitMix64, count: Int, samples: Int? = nil) -> [Stroke] {
-        (0 ..< count).map { _ in stroke(&rng, samples: samples) }
+    /// Which PencilKit rendering data a fixture stroke carries.
+    enum Rendering {
+        /// None (a v1 / non-PencilKit stroke).
+        case none
+        /// Square points, one opacity: compact on disk (typical pen).
+        case square
+        /// Every point its own width, height and opacity: the largest encoding (perf budgets).
+        case full
+        /// One of the above at random.
+        case random
     }
 
-    /// Realistic dense page: 400 strokes × 60 samples (§12).
-    static func densePage(seed: UInt64 = 400) -> [Stroke] {
+    private static func rendering(_ kind: Rendering, count: Int, width: Float, tool: PenKind, _ rng: inout SplitMix64) -> StrokeRendering? {
+        let points: [PointRendering]
+        switch kind {
+        case .none, .random:
+            return nil
+        case .square:
+            points = (0 ..< count).map { _ in
+                let size = width * Float.random(in: 0.2 ... 2, using: &rng)
+                return PointRendering(width: size, height: size)
+            }
+        case .full:
+            points = (0 ..< count).map { _ in
+                PointRendering(
+                    width: width * Float.random(in: 0.2 ... 2, using: &rng),
+                    height: width * Float.random(in: 0.2 ... 2, using: &rng),
+                    opacity: Float.random(in: 0.5 ... 1, using: &rng)
+                )
+            }
+        }
+        return StrokeRendering(ink: StrokeRendering.Ink.for(tool), randomSeed: UInt32.random(in: 0 ... .max, using: &rng), points: points)
+    }
+
+    static func strokes(_ rng: inout SplitMix64, count: Int, samples: Int? = nil, rendering: Rendering = .none) -> [Stroke] {
+        (0 ..< count).map { _ in stroke(&rng, samples: samples, rendering: rendering) }
+    }
+
+    /// Realistic dense page: 400 strokes × 60 samples (§12), with full per-point PencilKit rendering
+    /// data (the v2 worst case) unless `rendering` says otherwise.
+    static func densePage(seed: UInt64 = 400, rendering: Rendering = .full) -> [Stroke] {
         var rng = SplitMix64(seed: seed)
-        return strokes(&rng, count: 400, samples: 60)
+        return strokes(&rng, count: 400, samples: 60, rendering: rendering)
     }
 }
 

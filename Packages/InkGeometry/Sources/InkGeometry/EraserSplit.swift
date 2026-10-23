@@ -121,7 +121,9 @@ public enum EraserSplit {
 public extension Stroke {
     /// Partial erase: the pieces of this stroke left after erasing a disk, as new strokes (fresh IDs,
     /// same pen, color, width). The disk is inflated by half the base width, so ink visibly under the
-    /// eraser goes and surviving round caps end at the eraser's edge.
+    /// eraser goes and surviving round caps end at the eraser's edge. Pieces carry no
+    /// ``InkModel/Stroke/rendering`` yet (drawn from the pen profile); partial erase (#28) should carry
+    /// the stored point sizes over.
     /// - Returns: `nil` if untouched; otherwise the pieces (`[]` if fully erased). Feed into
     ///   `Page.replaceEdit`.
     func pieces(erasedBy center: CGPoint, radius: CGFloat) -> [Stroke]? {

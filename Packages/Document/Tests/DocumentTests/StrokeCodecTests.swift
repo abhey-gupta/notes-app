@@ -39,9 +39,10 @@ struct StrokeCodecTests {
         let data = try StrokeCodec.encode(strokes, compress: false)
         let bytes = [UInt8](data)
         #expect(Array(bytes[0 ..< 4]) == Array("INKS".utf8))
-        #expect(Array(bytes[4 ..< 10]) == [1, 0, 3, 0, 0, 0])
+        #expect(Array(bytes[4 ..< 10]) == [2, 0, 3, 0, 0, 0])
         #expect(Array(bytes[10 ..< 14]) == [0, 0, 0, 0])
-        #expect(bytes.count == 22 + 3 * (30 + 5 * 24))
+        #expect(bytes.count == 22 + 3 * (30 + 5 * 24 + 1)) // + rendering flags byte (none)
+        #expect(bytes[22 + 30 + 5 * 24] == 0)
         let first = strokes[0]
         #expect(Array(bytes[22 ..< 38]) == withUnsafeBytes(of: first.id.uuid.uuid) { Array($0) })
         #expect(bytes[22 + Offset.tool] == first.tool.rawValue)
@@ -56,7 +57,55 @@ struct StrokeCodecTests {
         let custom = Stroke(tool: .brush, color: .custom(RGBA8(r: 1, g: 2, b: 3, a: 4)), width: 1, samples: [])
         let bytes = try [UInt8](StrokeCodec.encode([semantic, custom], compress: false))
         #expect(Array(bytes[22 + 17 ..< 22 + 22]) == [0, SemanticInk.red.rawValue, 0, 0, 0])
-        #expect(Array(bytes[22 + 30 + 17 ..< 22 + 30 + 22]) == [1, 1, 2, 3, 4])
+        #expect(Array(bytes[22 + 31 + 17 ..< 22 + 31 + 22]) == [1, 1, 2, 3, 4])
+    }
+
+    @Test func renderingLayout() throws {
+        let samples = (0 ..< 3).map { Sample(x: Float($0), y: 0) }
+        func encoded(_ points: [PointRendering]) throws -> [UInt8] {
+            let rendering = StrokeRendering(ink: "ink", randomSeed: 0x0102_0304, points: points)
+            let stroke = Stroke(tool: .ballpoint, color: .primary, width: 1, samples: samples, rendering: rendering)
+            let bytes = try [UInt8](StrokeCodec.encode([stroke], compress: false))
+            #expect(try StrokeCodec.decode(Data(bytes)) == [stroke])
+            return Array(bytes[(22 + 30 + 3 * 24)...])
+        }
+        let square = try encoded(samples.map { _ in PointRendering(width: 2, height: 2, opacity: 0.5) })
+        #expect(square.count == 1 + 1 + 3 + 4 + 4 + 3 * 4) // flags, ink, seed, shared opacity, widths
+        #expect(Array(square[0 ..< 9]) == [7, 3] + Array("ink".utf8) + [4, 3, 2, 1])
+        let full = try encoded([
+            PointRendering(width: 2, height: 3, opacity: 1), PointRendering(width: 2, height: 2, opacity: 0.5),
+            PointRendering(width: 1, height: 1, opacity: 1),
+        ])
+        #expect(full[0] == 1)
+        #expect(full.count == 1 + 1 + 3 + 4 + 3 * 12)
+    }
+
+    @Test(arguments: [true, false])
+    func version1FilesDecodeWithoutRendering(compress: Bool) throws {
+        var rng = SplitMix64(seed: 11)
+        let strokes = Fixtures.strokes(&rng, count: 20, samples: 30, rendering: .full)
+        let v1 = try StrokeCodec.encode(strokes, compress: compress, version: 1)
+        #expect(StrokeCodec.version(of: v1) == 1)
+        let decoded = try StrokeCodec.decode(v1)
+        #expect(decoded.map(\.id) == strokes.map(\.id))
+        #expect(decoded.map(\.samples) == strokes.map(\.samples))
+        #expect(decoded.allSatisfy { $0.rendering == nil })
+        let reencoded = try StrokeCodec.encode(decoded)
+        #expect(StrokeCodec.version(of: reencoded) == StrokeCodec.formatVersion)
+    }
+
+    @Test func rejectsMalformedRendering() throws {
+        let samples = [Sample(x: 1, y: 1), Sample(x: 2, y: 2)]
+        let points = samples.map { _ in PointRendering(width: 1, height: 2) }
+        let rendering = StrokeRendering(ink: StrokeRendering.Ink.pen, randomSeed: 1, points: points)
+        let stroke = Stroke(tool: .ballpoint, color: .primary, width: 1, samples: samples, rendering: rendering)
+        let file = try StrokeCodec.encode([stroke], compress: false)
+        let flags = 30 + 2 * 24
+        #expect(throws: StrokeCodecError.invalidRendering) { try StrokeCodec.decode(rebuilt(file) { $0[flags] = 8 }) }
+        #expect(throws: StrokeCodecError.invalidRendering) { try StrokeCodec.decode(rebuilt(file) { $0[flags + 2] = 0xFF }) }
+        #expect(throws: StrokeCodecError.invalidRendering) { try StrokeCodec.decode(rebuilt(file) { $0[flags] = 2 }) }
+        #expect(throws: StrokeCodecError.truncated) { try StrokeCodec.decode(rebuilt(file) { $0.removeLast(4) }) }
+        #expect(throws: StrokeCodecError.truncated) { try StrokeCodec.decode(rebuilt(file) { $0[flags + 1] = 200 }) }
     }
 
     @Test func emptyPage() throws {
@@ -69,7 +118,7 @@ struct StrokeCodecTests {
     func randomizedRoundTripIsByteIdentical(compress: Bool) throws {
         var rng = SplitMix64(seed: compress ? 7 : 8)
         for _ in 0 ..< 300 {
-            let strokes = Fixtures.strokes(&rng, count: Int.random(in: 0 ... 40, using: &rng))
+            let strokes = Fixtures.strokes(&rng, count: Int.random(in: 0 ... 40, using: &rng), rendering: .random)
             let data = try StrokeCodec.encode(strokes, compress: compress)
             let decoded = try StrokeCodec.decode(data)
             #expect(decoded == strokes)
@@ -106,12 +155,12 @@ struct StrokeCodecTests {
         #expect(throws: StrokeCodecError.badMagic) { try StrokeCodec.decode(Data(bytes)) }
     }
 
-    @Test(arguments: [UInt16(0), 2, 0xFFFF])
+    @Test(arguments: [UInt16(0), 3, 99, 0xFFFF])
     func rejectsUnsupportedVersion(version: UInt16) throws {
         var bytes = try [UInt8](StrokeCodec.encode([]))
         bytes[Offset.version] = UInt8(version & 0xFF)
         bytes[Offset.version + 1] = UInt8(version >> 8)
-        #expect(throws: StrokeCodecError.unsupportedVersion(found: version, supported: 1)) { try StrokeCodec.decode(Data(bytes)) }
+        #expect(throws: StrokeCodecError.unsupportedVersion(found: version, supported: 2)) { try StrokeCodec.decode(Data(bytes)) }
     }
 
     @Test func rejectsUnknownFlags() throws {
@@ -130,7 +179,7 @@ struct StrokeCodecTests {
         var rng = SplitMix64(seed: 3)
         let strokes = Fixtures.strokes(&rng, count: 2, samples: 3)
         let file = try StrokeCodec.encode(strokes, compress: false)
-        let second = 30 + 3 * 24
+        let second = 30 + 3 * 24 + 1
 
         #expect(throws: StrokeCodecError.unknownTool(9)) { try StrokeCodec.decode(rebuilt(file) { $0[Offset.tool] = 9 }) }
         #expect(throws: StrokeCodecError.invalidColor) { try StrokeCodec.decode(rebuilt(file) { $0[Offset.colorKind] = 2 }) }

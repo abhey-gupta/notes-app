@@ -5,20 +5,22 @@ import Testing
 
 /// Budgets (release, warm file cache): decode a 400-stroke × 60-sample page < 5 ms; open a 100-page
 /// notebook (manifest + page 1) < 20 ms; pen-up → durable (``DocumentStore/apply(_:to:)`` of one
-/// 120-sample stroke, journal synced) p95 < 50 ms; checkpoint of 100 dirty pages < 500 ms.
+/// 120-sample stroke, journal synced) p95 < 5 ms; checkpoint of 100 dirty pages < 500 ms. Strokes carry
+/// full per-point PencilKit rendering data (v2's largest encoding).
 /// Run `swift test -c release --filter PerformanceTests`; numbers print to stderr. Debug builds only report.
 @Suite(.serialized)
 struct PerformanceTests {
-    @Test func decodeDensePage() throws {
-        let strokes = Fixtures.densePage()
+    @Test(arguments: [Fixtures.Rendering.full, .square, .none])
+    func decodeDensePage(rendering: Fixtures.Rendering) throws {
+        let strokes = Fixtures.densePage(rendering: rendering)
         let data = try StrokeCodec.encode(strokes)
         var decoded: [Stroke] = []
         let decode = try measureMilliseconds(rounds: isReleaseBuild ? 50 : 5) { decoded = try StrokeCodec.decode(data) }
         let encode = try measureMilliseconds(rounds: isReleaseBuild ? 50 : 5) { _ = try StrokeCodec.encode(strokes) }
         #expect(decoded == strokes)
         report(String(
-            format: "page 400×60 (%d B lz4): decode median %.3f ms (best %.3f), encode median %.3f ms (best %.3f)",
-            data.count, decode.median, decode.best, encode.median, encode.best
+            format: "page 400×60, rendering %@ (%d B lz4): decode median %.3f ms (best %.3f), encode median %.3f ms (best %.3f)",
+            "\(rendering)", data.count, decode.median, decode.best, encode.median, encode.best
         ))
         if isReleaseBuild {
             #expect(decode.median < 5, "decode median \(decode.median) ms")
@@ -68,7 +70,7 @@ struct PerformanceTests {
         var times: [Double] = []
         for _ in 0 ..< count {
             // A typical handwriting stroke: ~0.5 s at 240 Hz.
-            let stroke = Fixtures.stroke(&rng, samples: 120)
+            let stroke = Fixtures.stroke(&rng, samples: 120, rendering: .full)
             let edit = try await store.page(id).addEdit([stroke])
             let elapsed = try await clock.measure { try await store.apply(edit, to: id) }
             times.append(Double(elapsed.components.attoseconds) / 1e15 + Double(elapsed.components.seconds) * 1e3)
@@ -83,7 +85,7 @@ struct PerformanceTests {
             count, percentile(0.5), percentile(0.95), sorted[sorted.count - 1], first
         ))
         if isReleaseBuild {
-            #expect(percentile(0.95) < 50, "p95 \(percentile(0.95)) ms")
+            #expect(percentile(0.95) < 5, "p95 \(percentile(0.95)) ms")
         }
     }
 
@@ -99,7 +101,7 @@ struct PerformanceTests {
         let store = try DocumentStore(opening: package.url, options: .init(idleDelay: nil))
         var rng = SplitMix64(seed: 98)
         for id in notebook.pages {
-            try await store.apply(store.page(id).addEdit([Fixtures.stroke(&rng, samples: 120)]), to: id)
+            try await store.apply(store.page(id).addEdit([Fixtures.stroke(&rng, samples: 120, rendering: .full)]), to: id)
         }
         let elapsed = try await ContinuousClock().measure { try await store.flush() }
         let ms = Double(elapsed.components.attoseconds) / 1e15 + Double(elapsed.components.seconds) * 1e3

@@ -65,6 +65,36 @@ struct StrokeTests {
         #expect(decoded == stroke)
         #expect(decoded.bounds == stroke.bounds)
     }
+
+    private var rendering: StrokeRendering {
+        StrokeRendering(ink: StrokeRendering.Ink.pen, randomSeed: 7, points: samples.indices.map { i in
+            PointRendering(width: 20 + Float(i), height: 3, opacity: 0.5)
+        })
+    }
+
+    @Test func renderingRoundTripsAndWidensBounds() throws {
+        let stroke = Stroke(tool: .ballpoint, color: .primary, width: 2, samples: samples, rendering: rendering)
+        #expect(stroke.rendering == rendering)
+        let maxSize = rendering.maximumPointSize
+        let pad = CGFloat(maxSize / 2 * Float(2).squareRoot() + Stroke.boundsMargin)
+        #expect(stroke.bounds == CGRect(x: 10 - pad, y: 5 - pad, width: 20 + 2 * pad, height: 35 + 2 * pad))
+        #expect(try roundTrip(stroke) == stroke)
+        #expect(try roundTrip(Stroke(tool: .ballpoint, color: .primary, width: 2, samples: samples)).rendering == nil)
+    }
+
+    @Test func mismatchedRenderingIsDropped() {
+        let stroke = Stroke(tool: .ballpoint, color: .primary, width: 2, samples: Array(samples.prefix(1)), rendering: rendering)
+        #expect(stroke.rendering == nil)
+    }
+
+    @Test func transformScalesRenderedSizes() throws {
+        let stroke = Stroke(tool: .ballpoint, color: .primary, width: 2, samples: samples, rendering: rendering)
+        let moved = stroke.transformed(by: CGAffineTransform(scaleX: 2, y: 2))
+        let points = try #require(moved.rendering?.points)
+        #expect(points[0] == PointRendering(width: 40, height: 6, opacity: 0.5))
+        #expect(moved.rendering?.randomSeed == 7)
+        #expect(stroke.transformed(by: CGAffineTransform(translationX: 3, y: 0)).rendering == stroke.rendering)
+    }
 }
 
 struct NotebookTests {

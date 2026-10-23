@@ -38,6 +38,29 @@ struct CenterlineTests {
         }
     }
 
+    @Test func storedRenderingSetsRadii() {
+        let line = Fixtures.line(from: Point2(0, 0), to: Point2(10, 0), samples: 3)
+        let rendering = StrokeRendering(ink: StrokeRendering.Ink.pen, randomSeed: 1, points: [
+            PointRendering(width: 2, height: 2), PointRendering(width: 6, height: 4), PointRendering(width: 10, height: 10),
+        ])
+        let stroke = Stroke(tool: line.tool, color: line.color, width: line.width, samples: line.samples, rendering: rendering)
+        let c = Centerline(stroke: stroke)
+        #expect(c.radii.first == 1 && c.radii.last == 5)
+        #expect(c.radii[c.points.count / 2] == 3) // midpoint sample: max(6, 4) / 2
+        #expect(contains(stroke.bounds, c.bounds))
+    }
+
+    @Test func derivedRenderingFollowsProfileAndIsStable() {
+        let stroke = Fixtures.line(from: Point2(0, 0), to: Point2(10, 0), samples: 3)
+        let derived = stroke.derivedRendering
+        #expect(derived.ink == StrokeRendering.Ink.for(stroke.tool))
+        #expect(derived.points.count == 3)
+        let scale = PenProfile(stroke.tool).widthScale(force: stroke.samples[0].force, speed: 0, altitude: stroke.samples[0].altitude)
+        #expect(derived.points[0] == PointRendering(width: stroke.width * scale, height: stroke.width * scale))
+        #expect(stroke.derivedRendering == derived)
+        #expect(stroke.resolvedRendering == derived)
+    }
+
     @Test func dropsNonFiniteAndDuplicateSamples() {
         let samples = [
             Sample(x: 1, y: 1), Sample(x: .nan, y: 3), Sample(x: 1.01, y: 1), Sample(x: .infinity, y: 0), Sample(x: 3, y: 1, t: 0.01),
