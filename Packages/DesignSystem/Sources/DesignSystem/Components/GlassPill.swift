@@ -27,13 +27,22 @@ public struct GlassPill: View {
 
 /// Compact chrome while writing (mock §05): current tool, current color, expand.
 /// Chain `.glassEffectID(_:in:)` with the tools capsule's ID so collapsing is a morph, not a fade.
+/// `axis: .vertical` stacks the same pieces for a side-docked toolbar.
 public struct FocusPill: View {
+    private let axis: Axis
     private let tool: Symbol
     private let ink: Color
     private let onTool: () -> Void
     private let onExpand: () -> Void
 
-    public init(tool: Symbol, ink: Color, onTool: @escaping () -> Void = {}, onExpand: @escaping () -> Void) {
+    public init(
+        axis: Axis = .horizontal,
+        tool: Symbol,
+        ink: Color,
+        onTool: @escaping () -> Void = {},
+        onExpand: @escaping () -> Void
+    ) {
+        self.axis = axis
         self.tool = tool
         self.ink = ink
         self.onTool = onTool
@@ -41,22 +50,64 @@ public struct FocusPill: View {
     }
 
     public var body: some View {
-        GlassCapsule(height: Tokens.Size.focusPillHeight, leading: 5, trailing: 5, spacing: 0) {
+        GlassCapsule(
+            axis: axis,
+            height: Tokens.Size.focusPillHeight,
+            leading: Self.endPadding,
+            trailing: Self.endPadding,
+            spacing: 0
+        ) {
+            FocusPillContent(axis: axis, tool: tool, ink: ink, onTool: onTool, onExpand: onExpand)
+        }
+    }
+
+    /// Padding at each end of the pill, along its axis.
+    public static let endPadding: CGFloat = 5
+}
+
+/// The pill's pieces without the glass, for hosts that keep one capsule and swap its content (the dynamic
+/// toolbar resizes a single capsule between expanded and compact instead of swapping views).
+public struct FocusPillContent: View {
+    private let axis: Axis
+    private let tool: Symbol
+    private let ink: Color
+    private let onTool: () -> Void
+    private let onExpand: () -> Void
+
+    public init(
+        axis: Axis = .horizontal,
+        tool: Symbol,
+        ink: Color,
+        onTool: @escaping () -> Void = {},
+        onExpand: @escaping () -> Void
+    ) {
+        self.axis = axis
+        self.tool = tool
+        self.ink = ink
+        self.onTool = onTool
+        self.onExpand = onExpand
+    }
+
+    public var body: some View {
+        let horizontal = axis == .horizontal
+        let button = Tokens.Size.focusToolButton
+        let along: Edge.Set = horizontal ? .horizontal : .vertical
+        Group {
             ToolButton(
                 tool,
                 "Current tool",
                 isActive: true,
                 ink: ink,
-                size: Tokens.Size.focusToolButton,
+                size: horizontal ? button : CGSize(width: button.height, height: button.width),
                 iconSize: 17,
                 showsDot: false,
                 action: onTool
             )
             ColorSwatch(ink, label: "Current color", isSelected: true, diameter: Tokens.Size.focusSwatch)
                 .allowsHitTesting(false)
-                .padding(.horizontal, Tokens.Spacing.xs)
-            ChromeSeparator(height: 18)
-                .padding(.horizontal, -Tokens.Spacing.xs)
+                .padding(along, Tokens.Spacing.xs)
+            ChromeSeparator(axis: axis, height: 18)
+                .padding(along, -Tokens.Spacing.xs)
             Button(action: onExpand) {
                 Image(systemName: Symbol.disclosure.name)
                     .font(.system(size: 14, weight: .semibold))
@@ -85,6 +136,7 @@ private struct PillsPreview: View {
             VStack(spacing: 28) {
                 GlassPill.pageIndicator(current: 3, total: 11)
                 FocusPill(tool: .pen, ink: PaperTheme.night.ink(.blue).color) {}
+                FocusPill(axis: .vertical, tool: .highlighter, ink: PaperTheme.white.ink(.red).color) {}
             }
         }
     }

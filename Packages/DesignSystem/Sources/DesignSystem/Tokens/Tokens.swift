@@ -26,6 +26,9 @@ public enum Tokens {
         public static let iconActive = DynamicColor(light: RGBA(0x1E2129), dark: RGBA(0xE8E8EA))
         public static let pillText = DynamicColor(light: RGBA(0x55585F), dark: RGBA(0xA9ABB2))
         public static let separator = DynamicColor(light: RGBA(0x000000, alpha: 0.10), dark: RGBA(0xFFFFFF, alpha: 0.14))
+        /// Drop slot shown at the toolbar's target dock while it is dragged.
+        public static let dockHint = DynamicColor(light: RGBA(0x1E2129, alpha: 0.05), dark: RGBA(0xFFFFFF, alpha: 0.06))
+        public static let dockHintBorder = DynamicColor(light: RGBA(0x1E2129, alpha: 0.16), dark: RGBA(0xFFFFFF, alpha: 0.20))
         /// Hairline around swatches so light colors read on light glass.
         public static let swatchHairline = DynamicColor(light: RGBA(0x000000, alpha: 0.15), dark: RGBA(0xFFFFFF, alpha: 0.18))
 
@@ -143,6 +146,10 @@ public enum Tokens {
         public static let morph: Animation = .spring(duration: 0.25, bounce: 0.12)
         /// Morph replacement under Reduce Motion: a short crossfade.
         public static let reducedMorph: Animation = .easeInOut(duration: 0.15)
+        /// Toolbar tracking the finger while dragged: near-critically damped, so it trails by a frame or two.
+        public static let dragFollow: Animation = .interactiveSpring(response: 0.16, dampingFraction: 0.86)
+        /// Toolbar released: flies to its dock (position + axis re-flow) with a little settle.
+        public static let dock: Animation = .spring(duration: 0.42, bounce: 0.18)
         /// Continuous inking before chrome collapses (§7).
         public static let focusDelay: Duration = .milliseconds(1500)
         public static let thumbnailCrossfade: Animation = .easeOut(duration: 0.12)
