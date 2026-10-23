@@ -128,6 +128,13 @@ PencilKit adapter strategy: a `PKCanvasView` for the *active* page only (the one
 
 Latency measurement: timestamp of the touch (`UITouch.timestamp`) vs `MTLDrawable.presentedTime` via `addPresentedHandler`; report p50/p95 in the debug HUD and signposts. Hardware floor target: ≤ PencilKit + 1 frame on the same device.
 
+As built (#19, `MetalInkEngine`):
+
+- **Frame** = one command buffer: committed content (`CommittedContentRenderer`: until the tile cache lands, one viewport-sized composite texture re-rendered only when viewport/pages/theme/committed ink change), then a drawable pass that copies it and draws pending strokes (committed, not yet echoed back via `apply`) and the live stroke on top. Committed strokes live in per-page GPU buffers built off main (strips cached by stroke ID; one indexed triangle-strip draw per page per pass). #22 swaps the composite for tiles behind the same protocol; both render through `SceneEncoder`.
+- **Highlighter**: each stroke goes into a coverage target with max blending, then resolves onto the page; strokes whose bounds don't overlap share a coverage pass. It is tessellated as a chain of capsules rather than InkGeometry's outline strip (a wide flat-capped strip folds at tight turns), with the chisel ends clipped in the shader. On Night paper it uses **screen** instead of multiply, which would all but vanish on `#1B1C1F`.
+- `displaySyncEnabled` is macOS-only; iOS always presents in sync with the display. The layer is BGRA8 tagged sRGB (palette colors are sRGB; Core Animation matches them to the P3 panel).
+- The simulator SDK has no `addPresentedHandler`, so the probe records nothing there.
+
 ## 4. Document model and file format
 
 ### 4.1 Model (`InkModel`)
