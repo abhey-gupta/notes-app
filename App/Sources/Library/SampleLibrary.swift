@@ -1,15 +1,24 @@
+import Document
 import Foundation
 import InkModel
 import Library
 import Observation
+#if DEBUG
+    import FixtureGen
+#endif
 
 /// In-memory library seeded with the mock's notebooks: previews, screenshots, `-sampleLibrary YES`.
-/// Nothing persists. Init is a handful of struct copies: safe on the launch path.
+/// Nothing persists beyond the process: opening a notebook writes a scratch package to the temporary
+/// directory (DEBUG: FixtureGen handwriting; Release: blank pages). Init is a handful of struct copies:
+/// safe on the launch path.
 @MainActor
 @Observable
 final class SampleLibrary: LibraryModel {
     private(set) var notebooks: [NotebookSummary]
     private(set) var folders: [LibraryFolder]
+    @ObservationIgnored private var packages: [NotebookID: URL] = [:]
+    @ObservationIgnored private let scratch = FileManager.default.temporaryDirectory
+        .appending(path: "SampleLibrary-\(UUID().uuidString)", directoryHint: .isDirectory)
     let isLoaded = true
 
     init(now: Date = Date(), empty: Bool = false) {
@@ -78,6 +87,54 @@ final class SampleLibrary: LibraryModel {
     func update(_ notebook: NotebookSummary) {
         guard let index = notebooks.firstIndex(where: { $0.id == notebook.id }) else { return }
         notebooks[index] = notebook
+    }
+
+    func documentURL(for id: NotebookID) async throws -> URL {
+        if let url = packages[id] {
+            return url
+        }
+        guard let summary = notebook(id: id) else { throw LibraryError.notFound(id) }
+        let url = scratch.appending(path: "\(id).\(NotebookPackage.pathExtension)", directoryHint: .isDirectory)
+        let directory = scratch
+        try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Self.writePackage(for: summary, at: url)
+        }.value
+        packages[id] = url
+        return url
+    }
+
+    func documentDidSave(_ manifest: Manifest) {
+        guard let index = notebooks.firstIndex(where: { $0.id == manifest.notebook.id }) else { return }
+        notebooks[index].pageCount = manifest.pages.count
+        notebooks[index].theme = manifest.notebook.theme
+        notebooks[index].paper = manifest.notebook.paper
+        notebooks[index].modifiedAt = manifest.notebook.modifiedAt
+    }
+
+    /// The mock notebook as a package: same ID, pages, paper and theme; DEBUG fills pages with FixtureGen ink.
+    private nonisolated static func writePackage(for summary: NotebookSummary, at url: URL) throws {
+        let pageCount = max(summary.pageCount, 1)
+        #if DEBUG
+            if summary.sampleInk != nil {
+                let generator = FixtureGenerator(FixtureSpec(
+                    pages: pageCount, seed: summary.title.unicodeScalars.reduce(1) { $0 &* 31 &+ UInt64($1.value) }, strokesPerPage: 140,
+                    theme: summary.theme, paper: summary.paper
+                ))
+                let generated = generator.notebook
+                let notebook = Notebook(
+                    id: summary.id, title: summary.title, cover: summary.cover, paper: summary.paper, theme: summary.theme,
+                    pages: generated.pages, createdAt: summary.createdAt, modifiedAt: summary.modifiedAt
+                )
+                _ = try NotebookPackage.create(at: url, notebook: notebook, pages: generator.pages)
+                return
+            }
+        #endif
+        let notebook = Notebook(
+            id: summary.id, title: summary.title, cover: summary.cover, paper: summary.paper, theme: summary.theme,
+            pages: (0 ..< pageCount).map { _ in PageID() }, createdAt: summary.createdAt, modifiedAt: summary.modifiedAt
+        )
+        _ = try NotebookPackage.create(at: url, notebook: notebook)
     }
 
     func rename(_ id: NotebookID, to title: String) {

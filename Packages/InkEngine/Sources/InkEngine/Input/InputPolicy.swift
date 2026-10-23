@@ -25,8 +25,15 @@ public struct InputPolicy: Sendable {
 
     /// Finger touches beginning this soon after a Pencil lift are palms (s).
     public var palmWindow: TimeInterval = 0.15
-    /// Finger contacts larger than this (pt) are palms.
-    public var palmMajorRadius: CGFloat = 32
+    /// Finger contacts larger than this (pt) are palms. The simulator reports ~37 pt for every synthesized
+    /// touch, so it only rejects by timing there.
+    public var palmMajorRadius: CGFloat = Self.defaultPalmMajorRadius
+
+    #if targetEnvironment(simulator)
+        public static let defaultPalmMajorRadius: CGFloat = .infinity
+    #else
+        public static let defaultPalmMajorRadius: CGFloat = 32
+    #endif
     /// "Draw with finger" setting.
     public var allowsFingerDrawing: Bool
 
@@ -37,8 +44,9 @@ public struct InputPolicy: Sendable {
     private var roles: [TouchID: Role] = [:]
 
     /// Creates a policy.
-    public init(allowsFingerDrawing: Bool = false) {
+    public init(allowsFingerDrawing: Bool = false, palmMajorRadius: CGFloat = Self.defaultPalmMajorRadius) {
         self.allowsFingerDrawing = allowsFingerDrawing
+        self.palmMajorRadius = palmMajorRadius
     }
 
     /// A Pencil touch is down.

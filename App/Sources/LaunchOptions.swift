@@ -17,11 +17,28 @@ import Tools
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
 /// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
 /// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests).
+/// - `-allowFingerDrawing YES`: fingers ink (one finger draws, two scroll) — the simulator has no Pencil.
+/// - `-fixtureNotebook <pages>`: add a FixtureGen notebook ("Fixture <pages>p · seed 1") to the on-disk
+///   library after launch (generated once; the package ID is deterministic).
 /// - `-DesignSystemGallery YES`: DesignSystem gallery (#12).
 @MainActor
 enum LaunchOptions {
     static var showsNewNotebook: Bool {
         flag("newNotebook")
+    }
+
+    /// "Draw with finger" (no user setting yet; ARCHITECTURE.md §15.4 default off).
+    static var allowsFingerDrawing: Bool {
+        flag("allowFingerDrawing")
+    }
+
+    /// Pages of the FixtureGen notebook to add, or 0.
+    static var fixtureNotebookPages: Int {
+        #if DEBUG
+            max(UserDefaults.standard.integer(forKey: "fixtureNotebook"), 0)
+        #else
+            0
+        #endif
     }
 
     static var seedNotebooks: Int {

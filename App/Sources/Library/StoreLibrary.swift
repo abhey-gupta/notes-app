@@ -1,8 +1,12 @@
+import Document
 import Foundation
 import InkModel
 import Library
 import Observation
 import os
+#if DEBUG
+    import FixtureGen
+#endif
 
 /// The real library: a main-actor mirror of `LibraryStore` (§8).
 ///
@@ -20,6 +24,8 @@ final class StoreLibrary: LibraryModel {
     @ObservationIgnored let store: LibraryStore
     @ObservationIgnored private let locations: LibraryLocations
     @ObservationIgnored private var generation: UInt64 = 0
+    /// Package path (relative to the notebooks directory) by notebook, from the last snapshot.
+    @ObservationIgnored private var packagePaths: [NotebookID: String] = [:]
 
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "library")
 
@@ -45,6 +51,9 @@ final class StoreLibrary: LibraryModel {
         #if DEBUG
             if LaunchOptions.seedNotebooks > 0, notebooks.isEmpty {
                 await seed(count: LaunchOptions.seedNotebooks)
+            }
+            if LaunchOptions.fixtureNotebookPages > 0 {
+                await addFixture(pages: LaunchOptions.fixtureNotebookPages)
             }
         #endif
         let store = store
@@ -82,6 +91,20 @@ final class StoreLibrary: LibraryModel {
                 n.theme = theme
             }
         }
+    }
+
+    func documentURL(for id: NotebookID) async throws -> URL {
+        if let path = packagePaths[id] {
+            return locations.notebooksURL(path)
+        }
+        guard let entry = await store.snapshot().notebooks.first(where: { $0.id == id }) else {
+            throw LibraryError.notFound(id)
+        }
+        return locations.packageURL(for: entry)
+    }
+
+    func documentDidSave(_ manifest: Manifest) {
+        perform("did save") { try await $0.didSave(manifest) }
     }
 
     func rename(_ id: NotebookID, to title: String) {
@@ -150,6 +173,7 @@ final class StoreLibrary: LibraryModel {
         guard snapshot.generation >= generation else { return }
         generation = snapshot.generation
         notebooks = snapshot.notebooks.map(summary)
+        packagePaths = Dictionary(snapshot.notebooks.map { ($0.id, $0.packagePath) }, uniquingKeysWith: { _, last in last })
         folders = snapshot.folders
     }
 
@@ -186,6 +210,27 @@ final class StoreLibrary: LibraryModel {
                 _ = try? await store.create(notebook, in: folder)
             }
             await refresh()
+        }
+
+        /// `-fixtureNotebook N`: an N-page FixtureGen notebook (§12) for perf and scroll tests. Written once:
+        /// its ID is deterministic, so later launches find the package and skip the (slow, Debug) generation.
+        private func addFixture(pages: Int) async {
+            let generator = FixtureGenerator(FixtureSpec(pages: pages))
+            let id = generator.notebook.id
+            guard !notebooks.contains(where: { $0.id == id }) else { return }
+            let url = NotebookPackage.url(for: id, in: locations.notebooksDirectory)
+            if !FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                let start = ContinuousClock.now
+                do {
+                    try FileManager.default.createDirectory(at: locations.notebooksDirectory, withIntermediateDirectories: true)
+                    _ = try await Task.detached(priority: .userInitiated) { try generator.write(to: url) }.value
+                } catch {
+                    Self.log.error("fixture: \(error.localizedDescription, privacy: .public)")
+                    return
+                }
+                Self.log.info("fixture \(pages) pages written in \(ContinuousClock.now - start, privacy: .public)")
+            }
+            await apply(store.rebuild())
         }
     }
 #endif

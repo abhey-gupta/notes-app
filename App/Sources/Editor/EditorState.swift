@@ -1,73 +1,37 @@
-import CoreGraphics
 import DesignSystem
-import InkModel
 import Observation
 import Tools
 
-/// Placeholder ink + focus mode so the chrome is interactive until the canvas lands (#21). Tool choice and
-/// settings live in `Tools.ToolState`.
+/// Editor chrome state: focus mode and the undo/redo buttons. The notebook's history (`EditStack`) lives
+/// here so the toolbar observes it; `NotebookSession` records into it and performs undo/redo.
 @MainActor
 @Observable
 final class EditorState {
-    /// Placeholder stroke in page-normalized coordinates (0…1 of page width), so it survives rotation.
-    struct Stroke: Identifiable {
-        let id: Int
-        let page: Int
-        let tool: Tool
-        let color: InkColor
-        /// Width in page points.
-        let width: Float
-        var points: [CGPoint]
-    }
-
     private(set) var isFocused = false
-    private(set) var strokes: [Stroke] = []
-    private var redoStack: [Stroke] = []
-    private var nextID = 0
+    /// The notebook's undo history (§6).
+    let edits: EditStack
+    @ObservationIgnored var onUndo: () -> Void = {}
+    @ObservationIgnored var onRedo: () -> Void = {}
 
     var canUndo: Bool {
-        !strokes.isEmpty
+        edits.canUndo
     }
 
     var canRedo: Bool {
-        !redoStack.isEmpty
+        edits.canRedo
     }
 
-    init(startsFocused: Bool = false) {
+    init(startsFocused: Bool = false, edits: EditStack = EditStack()) {
         isFocused = startsFocused
-    }
-
-    // MARK: Strokes
-
-    /// Commits a pen or highlighter stroke with the tool's current color and width.
-    func commit(page: Int, points: [CGPoint], tools: ToolState) {
-        let tool = tools.tool
-        guard tool.inks, !points.isEmpty else { return }
-        let width = tool == .highlighter ? tools.highlighter.width : tools.pen.width
-        strokes.append(Stroke(id: nextID, page: page, tool: tool, color: tools.currentColor, width: width, points: points))
-        nextID += 1
-        redoStack.removeAll()
-    }
-
-    /// Stroke eraser: removes strokes on `page` passing within `radius` of `point`.
-    func erase(page: Int, at point: CGPoint, radius: CGFloat) {
-        let before = strokes.count
-        strokes.removeAll { stroke in
-            stroke.page == page && stroke.points.contains { hypot($0.x - point.x, $0.y - point.y) < radius }
-        }
-        if strokes.count != before {
-            redoStack.removeAll()
-        }
+        self.edits = edits
     }
 
     func undo() {
-        guard let last = strokes.popLast() else { return }
-        redoStack.append(last)
+        onUndo()
     }
 
     func redo() {
-        guard let stroke = redoStack.popLast() else { return }
-        strokes.append(stroke)
+        onRedo()
     }
 
     // MARK: Focus mode (§7)
@@ -81,7 +45,7 @@ final class EditorState {
     private var lastPenUp: ContinuousClock.Instant?
     private var focusTask: Task<Void, Never>?
 
-    /// Stand-in for `engineDidBeginStroke`: after `Tokens.Motion.focusDelay` of continuous inking, collapse chrome.
+    /// `engineDidBeginStroke`: after `Tokens.Motion.focusDelay` of continuous inking, collapse chrome.
     func strokeBegan() {
         let now = clock.now
         let continuing = sessionStart != nil && lastPenUp.map { now - $0 < Self.continuityGap } ?? false
@@ -97,6 +61,7 @@ final class EditorState {
         }
     }
 
+    /// The Pencil (or inking finger) lifted.
     func strokeEnded() {
         isInking = false
         lastPenUp = clock.now

@@ -81,7 +81,8 @@ struct EditorRoute: Hashable {
     }
 }
 
-/// `notebook.open` signpost: tap → editor's first appearance (§11; canvas.firstSharpTile lands with #21).
+/// `notebook.open` signpost (§11): tap → the first display frame after page 1's strokes reached the engine
+/// (`NotebookSession`). The engine-side `canvas.firstSharpTile` lands with the tile cache (#22).
 @MainActor
 enum OpenTrace {
     private static var interval: SignpostInterval?

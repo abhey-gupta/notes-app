@@ -1,7 +1,27 @@
 import DesignSystem
+import InkEngine
 import InkModel
 import SwiftUI
 import Tools
+
+extension ToolState {
+    /// What the engine needs for the current tool (§6): pen kind, width and color; the highlighter as a pen
+    /// profile; the eraser's diameter.
+    func configuration(allowsFingerDrawing: Bool) -> ToolConfiguration {
+        switch tool {
+        case .pen:
+            ToolConfiguration(tool: .pen(pen.kind), color: pen.color, width: pen.width, allowsFingerDrawing: allowsFingerDrawing)
+        case .highlighter:
+            ToolConfiguration(
+                tool: .pen(.highlighter), color: highlighter.color, width: highlighter.width, allowsFingerDrawing: allowsFingerDrawing
+            )
+        case .eraser:
+            ToolConfiguration(tool: .eraser, color: pen.color, width: eraser.width, allowsFingerDrawing: allowsFingerDrawing)
+        case .lasso:
+            ToolConfiguration(tool: .lasso, color: pen.color, width: 1, allowsFingerDrawing: allowsFingerDrawing)
+        }
+    }
+}
 
 /// Tools owns tool data and placement; DesignSystem owns their look. This is the seam.
 extension ToolSettings {

@@ -1,4 +1,5 @@
 import CoreGraphics
+import Document
 import Foundation
 import InkModel
 import Library
@@ -23,8 +24,14 @@ protocol LibraryModel: AnyObject, Observable {
     func start() async
     /// Creates a notebook (package + index entry, one blank page) and returns it. The caller opens it (§8).
     func createNotebook(_ draft: NotebookDraft) async throws -> NotebookSummary
-    /// Persists metadata edits from the editor (title, cover, paper, theme).
+    /// Persists metadata edits (title, cover, paper, theme) made outside the editor.
     func update(_ notebook: NotebookSummary)
+    /// The notebook's package, for the editor's `DocumentStore` (§8). While the editor is open its store is
+    /// the package's only writer: metadata edits go through the store and come back via `documentDidSave`.
+    func documentURL(for id: NotebookID) async throws -> URL
+    /// The editor's store wrote the manifest (checkpoint, page added, paper changed): refresh the entry
+    /// (modified date, page count, cover thumbnail…).
+    func documentDidSave(_ manifest: Manifest)
     func rename(_ id: NotebookID, to title: String)
     func move(_ id: NotebookID, to folder: FolderID?)
     func duplicate(_ id: NotebookID)

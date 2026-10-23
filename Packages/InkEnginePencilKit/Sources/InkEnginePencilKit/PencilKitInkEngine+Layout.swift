@@ -69,9 +69,17 @@ extension PencilKitInkEngine {
             view.setInk(nil)
             return
         }
+        let id = snapshot.id
+        if let cached = rasters.image(for: id, key: key) {
+            view.setInk(cached)
+            return
+        }
         let job = RenderJob(page: snapshot, palette: palette, theme: theme)
-        Task { [weak view] in
+        Task { [weak self, weak view] in
             let image = await Task.detached(priority: .userInitiated) { job.ink(scale: pixelScale) }.value
+            if let image {
+                self?.rasters.insert(image, for: id, key: key)
+            }
             guard let view, view.inkKey == key else { return }
             view.setInk(image)
         }

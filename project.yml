@@ -45,7 +45,7 @@ targets:
       - package: InkModel
       - package: InkGeometry
       - package: InkEngine
-      - package: InkEngineMetal
+      # InkEngineMetal is shelved (spike #16, ARCHITECTURE.md §3): kept building and tested, not linked.
       - package: InkEnginePencilKit
       - package: Tools
       - package: Canvas
@@ -54,6 +54,9 @@ targets:
       - package: Export
       - package: DesignSystem
       - package: Perf
+      # DEBUG only (`#if DEBUG` imports): sample-library ink and `-fixtureNotebook`; dead-stripped in Release.
+      - package: Fixtures
+        product: FixtureGen
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.abhey.notespace

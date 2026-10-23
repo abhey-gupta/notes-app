@@ -48,13 +48,13 @@ struct PalmRejection {
     }
 
     @Test func largeContactIsPalm() {
-        var policy = InputPolicy()
+        var policy = InputPolicy(palmMajorRadius: 32)
         #expect(policy.began(finger(2, t: 0, radius: 40)) == .palm)
         #expect(policy.began(finger(3, t: 0, radius: 20)) == .navigate)
     }
 
     @Test func contactThatGrowsIntoPalmIsDemoted() {
-        var policy = InputPolicy(allowsFingerDrawing: true)
+        var policy = InputPolicy(allowsFingerDrawing: true, palmMajorRadius: 32)
         #expect(policy.began(finger(2, t: 0, radius: 12)) == .draw)
         #expect(policy.moved(finger(2, t: 0.01, radius: 20)) == .draw)
         #expect(policy.moved(finger(2, t: 0.02, radius: 45)) == .palm)
@@ -118,7 +118,7 @@ struct Tracker {
     }
 
     @Test func fingerStrokeThatBecomesPalmIsCancelled() throws {
-        var tracker = InkInputTracker(policy: InputPolicy(allowsFingerDrawing: true))
+        var tracker = InkInputTracker(policy: InputPolicy(allowsFingerDrawing: true, palmMajorRadius: 32))
         _ = tracker.began(finger(2, t: 0)) { _ in target }
         let events = tracker.moved(finger(2, t: 0.01, radius: 60))
         guard case .cancelled = try #require(events.first) else { Issue.record("expected cancel"); return }

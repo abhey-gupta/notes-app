@@ -4,11 +4,12 @@ import os
 import PencilKit
 import UIKit
 
-/// `InkEngine` backed by PencilKit: the latency baseline and fallback (ARCHITECTURE.md §3.1).
+/// `InkEngine` backed by PencilKit: the shipping ink engine (spike #16, ARCHITECTURE.md §3).
 ///
 /// One `PKCanvasView` covers the *active* page (the one last touched, else the one nearest the
 /// viewport center), clipped to the visible rect and zoomed with the viewport. Other visible pages
-/// show a raster of their ink (`PKDrawing.image`). Pens draw through PencilKit; eraser and lasso
+/// show a raster of their ink (`PKDrawing.image`, rendered off main, recent ones kept in an
+/// ``InkRasterCache`` that empties on memory warnings). Pens draw through PencilKit; eraser and lasso
 /// input goes through the shared ``InkEngine/InkInputView`` pipeline and is reported, never applied.
 ///
 /// The canvas starts each page from the document snapshot. A finished PencilKit stroke is reported
@@ -34,6 +35,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     let pagesView = UIView()
     let canvas = AdapterCanvasView()
     let input = InkInputView()
+    /// Ink rasters of recently shown inactive pages.
+    let rasters = InkRasterCache()
 
     private(set) var viewport = Viewport.empty
     private(set) var snapshots: [PageID: PageSnapshot] = [:]
@@ -88,6 +91,14 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         input.delegate = self
         host.addSubview(input)
         applyTool()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(didReceiveMemoryWarning),
+            name: UIApplication.didReceiveMemoryWarningNotification, object: nil
+        )
+    }
+
+    @objc private func didReceiveMemoryWarning() {
+        rasters.removeAll()
     }
 
     // MARK: InkEngine
