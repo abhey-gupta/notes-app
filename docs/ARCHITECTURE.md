@@ -59,7 +59,24 @@ Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Docume
 
 Concurrency: value types everywhere in `InkModel` (`Sendable` structs). UIKit/Metal view classes are `@MainActor`. Background work lives in actors (`DocumentStore`, `LibraryStore`, `ThumbnailService`, `TileRenderer`). No `@unchecked Sendable` without a comment explaining why.
 
-## 3. Ink engine: custom Metal, PencilKit as spike baseline and fallback
+## 3. Ink engine: PencilKit (decided by spike #16)
+
+**Decision (2026-10-24): PencilKit is the shipping ink engine.** On an M1 iPad Pro the user found PencilKit "way smoother" than our best Metal path (28 ms touch→present at 120 Hz via `CAMetalDisplayLink`; the touch-driven pattern stayed at 60 Hz). Results: `docs/spikes/ink-latency.md`.
+
+What stays ours: the document model (`InkModel`), file format, WAL autosave, `EditStack` undo, library, PDF export, and all chrome. PencilKit owns live input, prediction, and stroke rendering, behind the `InkEngine` seam (§3.1) via `InkEnginePencilKit`.
+
+Hybrid canvas:
+- **Active page** (the one under the Pencil): a `PKCanvasView` per visible page or one moved to the active page (decide by measurement in #21), `drawingPolicy = .pencilOnly` by default, scrolling disabled (our `UIScrollView` owns scroll/zoom).
+- **Other visible pages**: `PKDrawing.image(from:scale:)` rendered off-main into a page-image cache (zoom buckets, memory budget, LRU), so ink looks identical everywhere. This replaces the Metal tile cache.
+- **Commit path**: `PKCanvasViewDelegate.canvasViewDrawingDidChange` → diff new `PKStroke`s → `Stroke` (adapter conversion, already tested) → `PageEdit` → `EditStack` + `DocumentStore`. Our model remains the source of truth; `PKDrawing` is a view of it.
+- **Tools**: pens map to `PKInkingTool` ink types (fountain → `.fountainPen`, ballpoint → `.monoline`, brush → `.watercolor`/`.pen`, highlighter → `.marker`); eraser → `PKEraserTool(.vector)` / `.bitmap` (partial); lasso → `PKLassoTool` (move/copy/delete native; recolor/resize via our model on the selection). Pencil double-tap/squeeze via `UIPencilInteraction`.
+- **Night paper**: PencilKit adapts ink colors for dark appearance; Night pages set the canvas to dark style. Verify against §10's remap.
+- **Undo**: PencilKit's internal undo is disabled/bypassed; all undo goes through `EditStack` (§6).
+
+The Metal engine (`InkEngineMetal`, #19) stays in the repo, unwired, as a future option (e.g. custom brushes); if revived it must use `CAMetalDisplayLink`. The sections below describing the Metal pipeline are historical.
+
+### Original analysis (pre-spike)
+
 
 **Decision: build our own Metal ink engine. Keep a PencilKit adapter behind the same seam for the latency spike and as a fallback if the Metal engine slips.**
 
