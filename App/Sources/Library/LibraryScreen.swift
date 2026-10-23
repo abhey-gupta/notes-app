@@ -1,4 +1,6 @@
 import DesignSystem
+import Library
+import os
 import SwiftUI
 
 /// Library (mock §01): serif title, glass search/settings/New, "Continue" recents, folder chips, covers grid.
@@ -12,19 +14,13 @@ struct LibraryScreen: View {
 
     @State private var query = ""
     @State private var folder: LibraryFolder.ID?
-    @State private var sort = Sort.recent
+    @State private var sort = LibrarySort.recent
     @State private var showsSettings = false
+    @State private var isCreating = false
+    @State private var prompt: LibraryPrompt?
     @Namespace private var chipSelection
 
     private let margin = Tokens.Spacing.libraryMargin
-
-    enum Sort: String, CaseIterable, Identifiable {
-        case recent, title
-
-        var id: Self {
-            self
-        }
-    }
 
     var body: some View {
         ScrollView {
@@ -52,12 +48,10 @@ struct LibraryScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showsNewNotebook) {
             NewNotebookSheet(folder: library.folder(id: folder)) { draft in
-                let notebook = library.createNotebook(draft)
-                showsNewNotebook = false
-                query = ""
-                open(EditorRoute(id: notebook.id, source: .cover))
+                create(draft)
             }
         }
+        .libraryPrompts($prompt, library: library)
     }
 
     // MARK: Header
@@ -148,6 +142,7 @@ struct LibraryScreen: View {
                     RecentCard(notebook: notebook, zoom: zoom) {
                         open(EditorRoute(id: notebook.id, source: .recent))
                     }
+                    .contextMenu { NotebookMenu(notebook: notebook, library: library, prompt: $prompt) }
                     .containerRelativeFrame(.horizontal, count: 3, spacing: 31)
                 }
             }
@@ -169,8 +164,19 @@ struct LibraryScreen: View {
             chip("All", id: nil)
             ForEach(library.folders) { folder in
                 chip(folder.name, id: folder.id)
+                    .contextMenu {
+                        Button("Rename Folder", systemImage: "pencil") { prompt = .renameFolder(folder) }
+                        Button("Delete Folder", systemImage: "trash", role: .destructive) {
+                            if self.folder == folder.id {
+                                self.folder = nil
+                            }
+                            library.deleteFolder(folder.id)
+                        }
+                    }
             }
-            Button {} label: {
+            Button {
+                prompt = .newFolder
+            } label: {
                 Text("+ Folder")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Tokens.Colors.textTertiary)
@@ -178,11 +184,13 @@ struct LibraryScreen: View {
                     .padding(.vertical, 7)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("newFolder")
             Spacer(minLength: Tokens.Spacing.m)
             Menu {
                 Picker("Sort", selection: $sort) {
-                    Text("Recent").tag(Sort.recent)
-                    Text("Title").tag(Sort.title)
+                    Text("Recent").tag(LibrarySort.recent)
+                    Text("Title").tag(LibrarySort.title)
+                    Text("Created").tag(LibrarySort.created)
                 }
             } label: {
                 HStack(spacing: 4) {
@@ -198,7 +206,7 @@ struct LibraryScreen: View {
         }
     }
 
-    private func chip(_ name: String, id: LibraryFolder.ID?) -> some View {
+    private func chip(_ name: String, id: FolderID?) -> some View {
         let selected = folder == id
         return Button {
             withAnimation(.snappy(duration: 0.25)) { folder = id }
@@ -223,21 +231,21 @@ struct LibraryScreen: View {
 
     private var shownNotebooks: [NotebookSummary] {
         let notebooks = library.notebooks(in: folder, matching: query)
-        switch sort {
-        case .recent: return notebooks
-        case .title: return notebooks.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-        }
+        return sort == .recent ? notebooks : notebooks.sorted(by: sort)
     }
 
     @ViewBuilder
     private var coversGrid: some View {
         let notebooks = shownNotebooks
         if notebooks.isEmpty {
-            Text(query.isEmpty ? "No notebooks yet. Tap New to start one." : "No notebooks match “\(query)”.")
-                .font(.system(size: 15))
-                .foregroundStyle(Tokens.Colors.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, Tokens.Spacing.xxxl)
+            // Hidden while a slow index load/rebuild is still running: never flash "No notebooks yet".
+            if library.isLoaded {
+                Text(query.isEmpty ? "No notebooks yet. Tap New to start one." : "No notebooks match “\(query)”.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Tokens.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, Tokens.Spacing.xxxl)
+            }
         } else {
             LazyVGrid(
                 columns: [GridItem(
@@ -252,7 +260,28 @@ struct LibraryScreen: View {
                     CoverTile(notebook: notebook, folder: library.folder(id: notebook.folderID)?.name, zoom: zoom) {
                         open(EditorRoute(id: notebook.id, source: .cover))
                     }
+                    .contextMenu { NotebookMenu(notebook: notebook, library: library, prompt: $prompt) }
                 }
+            }
+        }
+    }
+}
+
+extension LibraryScreen {
+    /// Package + index entry first, then the editor: no interim library state (§8).
+    private func create(_ draft: NotebookDraft) {
+        guard !isCreating else { return }
+        isCreating = true
+        Task {
+            defer { isCreating = false }
+            do {
+                let notebook = try await library.createNotebook(draft)
+                showsNewNotebook = false
+                query = ""
+                open(EditorRoute(id: notebook.id, source: .cover))
+            } catch {
+                Logger(subsystem: "com.abhey.notespace", category: "library")
+                    .error("create: \(error.localizedDescription, privacy: .public)")
             }
         }
     }

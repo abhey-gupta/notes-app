@@ -13,8 +13,9 @@ struct RootView: View {
         @State private var showsGallery = UserDefaults.standard.bool(forKey: "DesignSystemGallery")
     #endif
 
-    init() {
-        let library = SampleLibrary(empty: LaunchOptions.emptyLibrary)
+    /// - Parameter library: Defaults to the on-disk library (or a DEBUG launch-argument one); previews pass a sample.
+    init(library: (any LibraryModel)? = nil) {
+        let library = library ?? LaunchOptions.makeLibrary()
         _library = State(initialValue: library)
         _path = State(initialValue: LaunchOptions.initialPath(in: library))
         _showsNewNotebook = State(initialValue: LaunchOptions.showsNewNotebook)
@@ -33,10 +34,12 @@ struct RootView: View {
                 }
             }
         }
+        // After the first frame: finish a slow/rebuilding index load, purge old trash.
+        .task { await library.start() }
         #if DEBUG
-        .fullScreenCover(isPresented: $showsGallery) {
-            DesignSystemGallery()
-        }
+            .fullScreenCover(isPresented: $showsGallery) {
+                DesignSystemGallery()
+            }
         #endif
     }
 
@@ -86,10 +89,10 @@ enum OpenTrace {
 }
 
 #Preview("Library · light") {
-    RootView()
+    RootView(library: SampleLibrary())
 }
 
 #Preview("Library · dark") {
-    RootView()
+    RootView(library: SampleLibrary())
         .preferredColorScheme(.dark)
 }

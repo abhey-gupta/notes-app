@@ -1,5 +1,6 @@
 import DesignSystem
 import InkModel
+import Library
 import SwiftUI
 
 /// New notebook (mock §06): title, cover, paper template, paper style. A4 portrait fixed.

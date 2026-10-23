@@ -1,6 +1,7 @@
 import XCTest
 
-/// App shell smoke (#13): library → editor → back, focus mode, new notebook.
+/// App shell smoke (#13, #34): library → editor → back, focus mode; create → persists across relaunch.
+/// Shell tests use the in-memory fixtures (`-sampleLibrary`); persistence tests use the real store.
 final class LaunchTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -9,6 +10,7 @@ final class LaunchTests: XCTestCase {
     @MainActor
     func testLaunchShowsLibrary() {
         let app = XCUIApplication()
+        app.launchArguments += ["-sampleLibrary", "YES"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Library"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["cover-Thermodynamics"].exists)
@@ -18,6 +20,7 @@ final class LaunchTests: XCTestCase {
     @MainActor
     func testOpenNotebookShowsChromeAndBackReturns() {
         let app = XCUIApplication()
+        app.launchArguments += ["-sampleLibrary", "YES"]
         app.launch()
         let cover = app.buttons["cover-Thermodynamics"]
         XCTAssertTrue(cover.waitForExistence(timeout: 5))
@@ -39,7 +42,7 @@ final class LaunchTests: XCTestCase {
     @MainActor
     func testInkingCollapsesToFocusPillAndTapRestores() {
         let app = XCUIApplication()
-        app.launchArguments += ["-openNotebook", "Thermodynamics"]
+        app.launchArguments += ["-sampleLibrary", "YES", "-openNotebook", "Thermodynamics"]
         app.launch()
         XCTAssertTrue(app.buttons["Pen"].waitForExistence(timeout: 5))
 
@@ -58,11 +61,13 @@ final class LaunchTests: XCTestCase {
     }
 
     @MainActor
-    func testNewNotebookOpensEditor() {
+    func testCreatedNotebookPersistsAcrossRelaunch() {
         let app = XCUIApplication()
+        app.launchArguments += ["-resetLibrary", "YES"]
         app.launch()
         let new = app.buttons["newNotebook"]
         XCTAssertTrue(new.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No notebooks yet. Tap New to start one."].exists, "fresh install shows the empty state")
         new.tap()
 
         let title = app.textFields["notebookTitle"]
@@ -70,8 +75,15 @@ final class LaunchTests: XCTestCase {
         title.typeText("Organic Chemistry")
         app.buttons["createNotebook"].tap()
 
-        XCTAssertTrue(app.buttons["Organic Chemistry, notebook options"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Organic Chemistry, notebook options"].waitForExistence(timeout: 5), "create opens the editor")
         app.buttons["Library"].tap()
         XCTAssertTrue(app.buttons["cover-Organic Chemistry"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["recent-Organic Chemistry"].exists)
+
+        app.terminate()
+        let relaunched = XCUIApplication()
+        relaunched.launch()
+        XCTAssertTrue(relaunched.buttons["cover-Organic Chemistry"].waitForExistence(timeout: 5), "notebook survives relaunch")
+        XCTAssertFalse(relaunched.staticTexts["No notebooks yet. Tap New to start one."].exists)
     }
 }
