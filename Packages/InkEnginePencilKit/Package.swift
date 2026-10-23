@@ -8,9 +8,13 @@ let package = Package(
     dependencies: [
         .package(path: "../InkEngine"),
         .package(path: "../InkModel"),
+        .package(path: "../InkGeometry"),
     ],
     targets: [
-        .target(name: "InkEnginePencilKit", dependencies: ["InkEngine", "InkModel"]),
-        .testTarget(name: "InkEnginePencilKitTests", dependencies: ["InkEnginePencilKit"]),
+        .target(name: "InkEnginePencilKit", dependencies: ["InkEngine", "InkModel", "InkGeometry"]),
+        .testTarget(
+            name: "InkEnginePencilKitTests",
+            dependencies: ["InkEnginePencilKit", .product(name: "InkEngineTestSupport", package: "InkEngine")]
+        ),
     ]
 )

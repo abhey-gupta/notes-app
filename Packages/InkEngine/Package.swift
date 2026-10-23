@@ -4,13 +4,18 @@ import PackageDescription
 let package = Package(
     name: "InkEngine",
     platforms: [.iOS(.v26)],
-    products: [.library(name: "InkEngine", targets: ["InkEngine"])],
+    products: [
+        .library(name: "InkEngine", targets: ["InkEngine"]),
+        // Shared render fixtures + palette for engine tests (#18 PencilKit, #19 Metal). Test targets only.
+        .library(name: "InkEngineTestSupport", targets: ["InkEngineTestSupport"]),
+    ],
     dependencies: [
         .package(path: "../InkModel"),
         .package(path: "../InkGeometry"),
     ],
     targets: [
         .target(name: "InkEngine", dependencies: ["InkModel", "InkGeometry"]),
-        .testTarget(name: "InkEngineTests", dependencies: ["InkEngine"]),
+        .target(name: "InkEngineTestSupport", dependencies: ["InkEngine", "InkModel"]),
+        .testTarget(name: "InkEngineTests", dependencies: ["InkEngine", "InkEngineTestSupport"]),
     ]
 )
