@@ -23,7 +23,13 @@ struct PlanKey: Equatable {
         height = scene.pixelHeight
         self.bucket = bucket
         pages = scene.pages.map {
-            Page(id: $0.id, viewRect: $0.viewRect, buffers: $0.buffers.map(ObjectIdentifier.init), isVisible: $0.isVisible, background: $0.background)
+            Page(
+                id: $0.id,
+                viewRect: $0.viewRect,
+                buffers: $0.buffers.map(ObjectIdentifier.init),
+                isVisible: $0.isVisible,
+                background: $0.background
+            )
         }
     }
 }
@@ -41,6 +47,7 @@ extension TiledContentRenderer {
         var page: ScenePage
         var id: PageID
         var scene: ContentScene
+        var grid: TileGrid
 
         /// `rect` (view pt) in page space.
         func pageRect(_ rect: CGRect) -> CGRect {
@@ -56,7 +63,12 @@ extension TiledContentRenderer {
         /// `rect` (page space) in view points.
         func viewRect(_ rect: CGRect) -> CGRect {
             let z = scene.zoomScale
-            return CGRect(x: page.viewRect.minX + rect.minX * z, y: page.viewRect.minY + rect.minY * z, width: rect.width * z, height: rect.height * z)
+            return CGRect(
+                x: page.viewRect.minX + rect.minX * z,
+                y: page.viewRect.minY + rect.minY * z,
+                width: rect.width * z,
+                height: rect.height * z
+            )
         }
 
         /// Draws `region` (page space) from a texture covering `source` (page space).
@@ -98,7 +110,7 @@ extension TiledContentRenderer {
 
         for (i, page) in scene.pages.enumerated() where page.isVisible {
             guard let id = page.id else { continue }
-            let at = Placement(page: page, id: id, scene: scene)
+            let at = Placement(page: page, id: id, scene: scene, grid: grid)
             let bounds = CGRect(origin: .zero, size: page.size)
             let keys = grid.keys(id, bucket, covering: at.pageRect(view), pageSize: page.size)
             publishStaged(page: id, visible: keys)
@@ -119,7 +131,7 @@ extension TiledContentRenderer {
                 } else {
                     unsettled.insert(id)
                     wanted.append(Want(key: key, priority: priority, page: i))
-                    drawFallback(rect.intersection(bounds), at, bucket: bucket, grid: grid, into: &list, protecting: &protected)
+                    drawFallback(rect.intersection(bounds), at, bucket: bucket, into: &list, protecting: &protected)
                 }
             }
         }
@@ -143,7 +155,7 @@ extension TiledContentRenderer {
         var wanted: [Want] = []
         for (i, page) in scene.pages.enumerated() {
             guard let id = page.id, page.buffers != nil else { continue }
-            let at = Placement(page: page, id: id, scene: scene)
+            let at = Placement(page: page, id: id, scene: scene, grid: grid)
             for key in grid.keys(id, bucket, covering: at.pageRect(area), pageSize: page.size) where !protected.contains(key) {
                 protected.insert(key)
                 cache.touch(key)
@@ -161,11 +173,11 @@ extension TiledContentRenderer {
         _ region: CGRect,
         _ at: Placement,
         bucket: ZoomBucket,
-        grid: TileGrid,
         into list: inout DrawList,
         protecting protected: inout Set<TileKey>
     ) {
         list.fallbacks += 1
+        let grid = at.grid
         for other in bucket.fallbacks {
             let keys = grid.keys(at.id, other, covering: region, pageSize: at.page.size)
             let entries = keys.compactMap { key in cache[key].map { (key, $0.value) } }
@@ -249,7 +261,13 @@ extension TiledContentRenderer {
     func registerGauges() {
         PerfHUD.register(gauge: PerfGauge(id: "ink.tiles", label: "tiles") { [weak self] in
             guard let self else { return "–" }
-            return String(format: "%d · %.0f MB (pool %.0f / %.0f)", cache.count, Double(cache.bytes) / 1_048_576, Double(pool.allocatedBytes) / 1_048_576, Double(effectiveBudget()) / 1_048_576)
+            return String(
+                format: "%d · %.0f MB (pool %.0f / %.0f)",
+                cache.count,
+                Double(cache.bytes) / 1_048_576,
+                Double(pool.allocatedBytes) / 1_048_576,
+                Double(effectiveBudget()) / 1_048_576
+            )
         })
         PerfHUD.register(gauge: PerfGauge(id: "ink.tiles.queue", label: "tile queue") { [weak self] in
             guard let self else { return "–" }

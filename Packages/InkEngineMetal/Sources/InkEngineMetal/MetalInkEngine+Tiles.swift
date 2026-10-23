@@ -148,7 +148,12 @@ enum ThumbnailTexture {
             return true
         }
         guard drawn else { return nil }
-        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: GPUContext.pixelFormat, width: width, height: height, mipmapped: false)
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: GPUContext.pixelFormat,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
         desc.usage = .shaderRead
         desc.storageMode = .shared
         guard let texture = device.makeTexture(descriptor: desc) else { return nil }

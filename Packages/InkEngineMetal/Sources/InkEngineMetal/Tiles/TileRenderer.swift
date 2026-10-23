@@ -227,7 +227,11 @@ final class TileRenderer: @unchecked Sendable {
         // One tile pixel of slack: strip bounds already include the AA fringe.
         let pixel = 1 / (s * grid.pixelsPerPoint)
         let page = ScenePage(
-            transform: PageTransform(pageToTarget: pageToTile, targetSize: CGSize(width: side, height: side), pixelsPerPoint: grid.pixelsPerPoint),
+            transform: PageTransform(
+                pageToTarget: pageToTile,
+                targetSize: CGSize(width: side, height: side),
+                pixelsPerPoint: grid.pixelsPerPoint
+            ),
             background: job.background,
             buffers: job.buffers,
             scissor: scissor,

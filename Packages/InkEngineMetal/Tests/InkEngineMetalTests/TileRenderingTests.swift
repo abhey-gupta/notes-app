@@ -218,10 +218,12 @@ struct TileMemoryTests {
         let next = try await ContentCapture.capture(tiles, scene)
         #expect(Golden.difference(shown, next)?.differingFraction == 0)
         #expect(tiles.draws.fallbacks == 0)
-        // Prefetch refills within the halved budget.
+        // Prefetch refills within the halved budget (floored at twice the visible tiles so stale ones
+        // can still re-render; on device the full budget's half is far above that).
         try await ContentCapture.settle(tiles, scene)
         #expect(tiles.pool.allocatedBytes <= tiles.effectiveBudget())
-        #expect(tiles.effectiveBudget() <= before / 2)
+        #expect(tiles.effectiveBudget() <= max(before / 2, 2 * tiles.visibleKeys.count * tiles.pool.tileBytes))
+        #expect(tiles.effectiveBudget() < before)
         let settled = try await ContentCapture.capture(tiles, scene)
         #expect(Golden.difference(shown, settled)?.differingFraction == 0)
     }

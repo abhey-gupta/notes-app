@@ -33,7 +33,8 @@ extension TiledContentRenderer {
     var diagnostics: String {
         let stale = cache.entries.filter(\.value.isStale).map(\.key)
         return "depth \(renderer.depth), staged \(staged.count), complete \(planWasComplete), needsPlan \(needsPlan), "
-            + "frozen \(String(describing: frozenBucket)), stale \(stale), unsettled \(unsettled.count), deferred \(renderer.stats.deferred)"
+            + "frozen \(String(describing: frozenBucket)), stale \(stale), unsettled \(unsettled.count), "
+            + "deferred \(renderer.stats.deferred)"
     }
 }
 
@@ -62,6 +63,7 @@ enum ContentCapture {
         config.budget = budget
         config.zoomSettleDelay = 0
         config.registersGauges = false
+        config.observesMemoryWarnings = false
         return try #require(TiledContentRenderer(gpu: gpu, configuration: config))
     }
 
@@ -133,7 +135,10 @@ enum FixturePages {
         for i in 0 ..< count {
             let page = generator.page(at: i)
             snapshots.append(PageSnapshot(page: page, size: size))
-            frames.append(VisiblePage(id: page.id, frame: CGRect(x: 0, y: CGFloat(i) * (size.height + gap), width: size.width, height: size.height)))
+            frames.append(VisiblePage(
+                id: page.id,
+                frame: CGRect(x: 0, y: CGFloat(i) * (size.height + gap), width: size.width, height: size.height)
+            ))
         }
         return (snapshots, frames)
     }

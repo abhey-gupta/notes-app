@@ -7,7 +7,7 @@ import InkModel
 import Metal
 import Testing
 
-/// Scroll the 100-page fixture like the canvas host would (ARCHITECTURE.md §5, §11). Simulator numbers
+/// Scroll the 300-page fixture like the canvas host would (ARCHITECTURE.md §5, §11). Simulator numbers
 /// are relative only; the 120 Hz / hitch budgets are verified on device.
 @MainActor
 @Suite(.serialized)
@@ -43,7 +43,61 @@ struct ScrollSimulationTests {
                 engine.setPages(Array(fixture.snapshots[window]))
             }
             let frames = Array(fixture.frames[max(first - 1, 0) ... min(last + 1, count - 1)])
-            engine.setViewport(Viewport(contentOffset: CGPoint(x: 0, y: y), zoomScale: 1, size: ScrollSimulationTests.viewSize, pages: frames))
+            engine.setViewport(Viewport(
+                contentOffset: CGPoint(x: 0, y: y),
+                zoomScale: 1,
+                size: ScrollSimulationTests.viewSize,
+                pages: frames
+            ))
+        }
+    }
+
+    /// A fast fling: 48 pt per 120 Hz frame (5760 pt/s), top to bottom, paced like the display.
+    @MainActor
+    struct Fling {
+        var frameTimes: [Double] = []
+        var elapsed: Double = 0
+        var peakPool = 0
+        var peakCache = 0
+        var maxBuffers = 0
+        var peakFootprint = 0
+
+        static func run(_ host: Host, engine: MetalInkEngine, tiles: TiledContentRenderer) async throws -> Fling {
+            var run = Fling()
+            let clock = ContinuousClock()
+            let interval = Duration.nanoseconds(8_333_333)
+            var next = clock.now
+            var y: CGFloat = 0
+            let start = clock.now
+            while y < host.total {
+                y = min(y + 48, host.total)
+                host.scroll(to: y)
+                let t0 = clock.now
+                engine.drawFrame()
+                run.frameTimes.append((clock.now - t0) / .seconds(1))
+                run.peakPool = max(run.peakPool, tiles.pool.allocatedBytes)
+                run.peakCache = max(run.peakCache, tiles.cache.bytes)
+                run.maxBuffers = max(run.maxBuffers, engine.pageBuffers.count)
+                if run.frameTimes.count % 30 == 0 {
+                    run.peakFootprint = max(run.peakFootprint, Self.footprint())
+                }
+                next += interval
+                try await clock.sleep(until: next)
+            }
+            run.elapsed = (clock.now - start) / .seconds(1)
+            return run
+        }
+
+        /// The process's physical footprint (bytes): what jetsam counts.
+        static func footprint() -> Int {
+            var info = task_vm_info_data_t()
+            var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+            let result = withUnsafeMutablePointer(to: &info) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                    task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+                }
+            }
+            return result == KERN_SUCCESS ? Int(info.phys_footprint) : 0
         }
     }
 
@@ -54,12 +108,12 @@ struct ScrollSimulationTests {
     }
 
     @Test(.timeLimit(.minutes(5)))
-    func scrolling100PagesNeverWaitsOnTilesAndStaysInBudget() async throws {
+    func scrolling300PagesNeverWaitsOnTilesAndStaysInBudget() async throws {
         let engine = try #require(MetalInkEngine(palette: FixturePalette(), contentMode: .tiles))
         let tiles = try #require(engine.tiles)
         engine.view.frame = CGRect(origin: .zero, size: Self.viewSize)
         engine.view.layoutIfNeeded()
-        let host = Host(engine, pages: 100)
+        let host = Host(engine, pages: 300)
         // Open at page 1 and let the first screen settle (on device the thumbnail covers this).
         host.scroll(to: 0)
         try await engine.settle()
@@ -67,47 +121,27 @@ struct ScrollSimulationTests {
         let startTiles = tiles.renderer.stats
         let startStats = tiles.stats
 
-        // A fast fling: 48 pt per 120 Hz frame (5760 pt/s), the whole notebook in ~15 s.
-        let clock = ContinuousClock()
-        let interval = Duration.nanoseconds(8_333_333)
-        var next = clock.now
-        var frameTimes: [Double] = []
-        var peakPool = 0
-        var peakCache = 0
-        var maxBuffers = 0
-        var y: CGFloat = 0
-        let start = clock.now
-        while y < host.total {
-            y = min(y + 48, host.total)
-            host.scroll(to: y)
-            let t0 = clock.now
-            engine.drawFrame()
-            frameTimes.append((clock.now - t0) / .seconds(1))
-            peakPool = max(peakPool, tiles.pool.allocatedBytes)
-            peakCache = max(peakCache, tiles.cache.bytes)
-            maxBuffers = max(maxBuffers, engine.pageBuffers.count)
-            next += interval
-            try await clock.sleep(until: next)
-        }
-        let elapsed = (clock.now - start) / .seconds(1)
+        let run = try await Fling.run(host, engine: engine, tiles: tiles)
+        let frameTimes = run.frameTimes
 
         let prepare = tiles.prepareTimes ?? []
         let rendered = tiles.renderer.stats.tiles - startTiles.tiles
         let encode = (tiles.renderer.stats.encodeSeconds - startTiles.encodeSeconds) / Double(max(rendered, 1))
         let gpu = (tiles.renderer.stats.gpuSeconds - startTiles.gpuSeconds) / Double(max(rendered, 1))
         let fallbackFrames = tiles.stats.framesWithFallback - startStats.framesWithFallback
-        let budget = tiles.effectiveBudget()
+        let budget = tiles.configuration.budget
         PerfReport.append(String(
-            format: "scroll 100p: %d frames in %.1f s (%.0f fps paced); frame CPU p50 %.2f p99 %.2f max %.2f ms; "
-                + "prepare p50 %.3f p99 %.3f max %.3f ms; %d tiles rendered, %.2f ms encode + %.2f ms GPU per tile; "
+            format: "scroll 300p: %d frames in %.1f s (%.0f fps paced); frame CPU p50 %.2f p99 %.2f max %.2f ms; "
+                + "prepare CPU p50 %.3f p99 %.3f max %.3f ms; %d tiles rendered, %.2f ms encode + %.2f ms GPU per tile; "
                 + "fallback frames %d (bucket %d, paper %d regions); peak pool %d MiB, cache %d MiB (end %d / %d), budget %d MiB; "
-                + "max page buffers %d",
-            frameTimes.count, elapsed, Double(frameTimes.count) / elapsed,
+                + "max page buffers %d; peak footprint %d MiB",
+            frameTimes.count, run.elapsed, Double(frameTimes.count) / run.elapsed,
             Self.percentile(frameTimes, 0.5) * 1000, Self.percentile(frameTimes, 0.99) * 1000, (frameTimes.max() ?? 0) * 1000,
             Self.percentile(prepare, 0.5) * 1000, Self.percentile(prepare, 0.99) * 1000, (prepare.max() ?? 0) * 1000,
             rendered, encode * 1000, gpu * 1000,
             fallbackFrames, tiles.stats.fallbackBucket - startStats.fallbackBucket, tiles.stats.fallbackPaper - startStats.fallbackPaper,
-            peakPool >> 20, peakCache >> 20, tiles.pool.allocatedBytes >> 20, tiles.cache.bytes >> 20, budget >> 20, maxBuffers
+            run.peakPool >> 20, run.peakCache >> 20, tiles.pool.allocatedBytes >> 20, tiles.cache.bytes >> 20, budget >> 20, run.maxBuffers,
+            run.peakFootprint >> 20
         ))
 
         // No frame waits on a tile: renders only ever run on the tile queue, and planning stays far
@@ -115,10 +149,12 @@ struct ScrollSimulationTests {
         #expect(tiles.renderer.stats.onMainThread == 0)
         #expect(Self.percentile(prepare, 0.99) < 0.002)
         #expect(rendered > 100)
-        // Memory: tiles within budget, GPU buffers for visible ± 3 only.
-        #expect(peakPool <= budget)
-        #expect(peakCache <= budget)
-        #expect(maxBuffers <= 2 + 2 * MetalInkEngine.bufferRadius)
+        // Memory: tiles within budget, GPU buffers for visible ± 3 only (a 1366 pt view spans ≤ 3 pages).
+        #expect(run.peakPool <= budget)
+        #expect(run.peakCache <= budget)
+        #expect(run.maxBuffers <= 3 + 2 * MetalInkEngine.bufferRadius)
+        // Whole test process (fixture, engine, tiles; on the simulator GPU memory is host memory).
+        #expect(run.peakFootprint > 0 && run.peakFootprint < 400 << 20)
     }
 
     /// Committed-content cost per frame while scrolling, tiles vs the viewport composite (warm tile
@@ -150,7 +186,12 @@ struct ScrollSimulationTests {
         }
         let tileRate = try framesPerSecond(tiles)
         let compositeRate = try framesPerSecond(composite)
-        PerfReport.append(String(format: "composite fps (sim, relative): tiles %.0f, viewport composite %.0f (×%.1f)", tileRate, compositeRate, tileRate / compositeRate))
+        PerfReport.append(String(
+            format: "composite fps (sim, relative): tiles %.0f, viewport composite %.0f (×%.1f)",
+            tileRate,
+            compositeRate,
+            tileRate / compositeRate
+        ))
         #expect(tiles.draws.fallbacks == 0)
         #expect(tileRate > compositeRate)
     }

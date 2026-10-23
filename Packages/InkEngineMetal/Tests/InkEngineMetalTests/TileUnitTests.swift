@@ -156,7 +156,13 @@ struct StrokeSelectionTests {
 struct PageDiffTests {
     func build(_ page: Page, theme: PaperTheme = .white) throws -> PageBuffers {
         let gpu = try #require(GPUContext.shared)
-        let input = PageBuildInput(snapshot: PageSnapshot(page: page, size: RenderFixtures.pageSize), theme: theme, palette: FixturePalette(), fringe: 1, cached: [:])
+        let input = PageBuildInput(
+            snapshot: PageSnapshot(page: page, size: RenderFixtures.pageSize),
+            theme: theme,
+            palette: FixturePalette(),
+            fringe: 1,
+            cached: [:]
+        )
         return PageBuilder.buildNow(input, device: gpu.device).buffers
     }
 
@@ -165,7 +171,7 @@ struct PageDiffTests {
         let b = RenderFixtures.line(2, from: CGPoint(x: 300, y: 500), to: CGPoint(x: 400, y: 520))
         let page = Page(id: RenderFixtures.pageID(4), strokes: [a])
         let old = try build(page)
-        #expect(PageDiff.dirtyRect(from: old, to: try build(page)) == .null)
+        #expect(try PageDiff.dirtyRect(from: old, to: build(page)) == .null)
 
         let added = try build(page.applying(page.addEdit([b])))
         #expect(PageDiff.dirtyRect(from: old, to: added) == added.bounds(of: b.id))
@@ -176,6 +182,6 @@ struct PageDiffTests {
         let removed = try build(page.applying(page.removeEdit([a.id])))
         #expect(PageDiff.dirtyRect(from: old, to: removed) == old.bounds(of: a.id))
 
-        #expect(PageDiff.dirtyRect(from: old, to: try build(page, theme: .night)) == nil)
+        #expect(try PageDiff.dirtyRect(from: old, to: build(page, theme: .night)) == nil)
     }
 }

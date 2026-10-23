@@ -299,7 +299,11 @@ struct FrameTests {
         driver.scrollLinger = 0.05
         h.scroll(toY: 920)
         #expect(driver.isRunning)
-        try await Task.sleep(for: .milliseconds(400))
+        // Stops once the scroll lingered out and the tiles it asked for landed (slower on a loaded host).
+        let deadline = ContinuousClock.now + .seconds(5)
+        while driver.isRunning, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(!driver.isRunning)
         #expect(!driver.isActive(.scroll))
     }
