@@ -15,7 +15,7 @@ struct InkRasterCacheTests {
     }
 
     private func key(rev: UInt64 = 1) -> PageLayerView.InkKey {
-        PageLayerView.InkKey(rev: rev, theme: .white, pixelScale: 2, strokeCount: 1)
+        PageLayerView.InkKey(rev: rev, theme: .white, pixelScale: 2, strokeCount: 1, pendingCount: 0)
     }
 
     @Test func hitsOnlyForTheSameKey() throws {

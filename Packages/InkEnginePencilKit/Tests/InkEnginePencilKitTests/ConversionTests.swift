@@ -1,6 +1,7 @@
 import CoreGraphics
 @testable import InkEnginePencilKit
 import InkEngineTestSupport
+import InkGeometry
 import InkModel
 import PencilKit
 import Testing
@@ -14,11 +15,12 @@ struct ConversionTests {
         #expect(pk.path.count == original.samples.count)
         #expect(pk.ink.inkType == PencilKitConversion.inkType(for: kind))
 
-        let back = PencilKitConversion.stroke(from: pk, id: original.id, color: original.color)
+        let back = PencilKitConversion.stroke(from: pk, id: original.id, color: original.color, width: original.width)
         #expect(back.id == original.id)
         #expect(back.tool == kind)
         #expect(back.samples.count == original.samples.count)
-        #expect(abs(back.width - original.width) < 1e-3)
+        #expect(back.width == original.width)
+        #expect(back.rendering?.points.map(\.width) == original.derivedRendering.points.map(\.width))
         for edge in [\CGRect.minX, \.minY, \.maxX, \.maxY] {
             #expect(abs(back.bounds[keyPath: edge] - original.bounds[keyPath: edge]) <= 0.5)
         }
@@ -64,5 +66,17 @@ struct ConversionTests {
     @Test func inkingToolClampsWidth() {
         let tool = PencilKitConversion.inkingTool(.ballpoint, color: .black, width: 10000)
         #expect(tool.width <= PKInk.InkType.pen.validWidthRange.upperBound)
+    }
+
+    @Test(arguments: PenKind.allCases)
+    func middlePresetDrawsAtPencilKitDefaultWidth(kind: PenKind) {
+        let type = PencilKitConversion.inkType(for: kind)
+        let middle = PencilKitConversion.referenceWidth(for: kind)
+        #expect(PencilKitConversion.pencilKitWidth(for: kind, width: middle) == type.defaultWidth)
+        // Presets step monotonically finer/bolder within the ink's range.
+        let presets: [Float] = kind == .highlighter ? [10, 16, 24] : [1.5, 2.5, 4, 6, 8]
+        let widths = presets.map { PencilKitConversion.pencilKitWidth(for: kind, width: $0) }
+        #expect(widths == widths.sorted())
+        #expect(widths.allSatisfy { type.validWidthRange.contains($0) })
     }
 }

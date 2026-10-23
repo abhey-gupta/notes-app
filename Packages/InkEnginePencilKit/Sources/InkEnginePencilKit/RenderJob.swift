@@ -3,15 +3,31 @@ import InkModel
 import PencilKit
 import UIKit
 
-/// Off-main rasterization inputs (all `Sendable`).
+/// Off-main rasterization inputs (all `Sendable`). Ink is drawn by PencilKit from the exact stored
+/// strokes (``PencilKitConversion/pkStroke(from:color:)``), so a raster matches the canvas.
 struct RenderJob: Sendable {
     let page: PageSnapshot
     let palette: any InkPalette
     let theme: PaperTheme
+    /// Strokes on the canvas not yet in `page` (drawn last, as on the canvas).
+    var pending: [PKStroke] = []
+
+    /// PencilKit adapts ink for dark appearance; the canvas is pinned to light (the palette already
+    /// resolved colors for the paper), so rasters render light too.
+    private static let traits = UITraitCollection(userInterfaceStyle: .light)
+
+    var isEmpty: Bool {
+        page.strokes.isEmpty && pending.isEmpty
+    }
 
     /// Ink only, transparent, page space at `scale` px/pt.
     func ink(scale: CGFloat) -> CGImage? {
-        drawing().image(from: CGRect(origin: .zero, size: page.size), scale: scale).cgImage
+        let drawing = drawing()
+        var image: CGImage?
+        Self.traits.performAsCurrent {
+            image = drawing.image(from: CGRect(origin: .zero, size: page.size), scale: scale).cgImage
+        }
+        return image
     }
 
     /// Paper + template + ink scaled into `size` points at `scale`.
@@ -21,10 +37,13 @@ struct RenderJob: Sendable {
         format.opaque = true
         let sx = size.width / page.size.width
         let sy = size.height / page.size.height
-        let inkImage = page.strokes.isEmpty ? nil : drawing().image(
-            from: CGRect(origin: .zero, size: page.size),
-            scale: scale * max(sx, sy)
-        )
+        var inkImage: UIImage?
+        if !isEmpty {
+            let drawing = drawing()
+            Self.traits.performAsCurrent {
+                inkImage = drawing.image(from: CGRect(origin: .zero, size: page.size), scale: scale * max(sx, sy))
+            }
+        }
         let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
             let cg = context.cgContext
             cg.scaleBy(x: sx, y: sy)
@@ -40,9 +59,9 @@ struct RenderJob: Sendable {
         return image.cgImage
     }
 
-    private func drawing() -> PKDrawing {
+    func drawing() -> PKDrawing {
         PKDrawing(strokes: page.strokes.map { stroke in
             PencilKitConversion.pkStroke(from: stroke, color: UIColor(palette.ink(stroke.color, on: theme)))
-        })
+        } + pending)
     }
 }

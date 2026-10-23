@@ -17,6 +17,7 @@ import Tools
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
 /// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
 /// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests).
+/// - `-penKind fountain|ballpoint|brush`, `-penWidth <0...4>`: pen family and width step (UI tests).
 /// - `-allowFingerDrawing YES`: fingers ink (one finger draws, two scroll) — the simulator has no Pencil.
 /// - `-fixtureNotebook <pages>`: add a FixtureGen notebook ("Fixture <pages>p · seed 1") to the on-disk
 ///   library after launch (generated once; the package ID is deterministic).
@@ -94,6 +95,13 @@ enum LaunchOptions {
             }
             if arguments["toolbarCompact"] != nil {
                 tools.isCompact = flag("toolbarCompact")
+            }
+            // No pen-family or width picker yet (#26): UI tests choose them here.
+            if let raw = arguments["penKind"] as? String, let kind = PenSettings.kinds.first(where: { raw == "\($0)" }) {
+                tools.pen.kind = kind
+            }
+            if arguments["penWidth"] != nil {
+                tools.pen.widthIndex = defaults.integer(forKey: "penWidth")
             }
             return tools
         #else

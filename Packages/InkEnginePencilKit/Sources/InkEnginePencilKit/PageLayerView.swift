@@ -2,8 +2,12 @@ import InkModel
 import PencilKit
 import UIKit
 
-/// One visible page: paper color, vector template marks, and (unless it is the active page, whose ink
-/// the `PKCanvasView` draws) a raster of its ink.
+/// One visible page: paper color, vector template marks, and (unless the `PKCanvasView` is drawing this
+/// page) a raster of its ink.
+///
+/// The raster is only ever replaced, never cleared ahead of its successor, so ink never blinks out while
+/// a new raster renders. A page the canvas just left shows a snapshot of the canvas (``setPlaceholder``)
+/// until its raster arrives.
 @MainActor
 final class PageLayerView: UIView {
     private let linesLayer = CAShapeLayer()
@@ -11,6 +15,9 @@ final class PageLayerView: UIView {
     let inkLayer = CALayer()
 
     private var templateKey: TemplateKey?
+    private var zoom: CGFloat = 1
+    /// Snapshot of the canvas shown until the raster for ``requestedKey`` arrives, with its page-space rect.
+    private var placeholder: (view: UIView, pageRect: CGRect)?
 
     private struct TemplateKey: Equatable {
         var template: PageTemplate
@@ -24,14 +31,28 @@ final class PageLayerView: UIView {
         var line: CGColor
     }
 
-    /// Identifies the ink raster currently shown or being rendered.
-    var inkKey: InkKey?
+    /// The raster being rendered (or shown) for this page.
+    var requestedKey: InkKey?
+    /// The raster on screen, `nil` if none or a stale stand-in.
+    private(set) var shownKey: InkKey?
 
+    /// Identifies one raster of a page's ink.
     struct InkKey: Hashable {
         var rev: UInt64
         var theme: PaperTheme
         var pixelScale: CGFloat
         var strokeCount: Int
+        /// Strokes drawn on the canvas but not yet echoed into the snapshot.
+        var pendingCount: Int
+    }
+
+    /// Whether the raster may show (false while the canvas draws this page).
+    var showsInk = true {
+        didSet { updateInkVisibility() }
+    }
+
+    var hasPlaceholder: Bool {
+        placeholder != nil
     }
 
     override init(frame: CGRect) {
@@ -56,6 +77,7 @@ final class PageLayerView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.frame = frame
+        self.zoom = zoom
         layer.backgroundColor = colors.paper
         linesLayer.strokeColor = colors.line
         dotsLayer.fillColor = colors.line
@@ -70,23 +92,65 @@ final class PageLayerView: UIView {
             linesLayer.path = paths.lines.copy(using: &scale)
             dotsLayer.path = paths.dots.copy(using: &scale)
         }
+        if let placeholder {
+            placeholder.view.frame = Self.scaled(placeholder.pageRect, by: zoom)
+        }
         CATransaction.commit()
     }
 
-    func setInk(_ image: CGImage?) {
+    /// Shows the raster for `key` (`nil` image: the page has no ink) and drops any placeholder.
+    func setInk(_ image: CGImage?, key: InkKey?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         inkLayer.contents = image
+        shownKey = key
+        CATransaction.commit()
+        removePlaceholder()
+    }
+
+    /// Shows an out-of-date raster of this page while the current one renders (better than no ink).
+    func setStaleInk(_ image: CGImage) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        inkLayer.contents = image
+        shownKey = nil
         CATransaction.commit()
     }
 
-    var showsInk: Bool {
-        get { !inkLayer.isHidden }
-        set {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            inkLayer.isHidden = !newValue
-            CATransaction.commit()
-        }
+    /// Forgets which raster is shown so the next refresh renders again (the content stays on screen).
+    func invalidateInk() {
+        requestedKey = nil
+        shownKey = nil
+    }
+
+    /// Covers `pageRect` (page space) with `view` (a snapshot of the canvas) and hides the raster until
+    /// ``setInk(_:key:)``.
+    func setPlaceholder(_ view: UIView, pageRect: CGRect) {
+        removePlaceholder()
+        view.isUserInteractionEnabled = false
+        view.frame = Self.scaled(pageRect, by: zoom)
+        addSubview(view)
+        placeholder = (view, pageRect)
+        updateInkVisibility()
+    }
+
+    func removePlaceholder() {
+        guard let placeholder else { return }
+        placeholder.view.removeFromSuperview()
+        self.placeholder = nil
+        updateInkVisibility()
+    }
+
+    private func updateInkVisibility() {
+        let hidden = !showsInk || placeholder != nil
+        guard inkLayer.isHidden != hidden else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        inkLayer.isHidden = hidden
+        CATransaction.commit()
+    }
+
+    private static func scaled(_ rect: CGRect, by zoom: CGFloat) -> CGRect {
+        CGRect(x: rect.minX * zoom, y: rect.minY * zoom, width: rect.width * zoom, height: rect.height * zoom)
     }
 }

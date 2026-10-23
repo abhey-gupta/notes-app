@@ -47,6 +47,11 @@ final class InkRasterCache {
         return entry.image
     }
 
+    /// Whatever raster `page` has, current or not (a stand-in while the current one renders).
+    func latestImage(for page: PageID) -> CGImage? {
+        entries[page]?.image
+    }
+
     func insert(_ image: CGImage, for page: PageID, key: PageLayerView.InkKey) {
         remove(page)
         let size = image.bytesPerRow * image.height
