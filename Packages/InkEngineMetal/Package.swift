@@ -9,9 +9,21 @@ let package = Package(
         .package(path: "../InkEngine"),
         .package(path: "../InkModel"),
         .package(path: "../InkGeometry"),
+        .package(path: "../Perf"),
+        // Tests only: cross-checks renders against the PencilKit adapter (ARCHITECTURE.md §13).
+        .package(path: "../InkEnginePencilKit"),
     ],
     targets: [
-        .target(name: "InkEngineMetal", dependencies: ["InkEngine", "InkModel", "InkGeometry"]),
-        .testTarget(name: "InkEngineMetalTests", dependencies: ["InkEngineMetal"]),
+        // `Shaders/*.metal` compile into the module bundle's default library at build time.
+        .target(name: "InkEngineMetal", dependencies: ["InkEngine", "InkModel", "InkGeometry", "Perf"]),
+        .testTarget(
+            name: "InkEngineMetalTests",
+            dependencies: [
+                "InkEngineMetal",
+                .product(name: "InkEngineTestSupport", package: "InkEngine"),
+                "InkEnginePencilKit",
+            ],
+            resources: [.copy("Goldens")]
+        ),
     ]
 )
