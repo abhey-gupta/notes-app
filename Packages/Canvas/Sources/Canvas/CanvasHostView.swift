@@ -1,37 +1,8 @@
 #if canImport(UIKit)
     import InkEngine
     import InkModel
-    import Observation
-    import os
     import Perf
     import UIKit
-
-    /// Host callbacks, on the main actor.
-    @MainActor
-    public protocol CanvasHostViewDelegate: AnyObject {
-        /// The visible pages moved to a new ``PageWindow`` (not called for scrolls within the same pages).
-        func canvasHost(_ host: CanvasHostView, didChange window: PageWindow)
-        /// A finger started scrolling or zooming (focus mode restores the chrome, §7).
-        func canvasHostWillBeginNavigating(_ host: CanvasHostView)
-        /// The add-page button under the last page was tapped.
-        func canvasHostDidRequestNewPage(_ host: CanvasHostView)
-        /// The last touch on the canvas lifted (end of a Pencil gesture: eraser undo grouping, focus mode).
-        func canvasHostDidLiftAllTouches(_ host: CanvasHostView)
-    }
-
-    /// What SwiftUI shows about the viewport: the page indicator's page and the zoom.
-    @MainActor
-    @Observable
-    public final class CanvasViewportState {
-        /// Page nearest the viewport center (0-based), the "3" in "3 of 11".
-        public internal(set) var currentPage = 0
-        /// Pages in the layout.
-        public internal(set) var pageCount = 0
-        /// Scroll view zoom (1 = page points).
-        public internal(set) var zoomScale: CGFloat = 1
-
-        public init() {}
-    }
 
     /// The canvas host (ARCHITECTURE.md §5.1): a `UIScrollView` for native physics, rubber-banding and
     /// pinch zoom over a transparent content view the size of the notebook (``PageLayout``), with the
@@ -49,7 +20,7 @@
     /// The host is first responder with its own `UndoManager`, so ⌘Z and the system three-finger
     /// undo/redo gestures reach the notebook's history (`UndoManagerBridge` attaches to ``editUndoManager``).
     @MainActor
-    public final class CanvasHostView: UIView, UIScrollViewDelegate {
+    public final class CanvasHostView: UIView {
         /// Zoom range (scale of page points).
         public static let minimumZoom: CGFloat = 0.5
         public static let maximumZoom: CGFloat = 4
@@ -108,24 +79,12 @@
         private var lastBoundsSize: CGSize = .zero
         private var fitZoom: CGFloat = 1
         private var isUpdatingInsets = false
-        private var claimed: [(recognizer: UIGestureRecognizer, wasEnabled: Bool, touchTypes: [NSNumber])] = []
+        private let dismissGestures = DismissGestureClaim()
 
         /// Creates a host around `engine`.
         public init(engine: any InkEngine) {
             self.engine = engine
-            var button = UIButton.Configuration.glass()
-            button.image = UIImage(systemName: "plus")
-            button.title = "Add page"
-            button.imagePadding = 6
-            button.cornerStyle = .capsule
-            button.baseForegroundColor = .secondaryLabel
-            button.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-            button.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                var attributes = attributes
-                attributes.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-                return attributes
-            }
-            addPageButton = UIButton(configuration: button)
+            addPageButton = Self.makeAddPageButton()
             super.init(frame: .zero)
             backgroundColor = .clear
             isOpaque = false
@@ -160,7 +119,10 @@
                 return "Page \(state.currentPage + 1) of \(layout.pageCount)"
             }
             touchObserver.onPencil = { [weak self] in self?.pencilSeen() }
-            touchObserver.onBegan = { [weak self] in self?.claimDismissGestures() }
+            touchObserver.onBegan = { [weak self] in
+                guard let self else { return }
+                dismissGestures.claim(above: self)
+            }
             touchObserver.onAllLifted = { [weak self] in
                 guard let self else { return }
                 delegate?.canvasHostDidLiftAllTouches(self)
@@ -204,19 +166,20 @@
         override public func didMoveToWindow() {
             super.didMoveToWindow()
             guard window != nil else { return }
-            claimDismissGestures()
+            dismissGestures.claim(above: self)
             // After SwiftUI finishes the transition (which installs its dismiss gestures and shuffles responders).
             Task { @MainActor [weak self] in
                 self?.becomeFirstResponder()
                 try? await Task.sleep(for: .milliseconds(600))
-                self?.claimDismissGestures()
+                guard let self else { return }
+                dismissGestures.claim(above: self)
             }
         }
 
         override public func willMove(toWindow newWindow: UIWindow?) {
             super.willMove(toWindow: newWindow)
             if newWindow == nil {
-                releaseDismissGestures()
+                dismissGestures.release()
             }
         }
 
@@ -236,30 +199,6 @@
         override public func safeAreaInsetsDidChange() {
             super.safeAreaInsetsDidChange()
             setNeedsLayout()
-        }
-
-        // MARK: UIScrollViewDelegate
-
-        public func viewForZooming(in _: UIScrollView) -> UIView? {
-            contentView
-        }
-
-        public func scrollViewDidScroll(_: UIScrollView) {
-            viewportDidChange()
-        }
-
-        public func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            updateInsets()
-            state.zoomScale = scrollView.zoomScale
-            viewportDidChange()
-        }
-
-        public func scrollViewWillBeginDragging(_: UIScrollView) {
-            delegate?.canvasHostWillBeginNavigating(self)
-        }
-
-        public func scrollViewWillBeginZooming(_: UIScrollView, with _: UIView?) {
-            delegate?.canvasHostWillBeginNavigating(self)
         }
 
         // MARK: Layout
@@ -394,46 +333,35 @@
         private func requestNewPage() {
             delegate?.canvasHostDidRequestNewPage(self)
         }
+    }
 
-        // MARK: Interactive dismissal
-
-        /// The library pushes the editor with a SwiftUI zoom transition whose interactive dismissal (swipe down
-        /// anywhere, pinch, leading-edge pan) is installed on the editor's hosting view and would steal
-        /// Pencil strokes and scrolls on the canvas; SwiftUI has no switch for it (`interactiveDismissDisabled`
-        /// only covers sheets). While the canvas is in a window it disables the swipe-down and pinch
-        /// recognizers and limits the edge pan to fingers (back stays one edge swipe or the back button);
-        /// they're restored when it leaves. Recognizers are found by the `name` UIKit gives them
-        /// (`com.apple.UIKit.ZoomInteractiveDismiss…`); if a release renames them this is a no-op and
-        /// `CanvasTests.testDownwardDragAtTopDoesNotDismissEditor` fails.
-        private func claimDismissGestures() {
-            var view = superview
-            while let current = view {
-                for recognizer in current.gestureRecognizers ?? [] {
-                    guard let name = recognizer.name, name.hasPrefix(Self.zoomDismissPrefix),
-                          !claimed.contains(where: { $0.recognizer === recognizer }) else { continue }
-                    claimed.append((recognizer, recognizer.isEnabled, recognizer.allowedTouchTypes))
-                    if name.hasSuffix("LeadingEdgePan") {
-                        recognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
-                    } else {
-                        recognizer.isEnabled = false
-                    }
-                }
-                view = current.superview
-            }
+    extension CanvasHostView: UIScrollViewDelegate {
+        public func viewForZooming(in _: UIScrollView) -> UIView? {
+            contentView
         }
 
-        private func releaseDismissGestures() {
-            for entry in claimed {
-                entry.recognizer.isEnabled = entry.wasEnabled
-                entry.recognizer.allowedTouchTypes = entry.touchTypes
-            }
-            claimed = []
+        public func scrollViewDidScroll(_: UIScrollView) {
+            viewportDidChange()
         }
 
-        private static let zoomDismissPrefix = "com.apple.UIKit.ZoomInteractiveDismiss"
+        public func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            updateInsets()
+            state.zoomScale = scrollView.zoomScale
+            viewportDidChange()
+        }
 
-        // MARK: Input
+        public func scrollViewWillBeginDragging(_: UIScrollView) {
+            delegate?.canvasHostWillBeginNavigating(self)
+        }
 
+        public func scrollViewWillBeginZooming(_: UIScrollView, with _: UIView?) {
+            delegate?.canvasHostWillBeginNavigating(self)
+        }
+    }
+
+    // MARK: Input
+
+    extension CanvasHostView {
         private func updateNavigationGestures() {
             let direct = NSNumber(value: UITouch.TouchType.direct.rawValue)
             let pointer = NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)
@@ -447,88 +375,6 @@
             guard !hasSeenPencil else { return }
             hasSeenPencil = true
             updateNavigationGestures()
-        }
-    }
-
-    /// The canvas scroll view: an accessibility element whose label and value are computed when asked.
-    @MainActor
-    private final class CanvasScrollView: UIScrollView {
-        var pageLabel: (() -> String?)?
-        var valueProvider: (() -> String?)?
-
-        override var accessibilityLabel: String? {
-            get { pageLabel?() ?? super.accessibilityLabel }
-            set { super.accessibilityLabel = newValue }
-        }
-
-        override var accessibilityValue: String? {
-            get { valueProvider?() ?? super.accessibilityValue }
-            set { super.accessibilityValue = newValue }
-        }
-    }
-
-    /// Watches touches on the canvas without taking part in recognition (never recognizes, never delays or
-    /// cancels touches, can't be prevented): reports Pencil contact, so the host can hand one-finger
-    /// scrolling back to the scroll view, and the moment the last touch lifts.
-    @MainActor
-    private final class TouchObserver: UIGestureRecognizer {
-        var onPencil: (() -> Void)?
-        var onAllLifted: (() -> Void)?
-        var onBegan: (() -> Void)?
-        private var active: Set<ObjectIdentifier> = []
-
-        override init(target: Any?, action: Selector?) {
-            super.init(target: target, action: action)
-            cancelsTouchesInView = false
-            delaysTouchesBegan = false
-            delaysTouchesEnded = false
-        }
-
-        convenience init() {
-            self.init(target: nil, action: nil)
-        }
-
-        override func touchesBegan(_ touches: Set<UITouch>, with _: UIEvent) {
-            onBegan?()
-            for t in touches {
-                os.Logger(subsystem: "com.abhey.notespace", category: "debug").error("DBG touch type \(t.type.rawValue) radius \(t.majorRadius) view \(String(describing: t.view), privacy: .public)")
-            }
-            if touches.contains(where: { $0.type == .pencil }) {
-                onPencil?()
-            }
-            for touch in touches {
-                active.insert(ObjectIdentifier(touch))
-            }
-        }
-
-        override func touchesEnded(_ touches: Set<UITouch>, with _: UIEvent) {
-            lifted(touches)
-        }
-
-        override func touchesCancelled(_ touches: Set<UITouch>, with _: UIEvent) {
-            lifted(touches)
-        }
-
-        override func reset() {
-            super.reset()
-            active = []
-        }
-
-        private func lifted(_ touches: Set<UITouch>) {
-            for touch in touches {
-                active.remove(ObjectIdentifier(touch))
-            }
-            guard active.isEmpty else { return }
-            onAllLifted?()
-            state = .failed
-        }
-
-        override func canPrevent(_: UIGestureRecognizer) -> Bool {
-            false
-        }
-
-        override func canBePrevented(by _: UIGestureRecognizer) -> Bool {
-            false
         }
     }
 #endif

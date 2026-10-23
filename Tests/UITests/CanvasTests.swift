@@ -34,12 +34,25 @@ final class CanvasTests: XCTestCase {
         return pill.exists ? pill.label : nil
     }
 
+    /// Drags one finger from `from` to `to` (normalized window points), then waits out focus mode and
+    /// brings the chrome back if inking collapsed it.
+    @MainActor
+    private func ink(in app: XCUIApplication, from: CGVector, to: CGVector) {
+        let window = app.windows.firstMatch
+        let start = window.coordinate(withNormalizedOffset: from)
+        let end = window.coordinate(withNormalizedOffset: to)
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+        RunLoop.current.run(until: Date().addingTimeInterval(2.5))
+        let show = app.buttons["Show toolbar"]
+        if show.exists {
+            show.tap()
+            XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 3))
+        }
+    }
+
     @MainActor
     private func drawStroke(in app: XCUIApplication) {
-        let window = app.windows.firstMatch
-        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.4))
-        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.45))
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+        ink(in: app, from: CGVector(dx: 0.3, dy: 0.4), to: CGVector(dx: 0.65, dy: 0.45))
     }
 
     @MainActor
@@ -91,10 +104,7 @@ final class CanvasTests: XCTestCase {
         XCTAssertTrue(waitForStrokes("1 stroke", in: app))
 
         app.buttons["Eraser"].tap()
-        let window = app.windows.firstMatch
-        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.3))
-        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+        ink(in: app, from: CGVector(dx: 0.45, dy: 0.3), to: CGVector(dx: 0.5, dy: 0.55))
         XCTAssertTrue(waitForStrokes("0 strokes", in: app), "eraser crossing the stroke removes it")
 
         app.buttons["Undo"].tap()
@@ -173,7 +183,7 @@ final class CanvasTests: XCTestCase {
             let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
             start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .fast, thenHoldForDuration: 0)
             RunLoop.current.run(until: Date().addingTimeInterval(1.5))
-            XCTAssertTrue(app.buttons["Library"].exists, "editor still up (finger drawing \(fingerDrawing))")
+            XCTAssertTrue(canvas(app).exists, "editor still up (finger drawing \(fingerDrawing))")
             let library = app.buttons["newNotebook"]
             XCTAssertFalse(library.exists && library.isHittable, "library not revealed (finger drawing \(fingerDrawing))")
             app.terminate()

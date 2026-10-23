@@ -118,7 +118,7 @@
             engine.setPages(pushed.filter { $0.id != page }.compactMap { snapshot(for: $0.id) })
             pushed = []
             do throws(DocumentError) {
-                install(try await store.page(page))
+                try await install(store.page(page))
             } catch {
                 Self.log.error("reload of \(page, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             }

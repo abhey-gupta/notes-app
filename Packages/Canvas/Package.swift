@@ -1,8 +1,8 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// `PageLayout` and `PageWindow` are pure Swift and test headlessly on macOS (`swift test`); the UIKit host
-// (`CanvasHostView`, `PageResidency`) is iOS-only and compiles out elsewhere (`#if canImport(UIKit)`).
+/// `PageLayout` and `PageWindow` are pure Swift and test headlessly on macOS (`swift test`); the UIKit host
+/// (`CanvasHostView`, `PageResidency`) is iOS-only and compiles out elsewhere (`#if canImport(UIKit)`).
 let iOS = TargetDependencyCondition.when(platforms: [.iOS])
 
 let package = Package(

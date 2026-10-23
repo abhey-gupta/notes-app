@@ -22,7 +22,12 @@ public struct PageWindow: Hashable, Sendable {
     /// Creates the window for `visible` pages of a `pageCount`-page notebook. An empty `visible` range
     /// (nothing on screen yet) is treated as its lower bound's page, clamped, so a notebook always has a
     /// page loading.
-    public init(visible: Range<Int>, pageCount: Int, engineMargin: Int = PageWindow.engineMargin, residentMargin: Int = PageWindow.residentMargin) {
+    public init(
+        visible: Range<Int>,
+        pageCount: Int,
+        engineMargin: Int = PageWindow.engineMargin,
+        residentMargin: Int = PageWindow.residentMargin
+    ) {
         guard pageCount > 0 else {
             self.visible = 0 ..< 0
             engine = 0 ..< 0

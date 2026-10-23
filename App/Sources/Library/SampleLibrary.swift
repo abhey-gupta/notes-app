@@ -1,11 +1,11 @@
 import Document
-#if DEBUG
-    import FixtureGen
-#endif
 import Foundation
 import InkModel
 import Library
 import Observation
+#if DEBUG
+    import FixtureGen
+#endif
 
 /// In-memory library seeded with the mock's notebooks: previews, screenshots, `-sampleLibrary YES`.
 /// Nothing persists beyond the process: opening a notebook writes a scratch package to the temporary

@@ -99,7 +99,8 @@ final class NotebookSession {
             state.onUndo = { [weak self] in self?.bridge?.undo() }
             state.onRedo = { [weak self] in self?.bridge?.redo() }
         } catch {
-            Self.log.error("open \(self.notebookID, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            let id = notebookID
+            Self.log.error("open \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             OpenTrace.end()
         }
     }
@@ -124,7 +125,7 @@ final class NotebookSession {
             guard let store else { return }
             do {
                 try await store.flush()
-                library.documentDidSave(await store.manifest)
+                await library.documentDidSave(store.manifest)
             } catch {
                 Self.log.error("close flush failed: \(String(describing: error), privacy: .public)")
             }
@@ -163,7 +164,7 @@ final class NotebookSession {
                 try await store.setTemplate(style.defaultTemplate)
                 residency.setTemplate(style.defaultTemplate, for: residency.pageIDs)
             }
-            library.documentDidSave(await store.manifest)
+            await library.documentDidSave(store.manifest)
         }
     }
 
@@ -222,7 +223,8 @@ final class NotebookSession {
     // MARK: Pages
 
     private func pageLoaded(_ id: PageID) {
-        guard awaitingFirstPage, let window = host.pageWindow, window.visible.contains(where: { host.layout.pageIDs[$0] == id }) else { return }
+        guard awaitingFirstPage, let window = host.pageWindow,
+              window.visible.contains(where: { host.layout.pageIDs[$0] == id }) else { return }
         awaitingFirstPage = false
         // The engine draws the snapshot on its next vsync: end `notebook.open` one display frame later.
         FrameAfter.next { OpenTrace.end() }
@@ -246,7 +248,7 @@ final class NotebookSession {
 
     private func didCheckpoint() async {
         guard let store, !isClosed else { return }
-        library.documentDidSave(await store.manifest)
+        await library.documentDidSave(store.manifest)
     }
 
     // MARK: Factory
@@ -282,7 +284,6 @@ final class NotebookSession {
 
 extension NotebookSession: InkEngineDelegate {
     func engine(_: any InkEngine, didCommit stroke: Stroke, to page: PageID) {
-        Self.log.error("DBG commit \(stroke.samples.count)")
         enqueue("stroke") { [weak self] in
             guard let self, let residency else { return }
             let edit = try await residency.ensureLoaded(page).addEdit([stroke])
@@ -311,7 +312,6 @@ extension NotebookSession: InkEngineDelegate {
     func engine(_: any InkEngine, didReceiveLasso _: [CGPoint], to _: PageID) {}
 
     func engineDidBeginStroke(_: any InkEngine) {
-        Self.log.error("DBG begin \(String(describing: self.tool), privacy: .public)")
         state.strokeBegan()
         if !host.isFirstResponder {
             host.becomeFirstResponder()
@@ -344,7 +344,6 @@ extension NotebookSession: CanvasHostViewDelegate {
     }
 
     func canvasHostDidLiftAllTouches(_: CanvasHostView) {
-        Self.log.error("DBG lifted")
         state.strokeEnded()
         enqueue("gesture end") { [weak self] in
             guard let self else { return }

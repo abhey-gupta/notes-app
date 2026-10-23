@@ -44,7 +44,7 @@ public struct PageLayout: Hashable, Sendable {
 
     /// The footer's rect (below the last page, full content width).
     public var footerFrame: CGRect {
-        let top = frames.last.map { $0.maxY } ?? 0
+        let top = frames.last.map(\.maxY) ?? 0
         return CGRect(x: 0, y: top, width: pageSize.width, height: footer)
     }
 

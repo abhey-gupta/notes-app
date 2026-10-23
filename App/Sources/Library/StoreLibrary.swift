@@ -1,12 +1,12 @@
 import Document
-#if DEBUG
-    import FixtureGen
-#endif
 import Foundation
 import InkModel
 import Library
 import Observation
 import os
+#if DEBUG
+    import FixtureGen
+#endif
 
 /// The real library: a main-actor mirror of `LibraryStore` (§8).
 ///
@@ -230,7 +230,7 @@ final class StoreLibrary: LibraryModel {
                 }
                 Self.log.info("fixture \(pages) pages written in \(ContinuousClock.now - start, privacy: .public)")
             }
-            apply(await store.rebuild())
+            await apply(store.rebuild())
         }
     }
 #endif
