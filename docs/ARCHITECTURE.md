@@ -260,7 +260,7 @@ Glass: native Liquid Glass, verified in the iOS 27.1 SDK (all `@available(iOS 26
 
 `Export` package, CoreGraphics (`UIGraphicsPDFRenderer` in app, `CGContext(consumer:mediaBox:)` in headless tests). Vector by default:
 
-- Reuse `InkGeometry` outlines → `CGPath` fill per stroke. Highlighter with `.multiply` blend, drawn first. Template background as vector lines/dots. Page size = notebook page size in points, one PDF page per notebook page.
+- Reuse `InkGeometry` geometry, fitted to cubics within ~4 % of the stroke width: centerlines stroked with round caps/joins in near-constant-width pieces (one piece for ballpoint/highlighter), filled outlines only where that can't work (dots, translucent varying-width ink). ≤ 10 MB per 100 dense pages (~7.7 MB for the seed-1 fixture). Highlighter with `.multiply` blend, drawn first. Template background as vector lines/dots. Page size = notebook page size in points, one PDF page per notebook page.
 - Brush strokes with soft edges rasterize badly as pure fill; export rasterizes brush strokes per page at 2× via `engine.render` and composites as an image under the vector ink. Everything else stays vector (small files, crisp zoom).
 - Night-paper notebooks export on white paper with light-palette ink by default ("Export as shown" toggle keeps Night).
 - Runs on a background task; share sheet (`UIActivityViewController` / `ShareLink` with a `FileRepresentation`) gets a temp file URL. 100 pages < 3 s on M-series. Export options: all pages / current page / range.

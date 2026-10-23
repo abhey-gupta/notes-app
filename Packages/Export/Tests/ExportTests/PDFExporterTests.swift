@@ -29,8 +29,10 @@ struct PDFExporterTests {
         #expect(try await PDF(exporter.pdfData(pages: pages, options: PDFExportOptions(pages: .page(2)))).pageCount == 1)
         let range = try await PDF(exporter.pdfData(pages: pages, options: PDFExportOptions(pages: .range(1 ... 3))))
         #expect(range.pageCount == 3)
-        // Page 1 of the range is notebook page 2 (two strokes, merged into one opaque fill run).
-        #expect(try range.operatorCounts(0).fills == 1 + 1) // paper + ink run
+        // Page 1 of the range is notebook page 2 (two same-width strokes, merged into one opaque stroke run).
+        let ops = try range.operatorCounts(0)
+        #expect(ops.fills == 1) // paper
+        #expect(ops.strokes == 1) // ink run
 
         await #expect(throws: PDFExportError.pageOutOfRange(5)) {
             try await exporter.pdfData(pages: pages, options: PDFExportOptions(pages: .range(3 ... 5)))
@@ -53,7 +55,7 @@ struct PDFExporterTests {
         let ops = try pdf.operatorCounts(0)
         #expect(ops.text == 0)
         #expect(ops.images == 0)
-        #expect(ops.fills > 3)
+        #expect(ops.fills + ops.strokes > 3)
         #expect(try !pdf.pageHasResource(0, "Font"))
         #expect(try !pdf.pageHasResource(0, "XObject"))
     }
