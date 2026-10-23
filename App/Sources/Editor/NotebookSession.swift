@@ -1,7 +1,6 @@
 import Canvas
 import Document
 import InkEngine
-import InkEngineMetal
 import InkEnginePencilKit
 import InkModel
 import os
@@ -255,11 +254,8 @@ final class NotebookSession {
 
     private func makeHost() -> CanvasHostView {
         let palette = DesignSystemInkPalette()
-        let engine: any InkEngine = if !LaunchOptions.prefersPencilKit, let metal = MetalInkEngine(palette: palette) {
-            metal
-        } else {
-            PencilKitInkEngine(palette: palette)
-        }
+        // PencilKit is the ink engine (spike #16, ARCHITECTURE.md §3); the Metal engine stays unwired.
+        let engine = PencilKitInkEngine(palette: palette)
         engine.setTheme(initialTheme)
         let host = CanvasHostView(engine: engine)
         // Paper for every page from the first frame; real page IDs replace these when the manifest is read.

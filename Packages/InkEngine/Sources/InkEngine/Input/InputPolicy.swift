@@ -44,8 +44,9 @@ public struct InputPolicy: Sendable {
     private var roles: [TouchID: Role] = [:]
 
     /// Creates a policy.
-    public init(allowsFingerDrawing: Bool = false) {
+    public init(allowsFingerDrawing: Bool = false, palmMajorRadius: CGFloat = Self.defaultPalmMajorRadius) {
         self.allowsFingerDrawing = allowsFingerDrawing
+        self.palmMajorRadius = palmMajorRadius
     }
 
     /// A Pencil touch is down.

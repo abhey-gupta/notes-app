@@ -45,7 +45,7 @@ targets:
       - package: InkModel
       - package: InkGeometry
       - package: InkEngine
-      - package: InkEngineMetal
+      # InkEngineMetal is shelved (spike #16, ARCHITECTURE.md §3): kept building and tested, not linked.
       - package: InkEnginePencilKit
       - package: Tools
       - package: Canvas

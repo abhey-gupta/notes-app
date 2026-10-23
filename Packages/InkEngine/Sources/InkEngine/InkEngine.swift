@@ -3,8 +3,8 @@ import InkModel
 import UIKit
 
 /// The ink engine seam (ARCHITECTURE.md §3.1): a UIKit view that draws and captures ink for the pages
-/// it is told about, plus a small command surface. Implemented by `InkEngineMetal` (shipping) and
-/// `InkEnginePencilKit` (baseline / fallback).
+/// it is told about, plus a small command surface. Implemented by `InkEnginePencilKit` (shipping,
+/// spike #16) and `InkEngineMetal` (shelved, not wired into the app).
 ///
 /// The canvas host (§5) owns scrolling, zooming and page layout. The engine never mutates the
 /// document: it reports committed strokes and eraser/lasso input to its ``delegate``; `Tools` turns
