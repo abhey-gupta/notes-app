@@ -225,13 +225,16 @@ Whole body after header compressed with `Compression` framework lz4 (fast decode
 
 ## 7. Toolbar and chrome
 
-`ToolbarContent` (tools, quick colors, undo/redo) is placement-agnostic SwiftUI. `ToolbarHost(placement:)` lays it out:
+`ToolbarContent(axis:)` (tools, quick colors, undo/redo) is axis-agnostic SwiftUI. `ToolbarHost` makes it **dynamic** (user decision):
 
 ```swift
-enum ToolbarPlacement: String, CaseIterable { case topCapsule, sideDock, floatingPuck }
+enum ToolbarDock: String, Codable { case top, bottom, left, right }   // left/right render vertically
 ```
 
-Placement comes from a setting (default TBD, **open decision §15**). All three variants from mockup §07 are built as layouts of the same content so switching is a one-line change; only `topCapsule` needs to be polished for Day 0, the others can be rough.
+- Default: expanded capsule floating top center (mock §02).
+- Drag the toolbar → it tracks the finger, then springs to the nearest dock on release; dock persists.
+- Pinch-in on the expanded toolbar → compact pill (current tool + color) at the same dock; tap the pill → expand. Focus mode reuses the compact pill.
+- All transitions are `glassEffectID` morphs inside one `GlassEffectContainer` with interactive springs; Reduce Motion → crossfade. Toolbar gestures are finger-only and never reach the canvas; Pencil input is unaffected. Tracked in #26.
 
 Chrome pieces (mock §02): left capsule (back, title, menu), center capsule (tools), right capsule (pages grid, share, more), bottom-right "3 of 11" pill. **Focus mode**: on `engineDidBeginStroke` the capsules fade to a single compact pill (mock §05) after 1.5 s of continuous inking; any tap on chrome or a scroll gesture restores. Dark mode follows system appearance; the paper theme (Night) is per-notebook and independent of system dark mode.
 
@@ -330,9 +333,7 @@ Resolved:
 6. **Night paper + custom colors**: auto lightness remap, "Keep exact colors" per notebook.
 7. **Notebooks location**: `Documents/Notebooks`, file sharing off until the format is stable.
 
-Open:
-
-1. **Toolbar placement**: top capsule / side dock / floating puck (mock §07). `topCapsule` is the working default until decided; all three stay buildable.
+8. **Toolbar**: dynamic — floats top by default, drag to dock top/bottom/left/right, pinch-in to compact pill, tap to expand (§7).
 
 ## 16. Future (not Day 0, designed for)
 
