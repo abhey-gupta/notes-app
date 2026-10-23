@@ -174,9 +174,10 @@ Whole body after header compressed with `Compression` framework lz4 (`COMPRESSIO
 
 ### 4.4 Autosave and crash safety
 
-- Every committed `PageEdit` is appended synchronously-cheap to `pages/<id>.wal` (one record, O(edit size)) from the `DocumentStore` actor. Pen-up to durable: < 50 ms, never on main.
-- Checkpoint: after 2 s idle, on page leave, on background/resign-active, or when WAL > 1 MB: rewrite `<id>.strokes` to a temp file, `rename` atomically, delete WAL. Manifest written atomically (`Data.write(.atomic)`) with bumped `rev`s.
-- Open: if a `.wal` exists, replay it over `.strokes` before presenting. Replay is idempotent (edits reference stroke IDs).
+- Every committed `PageEdit` is appended synchronously-cheap to `pages/<id>.wal` (one record, O(edit size)) from the `DocumentStore` actor (own serial queue). Pen-up to durable: < 50 ms, never on main. Measured (M-series Mac, release, shared loaded machine): one 120-sample stroke p50 0.3–0.5 ms, p95 0.7–2.2 ms.
+- WAL format (`Document.Journal`): 32 B header (`INKW`, version, base rev, base stroke-file length + CRC) then records `u32 length | u32 crc32 | u64 rev | u8 kind | binary PageEdit`. Each append is `pwrite` + `F_BARRIERFSYNC`: an app kill loses nothing that `apply` returned for; power loss/panic recovers a consistent, in-order prefix (may lose the newest edits still in the drive cache). `F_FULLFSYNC` would cost ~8× per append.
+- Checkpoint: after 2 s idle (one debounce task, not a timer per edit), on page leave (`evict(page:)`), on background/resign-active (`flush()`), or when WAL > 1 MB: rewrite `<id>.strokes` to a temp file, barrier-sync, `rename`, then manifest the same way with bumped `rev`s, then delete WAL. 100 dense dirty pages (~58 MB): 170–260 ms.
+- Open: if a `.wal` exists, replay it over `.strokes` before presenting. A torn or corrupt tail is detected by length/CRC and truncated; earlier records are kept. Replay is idempotent: a WAL whose base no longer matches the stroke file (checkpoint crashed before deleting it) is already folded in and is discarded, never replayed twice.
 - Never a "Save" button. Never a dirty-state dialog.
 
 ### 4.5 Versioning, migration, forward-compat

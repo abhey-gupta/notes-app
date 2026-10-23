@@ -14,6 +14,8 @@ public enum DocumentError: Error, Hashable, Sendable {
     case pageTooLarge(PageID)
     /// No page with this ID in the manifest.
     case unknownPage(PageID)
+    /// The edit does not apply to the page's current strokes; nothing was journaled or changed.
+    case invalidEdit(PageID, PageEditError)
     /// The page ID already exists (or appears twice in the manifest).
     case duplicatePage(PageID)
     /// Page index outside `0..<pageCount` (or `0...pageCount` for inserts).
@@ -40,6 +42,8 @@ extension DocumentError: LocalizedError {
             "Page \(id) is too large to save."
         case let .unknownPage(id):
             "No page \(id) in this notebook."
+        case let .invalidEdit(id, error):
+            "The change to page \(id) could not be applied (\(error))."
         case let .duplicatePage(id):
             "Page \(id) already exists."
         case let .pageIndexOutOfRange(index):
