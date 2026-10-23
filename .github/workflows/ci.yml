@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PATH_PREFIX: /opt/homebrew/bin
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+
+jobs:
+  lint:
+    runs-on: [self-hosted, macOS, xcode27]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: export PATH="$PATH_PREFIX:$PATH" && make lint
+
+  packages:
+    runs-on: [self-hosted, macOS, xcode27]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: export PATH="$PATH_PREFIX:$PATH" && make test-packages
+
+  ios:
+    runs-on: [self-hosted, macOS, xcode27]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test on iPad simulator
+        run: |
+          export PATH="$PATH_PREFIX:$PATH"
+          SIM=$(scripts/ci-sim.sh CI-iPad)
+          make test SIM="$SIM"

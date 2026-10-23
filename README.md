@@ -27,6 +27,8 @@ make perf           # launch perf tests (Release)
 make lint / format
 ```
 
+CI: GitHub Actions on a self-hosted runner on the dev Mac (`runs-on: [self-hosted, macOS, xcode27]`), service in `~/actions-runner/notespace` (`./svc.sh status/start/stop`). Jobs: lint, packages, ios. Label a PR `run-perf` for launch perf.
+
 ## Layout
 
 `App/` thin SwiftUI shell · `Packages/` local Swift packages (see ARCHITECTURE.md §2) · `Tests/` UI + perf tests.
