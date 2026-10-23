@@ -332,7 +332,6 @@ Resolved:
 5. **Page size**: fixed A4 portrait on Day 0.
 6. **Night paper + custom colors**: auto lightness remap, "Keep exact colors" per notebook.
 7. **Notebooks location**: `Documents/Notebooks`, file sharing off until the format is stable.
-
 8. **Toolbar**: dynamic — floats top by default, drag to dock top/bottom/left/right, pinch-in to compact pill, tap to expand (§7).
 
 ## 16. Future (not Day 0, designed for)
