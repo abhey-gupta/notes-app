@@ -1,0 +1,30 @@
+name: Perf
+
+on:
+  schedule:
+    - cron: "0 21 * * *"
+  pull_request:
+    types: [labeled, synchronize]
+  workflow_dispatch:
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PATH_PREFIX: /opt/homebrew/bin
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+
+jobs:
+  perf:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-perf')
+    runs-on: [self-hosted, macOS, xcode27]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # Baselines + regression gate land in #15.
+      - name: Launch perf (relative signal only)
+        run: |
+          export PATH="$PATH_PREFIX:$PATH"
+          SIM=$(scripts/ci-sim.sh CI-iPad)
+          make perf SIM="$SIM"
