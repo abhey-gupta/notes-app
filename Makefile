@@ -3,7 +3,7 @@ DEST := platform=iOS Simulator,name=$(SIM)
 HEADLESS := InkModel InkGeometry Document Library Tools Export Fixtures
 XCB := $(shell command -v xcbeautify >/dev/null && echo "| xcbeautify" )
 
-.PHONY: gen lint format test-packages build test perf fixtures open clean
+.PHONY: gen lint format test-packages build test perf perf-gate perf-baseline fixtures open clean
 
 gen:
 	xcodegen generate --quiet
@@ -30,6 +30,17 @@ test: gen
 
 perf: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme NotespacePerf -destination '$(DEST)' $(XCB)
+
+# Perf regression gate vs Tests/PerfTests/baselines.json (median of PERF_ITERATIONS, > 10 % fails).
+# perf-baseline rewrites this simulator model's baselines: run on a quiet machine (README).
+PERF_ITERATIONS ?= 5
+PERF_ENV = SIM='$(SIM)' PERF_ITERATIONS=$(PERF_ITERATIONS)
+
+perf-gate: gen
+	$(PERF_ENV) scripts/perf-gate.sh gate
+
+perf-baseline: gen
+	$(PERF_ENV) scripts/perf-gate.sh baseline
 
 # Deterministic 1/10/100/300-page notebooks in Fixtures/ (gitignored), ARCHITECTURE.md §12.
 FIXTURE_PAGES ?= 1 10 100 300

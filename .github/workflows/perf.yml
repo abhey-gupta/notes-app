@@ -11,6 +11,10 @@ concurrency:
   group: perf-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   PATH_PREFIX: /opt/homebrew/bin
   DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
@@ -19,15 +23,34 @@ jobs:
   perf:
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-perf')
     runs-on: [self-hosted, macOS, xcode27]
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      # Baselines + regression gate land in #15.
-      - name: Launch perf (relative signal only)
+      # Median of 5 runs per test vs Tests/PerfTests/baselines.json; > 10 % fails (re-run once to rule out noise).
+      - name: Perf gate (relative signal only)
         run: |
           export PATH="$PATH_PREFIX:$PATH"
           SIM=$(scripts/ci-sim.sh CI-iPad)
-          make perf SIM="$SIM"
+          make perf-gate SIM="$SIM"
+      - name: Comment summary on PR
+        if: always() && github.event_name == 'pull_request' && hashFiles('build/perf/summary.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          export PATH="$PATH_PREFIX:$PATH"
+          { cat build/perf/summary.md; echo; echo "<sub>${{ github.event.pull_request.head.sha }} · [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>"; } > build/perf/comment.md
+          gh pr comment "$PR" --repo "${{ github.repository }}" --body-file build/perf/comment.md --edit-last --create-if-none
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: |
+            build/perf/*.md
+            build/perf/*.json
+            build/perf/*.log
+          if-no-files-found: ignore
       - name: Shut down simulator
         if: always()
         run: xcrun simctl shutdown CI-iPad 2>/dev/null || true
