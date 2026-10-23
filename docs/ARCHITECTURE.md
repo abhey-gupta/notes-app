@@ -92,10 +92,10 @@ Cost: the Metal engine is the single biggest engineering risk (§14). Mitigation
     func setTheme(_ theme: PaperTheme)
     func apply(_ edit: PageEdit, to page: PageID)     // undo/redo/lasso go through here
     func invalidate(_ rect: CGRect, in page: PageID)
-    func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage  // thumbnails, export raster fallback
+    func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage?  // thumbnails, export raster fallback; nil only for degenerate size
 }
 
-public protocol InkEngineDelegate: AnyObject {
+@MainActor public protocol InkEngineDelegate: AnyObject {
     func engine(_ e: InkEngine, didCommit stroke: Stroke, to page: PageID)
     func engine(_ e: InkEngine, didReceiveEraser samples: [Sample], to page: PageID)  // Tools package resolves what gets erased
     func engine(_ e: InkEngine, didReceiveLasso path: [CGPoint], to page: PageID)
@@ -104,6 +104,8 @@ public protocol InkEngineDelegate: AnyObject {
 ```
 
 Rules: the engine never mutates the document. It emits committed strokes/eraser/lasso input; `Tools` turns them into `PageEdit`s; `DocumentStore` applies them and calls back `apply`/`invalidate`. One direction, one source of truth.
+
+Colors: engines take an `InkPalette` (paper, template line, `ink(_:on:)`) at init; the app adapts `DesignSystem` tokens, so hex values stay out of engines (§10).
 
 PencilKit adapter strategy: a `PKCanvasView` for the *active* page only (the one under the Pencil), overlaid on the canvas host; non-active pages are rendered as images. Enough for the spike and a fallback, not pretty.
 
