@@ -1,9 +1,9 @@
 name: CI
 
+# PR-only: squash merges of green PRs don't re-run on main (single shared runner).
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths-ignore: ["docs/**", "design/**", "**/*.md"]
   workflow_dispatch:
 
 concurrency:

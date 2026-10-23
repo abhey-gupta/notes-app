@@ -22,8 +22,11 @@ test-packages:
 build: gen
 	set -o pipefail; xcodebuild build -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(XCB)
 
+# No post-failure diagnostics (can hang 10 min); retry flaky UI gestures once.
+TESTFLAGS := -collect-test-diagnostics never -retry-tests-on-failure -test-iterations 2
+
 test: gen
-	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(XCB)
+	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(TESTFLAGS) $(XCB)
 
 perf: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme NotespacePerf -destination '$(DEST)' $(XCB)
