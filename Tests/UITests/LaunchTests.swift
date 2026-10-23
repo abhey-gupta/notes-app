@@ -10,7 +10,7 @@ final class LaunchTests: XCTestCase {
     @MainActor
     func testLaunchShowsLibrary() {
         let app = XCUIApplication()
-        app.launchArguments += ["-sampleLibrary", "YES"]
+        app.launchArguments += ["-sampleLibrary", "YES", "-resetToolState", "YES"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Library"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["cover-Thermodynamics"].exists)
@@ -20,7 +20,7 @@ final class LaunchTests: XCTestCase {
     @MainActor
     func testOpenNotebookShowsChromeAndBackReturns() {
         let app = XCUIApplication()
-        app.launchArguments += ["-sampleLibrary", "YES"]
+        app.launchArguments += ["-sampleLibrary", "YES", "-resetToolState", "YES"]
         app.launch()
         let cover = app.buttons["cover-Thermodynamics"]
         XCTAssertTrue(cover.waitForExistence(timeout: 5))
@@ -42,7 +42,7 @@ final class LaunchTests: XCTestCase {
     @MainActor
     func testInkingCollapsesToFocusPillAndTapRestores() {
         let app = XCUIApplication()
-        app.launchArguments += ["-sampleLibrary", "YES", "-openNotebook", "Thermodynamics"]
+        app.launchArguments += ["-sampleLibrary", "YES", "-openNotebook", "Thermodynamics", "-resetToolState", "YES"]
         app.launch()
         XCTAssertTrue(app.buttons["Pen"].waitForExistence(timeout: 5))
 
@@ -63,7 +63,7 @@ final class LaunchTests: XCTestCase {
     @MainActor
     func testCreatedNotebookPersistsAcrossRelaunch() {
         let app = XCUIApplication()
-        app.launchArguments += ["-resetLibrary", "YES"]
+        app.launchArguments += ["-resetLibrary", "YES", "-resetToolState", "YES"]
         app.launch()
         let new = app.buttons["newNotebook"]
         XCTAssertTrue(new.waitForExistence(timeout: 5))

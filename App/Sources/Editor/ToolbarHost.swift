@@ -1,258 +1,306 @@
 import DesignSystem
 import SwiftUI
+import Tools
 
-/// Where the tools capsule sits. Product decision: one dynamic toolbar, top by default, draggable and
-/// spring-snapped to any edge, pinch to compact (#26). #13 renders each dock statically; `top` is polished.
-enum ToolbarDock: String, CaseIterable, Identifiable {
-    case top, bottom, left, right
-
-    static let defaultsKey = "toolbarDock"
-
-    var id: Self {
-        self
-    }
-
-    var axis: Axis {
-        switch self {
-        case .top, .bottom: .horizontal
-        case .left, .right: .vertical
-        }
-    }
-
-    var displayName: String {
-        rawValue.capitalized
-    }
-
-    fileprivate var alignment: Alignment {
-        switch self {
-        case .top: .top
-        case .bottom: .bottom
-        case .left: .leading
-        case .right: .trailing
-        }
-    }
-}
-
-/// Editor chrome (mock §02): nav capsule, docked tools, pages capsule, page pill, all in one `GlassChrome` so
-/// collapsing to the compact pill (mock §05) is a `glassEffectID` morph.
+/// Editor chrome (mock §02): nav capsule, the dynamic tools toolbar, pages capsule, page pill, all in one
+/// `GlassChrome` so every change of shape is a Liquid Glass morph (§7, #26).
+///
+/// The toolbar docks top (default), bottom, left or right. Drag it with a finger and it follows with an
+/// interactive spring, rubber-banding at the screen edges, while a slot shows where it will land; release and
+/// it springs to the nearest dock, re-flowing between horizontal and vertical in place. Pinch in to collapse it
+/// to the compact pill at the same dock; tap (or pinch out on) the pill to expand. Focus mode shows the same
+/// pill. Dock and compact persist in `ToolState`.
 struct ToolbarHost: View {
-    let dock: ToolbarDock
-    /// Compact pill instead of the expanded chrome: focus mode now, pinch-to-compact later (#26).
-    let isCompact: Bool
+    let tools: ToolState
+    let state: EditorState
     let title: String
     @Binding var paper: PaperTheme
     @Binding var pattern: PaperPattern
-    let state: EditorState
     let page: (current: Int, total: Int)
     let onBack: () -> Void
+    /// Tap on the already-current tool. The tool options popover (#27) presents from here.
+    let onReselectTool: (Tool) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var glass
+    @State private var drag: Drag?
+    @State private var pinch: CGFloat = 1
+    @State private var metrics = Metrics()
 
     enum ChromeID: Hashable {
         case nav, tools, pages
     }
 
+    private struct Drag: Equatable {
+        var offset: CGSize = .zero
+        var target: ToolbarDock
+    }
+
+    /// Measured chrome geometry, in the chrome's own coordinate space (inside the horizontal inset).
+    private struct Metrics: Equatable {
+        var container: CGSize = .zero
+        /// Toolbar frame at rest (not updated mid-drag).
+        var tools: CGRect = .zero
+        var nav: CGFloat = 0
+        var pages: CGFloat = 0
+        var pill: CGSize = .zero
+        /// Expanded toolbar length along each axis, cached as each is seen (hint size, top-row fitting).
+        var horizontalLength: CGFloat?
+        var verticalLength: CGFloat?
+    }
+
+    private nonisolated static let space = "chrome"
+    /// Fallback toolbar length before it has been measured on an axis.
+    private static let estimatedLength: CGFloat = 400
+    private static let estimatedPillLength: CGFloat = 140
+    /// Pinching below this collapses on release.
+    private static let collapseMagnification: CGFloat = 0.85
+    /// Pinching the pill out past this expands it.
+    private static let expandMagnification: CGFloat = 1.15
+    /// Toolbar hit area: the capsule's bounding box plus a 2 pt rim, so a pinch whose fingers start on the
+    /// capsule's rounded ends or outline still lands on the toolbar instead of inking the canvas.
+    private static var hitShape: some Shape {
+        Rectangle().inset(by: -2)
+    }
+
+    private var isCompact: Bool {
+        state.isFocused || tools.isCompact
+    }
+
     var body: some View {
         GlassChrome {
             ZStack {
-                if !isCompact {
+                if !state.isFocused {
                     HStack(alignment: .top) {
-                        navCapsule.chromeID(.nav, in: glass, transition: glassTransition)
+                        NavCapsule(title: title, paper: $paper, pattern: $pattern, onBack: onBack)
+                            .chromeID(.nav, in: glass, transition: glassTransition)
+                            .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
                         Spacer(minLength: Tokens.Spacing.m)
-                        pagesCapsule.chromeID(.pages, in: glass, transition: glassTransition)
+                        PagesCapsule(tools: tools, state: state)
+                            .chromeID(.pages, in: glass, transition: glassTransition)
+                            .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
                     }
                     .padding(.top, Tokens.Spacing.s)
                     .frame(maxHeight: .infinity, alignment: .top)
                 }
-                tools
-                    .padding(toolsInsets)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: dock.alignment)
+                if let drag {
+                    dockHint(drag.target)
+                }
+                toolbar
                 pagePill
             }
+            .coordinateSpace(.named(Self.space))
+            .onGeometryChange(for: CGSize.self, of: \.size) { metrics.container = $0 }
             .padding(.horizontal, Tokens.Spacing.chromeInset)
         }
-        .animation(reduceMotion ? Tokens.Motion.reducedMorph : Tokens.Motion.morph, value: isCompact)
-        .animation(Tokens.Motion.morph, value: dock)
+        .animation(morphAnimation, value: isCompact)
+        .animation(dockAnimation, value: tools.dock)
     }
 
     private var ink: Color {
-        paper.ink(state.inkRole).color
-    }
-
-    private var toolsInsets: EdgeInsets {
-        switch dock {
-        case .top: EdgeInsets(top: Tokens.Spacing.s, leading: 0, bottom: 0, trailing: 0)
-        case .bottom: EdgeInsets(top: 0, leading: 0, bottom: Tokens.Spacing.chromeInset, trailing: 0)
-        case .left, .right: EdgeInsets()
-        }
+        tools.currentColor.color(on: paper)
     }
 
     private var glassTransition: GlassEffectTransition {
         reduceMotion ? .materialize : .matchedGeometry
     }
 
-    // MARK: Tools
+    private var morphAnimation: Animation {
+        reduceMotion ? Tokens.Motion.reducedMorph : Tokens.Motion.morph
+    }
 
-    @ViewBuilder
-    private var tools: some View {
-        if isCompact {
-            FocusPill(tool: state.tool.symbol, ink: ink, onTool: state.exitFocus, onExpand: state.exitFocus)
-                .contentShape(.capsule)
-                .onTapGesture(perform: state.exitFocus)
-                .chromeID(.tools, in: glass, transition: glassTransition)
-                .accessibilityIdentifier("focusPill")
-                .padding(dock == .top ? .top : [], (Tokens.Size.capsuleHeight - Tokens.Size.focusPillHeight) / 2)
-        } else if dock.axis == .horizontal {
-            GlassCapsule {
-                EditorToolbarContent(state: state, paper: paper, axis: .horizontal)
+    private var dockAnimation: Animation {
+        reduceMotion ? Tokens.Motion.reducedMorph : Tokens.Motion.dock
+    }
+
+    // MARK: Toolbar
+
+    private var toolbar: some View {
+        let dock = tools.dock
+        let placement = layout.placement(for: dock, length: restingLength(dock.axis))
+        return toolbarBody(axis: dock.axis)
+            // Reduce Motion: a dock change swaps identity, so it crossfades instead of flying.
+            .id(reduceMotion ? dock.rawValue : "toolbar")
+            .transition(.opacity)
+            .offset(drag?.offset ?? .zero)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { measured($0) }
+            .padding(placement.insets)
+            .offset(x: placement.shift)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: dock.alignment)
+    }
+
+    /// One glass capsule for both states: expanded ⇄ compact resizes it (thickness, padding, length) while the
+    /// contents cross-fade, so the glass itself morphs with the spring instead of swapping views. Glass doesn't
+    /// follow `scaleEffect`, so pinch feedback squeezes the spacing instead and the capsule tracks it.
+    private func toolbarBody(axis: Axis) -> some View {
+        let compact = isCompact
+        let ends = compact ? FocusPill.endPadding : Tokens.Spacing.s
+        let squeeze = Tokens.Spacing.hairline - 40 * (1 - pinch)
+        return GlassCapsule(
+            axis: axis,
+            height: compact ? Tokens.Size.focusPillHeight : Tokens.Size.capsuleHeight,
+            leading: ends,
+            trailing: ends,
+            spacing: compact ? 0 : squeeze
+        ) {
+            if compact {
+                FocusPillContent(axis: axis, tool: tools.tool.symbol, ink: ink, onTool: expand, onExpand: expand)
+                    .transition(contentTransition)
+            } else {
+                EditorToolbarContent(tools: tools, state: state, paper: paper, axis: axis, onReselect: onReselectTool)
+                    .transition(contentTransition)
             }
-            .chromeID(.tools, in: glass, transition: glassTransition)
+        }
+        .contentShape(Self.hitShape)
+        .gesture(TapGesture().onEnded(expand), isEnabled: compact)
+        .chromeID(.tools, in: glass, transition: glassTransition)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(compact ? "focusPill" : "toolbar")
+        .accessibilityAction(named: compact ? "Show toolbar" : "Compact toolbar") {
+            compact ? expand() : collapse()
+        }
+        .gesture(FingerPan(onBegan: dragBegan, onChanged: dragChanged, onEnded: dragEnded))
+        .gesture(FingerPinch(onChanged: pinchChanged, onEnded: pinchEnded))
+    }
+
+    private var contentTransition: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.7))
+    }
+
+    private func measured(_ frame: CGRect) {
+        guard drag == nil else { return }
+        metrics.tools = frame
+        guard !isCompact else { return }
+        if tools.dock.isVertical {
+            metrics.verticalLength = frame.height
         } else {
-            VStack(spacing: Tokens.Spacing.hairline) {
-                EditorToolbarContent(state: state, paper: paper, axis: .vertical)
-            }
-            .padding(.vertical, Tokens.Spacing.s)
-            .frame(width: Tokens.Size.capsuleHeight)
-            .glassEffect(.regular, in: .capsule)
-            .chromeID(.tools, in: glass, transition: glassTransition)
+            metrics.horizontalLength = frame.width
         }
     }
 
-    // MARK: Capsules
+    // MARK: Drag to dock
 
-    private var navCapsule: some View {
-        GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
-            ToolButton(.back, "Library", action: onBack)
-            Menu {
-                Picker("Paper", selection: $paper) {
-                    ForEach(PaperTheme.allCases) { theme in
-                        Text(theme.displayName).tag(theme)
-                    }
-                }
-                Picker("Template", selection: $pattern) {
-                    ForEach(PaperPattern.allCases) { pattern in
-                        Text(pattern.displayName).tag(pattern)
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(.chromeTitle)
-                        .foregroundStyle(Tokens.Colors.textPrimary)
-                        .lineLimit(1)
-                        .frame(maxWidth: 220, alignment: .leading)
-                        .fixedSize(horizontal: true, vertical: false)
-                    Image(systemName: Symbol.disclosure.name)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Tokens.Colors.textTertiary)
-                }
-                .frame(height: Tokens.Size.toolButton.height)
-                .contentShape(.rect)
-            }
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(title), notebook options")
+    private var bounds: CGRect {
+        CGRect(origin: .zero, size: metrics.container)
+    }
+
+    private func dragBegan() {
+        withAnimation(Tokens.Motion.dragFollow) {
+            drag = Drag(target: tools.dock)
         }
     }
 
-    private var pagesCapsule: some View {
-        GlassCapsule {
-            ToolButton(.pages, "Pages") {}
-            ToolButton(.share, "Share") {}
-            Menu {
-                Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
-                #if DEBUG
-                    Picker("Toolbar dock (debug)", selection: dockBinding) {
-                        ForEach(ToolbarDock.allCases) { Text($0.displayName).tag($0) }
-                    }
-                #endif
-            } label: {
-                Image(systemName: Symbol.more.name)
-                    .font(.system(size: Tokens.Size.toolIcon))
-                    .foregroundStyle(Tokens.Colors.icon)
-                    .frame(width: Tokens.Size.toolButton.width, height: Tokens.Size.toolButton.height)
-                    .contentShape(.capsule)
-            }
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .accessibilityLabel("More")
+    private func dragChanged(_ translation: CGSize) {
+        guard var next = drag else { return }
+        // It may come within 6 pt of the screen edge (past the chrome inset), then resists for a further 24 pt.
+        let reach = bounds.insetBy(dx: -(Tokens.Spacing.chromeInset - Tokens.Spacing.s), dy: 0)
+        next.offset = DockGeometry.rubberBanded(translation, frame: metrics.tools, in: reach)
+        next.target = DockGeometry.nearestDock(to: metrics.tools.center + translation, in: bounds, current: next.target)
+        withAnimation(Tokens.Motion.dragFollow) {
+            drag = next
         }
     }
 
-    #if DEBUG
-        private var dockBinding: Binding<ToolbarDock> {
-            Binding {
-                dock
-            } set: {
-                UserDefaults.standard.set($0.rawValue, forKey: ToolbarDock.defaultsKey)
+    private func dragEnded(_ translation: CGSize, velocity: CGSize, cancelled: Bool) {
+        guard drag != nil else { return }
+        let projected = metrics.tools.center + translation + velocity * DockGeometry.flickProjection
+        let target = cancelled ? tools.dock : DockGeometry.nearestDock(to: projected, in: bounds, current: tools.dock)
+        withAnimation(dockAnimation) {
+            tools.dock = target
+            drag = nil
+        }
+    }
+
+    // MARK: Pinch / compact
+
+    /// The capsule shrinks with the fingers (damped), then morphs to the pill or springs back.
+    private func pinchChanged(_ magnification: CGFloat) {
+        guard !isCompact else { return }
+        withAnimation(Tokens.Motion.dragFollow) {
+            pinch = DockGeometry.pinchScale(magnification)
+        }
+    }
+
+    /// Pinch in on the toolbar collapses it; pinch out on the pill expands it.
+    private func pinchEnded(_ magnification: CGFloat) {
+        if isCompact {
+            if magnification > Self.expandMagnification {
+                expand()
+            }
+        } else if magnification < Self.collapseMagnification {
+            collapse()
+        } else {
+            withAnimation(.spring(duration: 0.3, bounce: 0.35)) {
+                pinch = 1
             }
         }
-    #endif
+    }
+
+    private func collapse() {
+        withAnimation(morphAnimation) {
+            tools.isCompact = true
+            pinch = 1
+        }
+    }
+
+    /// Pill tap / pinch-out, and the focus pill's tool and chevron buttons.
+    private func expand() {
+        withAnimation(morphAnimation) {
+            tools.isCompact = false
+            state.exitFocus()
+        }
+    }
+
+    // MARK: Placement
+
+    /// Length of the toolbar at rest on `axis` (compact or expanded).
+    private func restingLength(_ axis: Axis) -> CGFloat {
+        if isCompact {
+            return Self.estimatedPillLength
+        }
+        let measured = axis == .horizontal ? metrics.horizontalLength : metrics.verticalLength
+        return measured ?? metrics.horizontalLength ?? metrics.verticalLength ?? Self.estimatedLength
+    }
+
+    private var layout: DockLayout {
+        DockLayout(
+            containerWidth: metrics.container.width,
+            nav: state.isFocused ? 0 : metrics.nav,
+            pages: state.isFocused ? 0 : metrics.pages,
+            pagePill: metrics.pill,
+            isCompact: isCompact,
+            isFocused: state.isFocused
+        )
+    }
+
+    /// Drop slot at the drag target: the toolbar's footprint once docked there.
+    private func dockHint(_ dock: ToolbarDock) -> some View {
+        let length = restingLength(dock.axis)
+        let thickness = isCompact ? Tokens.Size.focusPillHeight : Tokens.Size.capsuleHeight
+        let size = dock.isVertical ? CGSize(width: thickness, height: length) : CGSize(width: length, height: thickness)
+        let placement = layout.placement(for: dock, length: length)
+        return Capsule()
+            .fill(Tokens.Colors.dockHint)
+            .overlay(Capsule().strokeBorder(Tokens.Colors.dockHintBorder, lineWidth: 1))
+            .frame(width: size.width, height: size.height)
+            .padding(placement.insets)
+            .offset(x: placement.shift)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: dock.alignment)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .transition(.opacity)
+    }
 
     private var pagePill: some View {
         Button(action: state.exitFocus) {
             GlassPill.pageIndicator(current: page.current, total: page.total)
         }
         .buttonStyle(.plain)
+        .onGeometryChange(for: CGSize.self, of: \.size) { metrics.pill = $0 }
         .opacity(isCompact ? 0.7 : 1)
         .accessibilityIdentifier("pageIndicator")
         .padding(.bottom, Tokens.Spacing.chromeInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-    }
-}
-
-/// Tools, quick colors, undo/redo, laid out along `axis` so the same content docks on any edge.
-/// ARCHITECTURE §7 calls this `ToolbarContent`; renamed so it doesn't shadow SwiftUI's protocol in App.
-struct EditorToolbarContent: View {
-    let state: EditorState
-    let paper: PaperTheme
-    let axis: Axis
-
-    var body: some View {
-        ForEach(EditorState.Tool.allCases) { tool in
-            ToolButton(tool.symbol, tool.label, isActive: state.tool == tool, ink: paper.ink(state.inkRole).color) {
-                state.tool = tool
-            }
-        }
-        separator
-        ForEach(Array(Tokens.quickColors.enumerated()), id: \.offset) { index, role in
-            ColorSwatch(paper.ink(role).color, label: role.label, isSelected: state.quickColor == index) {
-                state.quickColor = index
-                if !state.tool.inks {
-                    state.tool = .pen
-                }
-            }
-        }
-        separator
-        ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
-            .disabled(!state.canUndo)
-        ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
-            .disabled(!state.canRedo)
-    }
-
-    @ViewBuilder
-    private var separator: some View {
-        if axis == .horizontal {
-            ChromeSeparator()
-        } else {
-            Capsule()
-                .fill(Tokens.Colors.separator)
-                .frame(width: Tokens.Size.separator.height, height: Tokens.Size.separator.width)
-                .padding(.vertical, Tokens.Spacing.s)
-                .accessibilityHidden(true)
-        }
-    }
-}
-
-private extension InkRole {
-    var label: String {
-        switch self {
-        case .primary: "Black"
-        case .blue: "Blue"
-        case .red: "Red"
-        case .accent: "Amber"
-        }
     }
 }
 

@@ -1,23 +1,20 @@
 import DesignSystem
 import SwiftUI
+import Tools
 
 /// Full-screen editor (§7): desk, canvas (placeholder until #21), floating glass chrome.
 struct EditorScreen: View {
     let library: any LibraryModel
+    let tools: ToolState
     @State private var notebook: NotebookSummary
     @State private var state: EditorState
     @State private var currentPage: Int? = 0
 
-    #if DEBUG
-        @AppStorage(ToolbarDock.defaultsKey) private var dock: ToolbarDock = .top
-    #else
-        private let dock: ToolbarDock = .top
-    #endif
-
     @Environment(\.dismiss) private var dismiss
 
-    init(notebook: NotebookSummary, library: any LibraryModel, startsFocused: Bool = false) {
+    init(notebook: NotebookSummary, library: any LibraryModel, tools: ToolState, startsFocused: Bool = false) {
         self.library = library
+        self.tools = tools
         _notebook = State(initialValue: notebook)
         _state = State(initialValue: EditorState(startsFocused: startsFocused))
     }
@@ -30,17 +27,18 @@ struct EditorScreen: View {
                 paper: notebook.theme.style,
                 pattern: notebook.paper.pattern,
                 state: state,
+                tools: tools,
                 currentPage: $currentPage
             )
             ToolbarHost(
-                dock: dock,
-                isCompact: state.isFocused,
+                tools: tools,
+                state: state,
                 title: notebook.title,
                 paper: paperBinding,
                 pattern: patternBinding,
-                state: state,
                 page: (min((currentPage ?? 0) + 1, notebook.pageCount), notebook.pageCount),
-                onBack: { dismiss() }
+                onBack: { dismiss() },
+                onReselectTool: { _ in } // tool options popover lands with #27
             )
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -62,11 +60,11 @@ struct EditorScreen: View {
 
 #Preview("Editor · light") {
     let library = SampleLibrary()
-    EditorScreen(notebook: library.notebooks[0], library: library)
+    EditorScreen(notebook: library.notebooks[0], library: library, tools: ToolState(initial: .notespace))
 }
 
 #Preview("Editor · focus · dark") {
     let library = SampleLibrary()
-    EditorScreen(notebook: library.notebooks[3], library: library, startsFocused: true)
+    EditorScreen(notebook: library.notebooks[3], library: library, tools: ToolState(initial: .notespace), startsFocused: true)
         .preferredColorScheme(.dark)
 }
