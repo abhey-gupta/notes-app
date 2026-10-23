@@ -56,7 +56,11 @@ struct ToolStateTests {
         state.dock = .bottom
         #expect(defaults.data(forKey: "tools") == nil, "write waits for the debounce")
 
-        try await Task.sleep(for: .milliseconds(400))
+        // Poll instead of a fixed sleep: CI shares the machine and the debounced write can be late.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while defaults.data(forKey: "tools") == nil, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(makeState(defaults).dock == .bottom)
     }
 

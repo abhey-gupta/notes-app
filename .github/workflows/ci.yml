@@ -31,7 +31,7 @@ jobs:
 
   ios:
     runs-on: [self-hosted, macOS, xcode27]
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - name: Test on iPad simulator
