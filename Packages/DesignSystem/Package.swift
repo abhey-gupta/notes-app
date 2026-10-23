@@ -8,7 +8,7 @@ let package = Package(
     dependencies: [
     ],
     targets: [
-        .target(name: "DesignSystem", dependencies: []),
+        .target(name: "DesignSystem", dependencies: [], resources: [.process("Resources")]),
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
     ]
 )

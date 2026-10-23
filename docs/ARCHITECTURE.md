@@ -274,7 +274,7 @@ Glass: native Liquid Glass, verified in the iOS 27.1 SDK (all `@available(iOS 26
 
 Geometry: capsule height 52, radius 26, blur 24 + saturate 180 %; tool button 44×40 r20, active = 8 % ink tint + 4 pt dot in the current color; quick-color swatch 22 pt, selected ring 2 pt paper + 3.5 pt color; page radius 4, shadow `0 12 40 -12 rgba(40,30,10,.18)`; pages-overview thumb 176×228 r6, selected ring 3 pt blue; cover 150×196, radius 5/12 (spine); popover 328 w r24. Type: SF Pro for UI, **Instrument Serif** (OFL, bundled) for notebook titles and the pages-overview heading. Caveat in the mocks is stand-in handwriting; not shipped.
 
-**Ink color model.** `InkColor` is `semantic(.primary | .blue | .red | .accent)` or `custom(rgba)`. Semantic colors resolve per paper theme at render time (so the same stroke is near-black on cream and off-white on Night). Custom colors on Night paper get their OKLCH lightness remapped (`L' = 1 − L` clamped to [0.55, 0.95], hue/chroma kept) unless the notebook setting "Keep exact colors" is on. Export resolves against the export paper theme (§9).
+**Ink color model.** `InkColor` is `semantic(.primary | .blue | .red | .accent)` or `custom(rgba)`. Semantic colors resolve per paper theme at render time (so the same stroke is near-black on cream and off-white on Night). Custom colors on Night paper get their OKLCH lightness remapped (`L' = clamp(max(L, 1.2 − L), 0.65, 0.95)`, hue/chroma kept: dark colors mirror light, light colors stay, never darker) unless the notebook setting "Keep exact colors" is on. Export resolves against the export paper theme (§9).
 
 ## 11. Perf budgets, mapped
 
