@@ -14,13 +14,13 @@ final class PerfHUDTests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         let hud = app.descendants(matching: .any)["perfHUD"]
-        XCTAssertTrue(app.staticTexts["Notespace"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Library"].waitForExistence(timeout: 5))
         XCTAssertFalse(hud.exists)
 
-        app.staticTexts["Notespace"].tap(withNumberOfTaps: 3, numberOfTouches: 3)
+        app.staticTexts["Library"].tap(withNumberOfTaps: 3, numberOfTouches: 3)
         XCTAssertTrue(hud.waitForExistence(timeout: 2))
 
-        app.staticTexts["Notespace"].tap(withNumberOfTaps: 3, numberOfTouches: 3)
+        app.staticTexts["Library"].tap(withNumberOfTaps: 3, numberOfTouches: 3)
         XCTAssertTrue(hud.waitForNonExistence(timeout: 2))
     }
 }
