@@ -114,6 +114,28 @@
             get { valueProvider?() ?? super.accessibilityValue }
             set { super.accessibilityValue = newValue }
         }
+
+        /// Applies this scroll view's own pinch if UIKit didn't. With the engine view (a sibling of the
+        /// zoomed content view, holding a `PKCanvasView`) under the fingers, `UIScrollView` recognizes the
+        /// pinch and reports its scale (seeded with the current zoom) but leaves `zoomScale` alone (#71:
+        /// "pinch zoomed only the stroke"). Zooms about the pinch centroid, within the zoom range; a no-op
+        /// when UIKit already zoomed.
+        @objc func applyPinch(_ pinch: UIPinchGestureRecognizer) {
+            guard pinch.state == .changed, pinch.numberOfTouches >= 2 else { return }
+            let old = zoomScale
+            let target = min(max(pinch.scale, minimumZoomScale), maximumZoomScale)
+            guard old > 0, abs(target - old) > 0.0001 else { return }
+            let location = pinch.location(in: self)
+            let onScreen = CGPoint(x: location.x - contentOffset.x, y: location.y - contentOffset.y)
+            let anchor = CGPoint(x: location.x / old, y: location.y / old) // content point under the fingers
+            setZoomScale(target, animated: false)
+            let maxX = max(contentSize.width + contentInset.right - bounds.width, -contentInset.left)
+            let maxY = max(contentSize.height + contentInset.bottom - bounds.height, -contentInset.top)
+            contentOffset = CGPoint(
+                x: min(max(anchor.x * target - onScreen.x, -contentInset.left), maxX),
+                y: min(max(anchor.y * target - onScreen.y, -contentInset.top), maxY)
+            )
+        }
     }
 
     /// Watches touches on the canvas without taking part in recognition (never recognizes, never delays or

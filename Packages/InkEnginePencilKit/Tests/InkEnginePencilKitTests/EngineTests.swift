@@ -228,6 +228,68 @@ struct EngineTests {
         #expect(h.recorder.eraser.isEmpty)
     }
 
+    @Test func canvasHasNoPinchOfItsOwn() {
+        let h = Harness()
+        for zoom in [1, 2, 0.75] as [CGFloat] {
+            h.scroll(toY: 0, zoom: zoom)
+            #expect(h.engine.canvas.zoomScale == zoom)
+            let pinch = h.engine.canvas.pinchGestureRecognizer
+            #expect(pinch == nil || pinch?.isEnabled == false)
+        }
+    }
+
+    /// Strokes PencilKit captured come back exactly when the canvas is rebuilt from the document
+    /// (page switch, undo, theme) — the bug behind "ink changes weight after scrolling" (#71).
+    @Test func rebuiltCanvasRedrawsCapturedStrokesExactly() throws {
+        let h = Harness()
+        h.scroll(toY: 900)
+        let page = h.frames[1].id
+        let captured = try #require(LosslessRoundTripTests.capturedLikeStrokes().first)
+        var drawing = h.engine.canvas.drawing
+        drawing.strokes.append(captured)
+        h.engine.canvas.drawing = drawing
+        h.engine.canvasViewDrawingDidChange(h.engine.canvas)
+        let stroke = try #require(h.recorder.commits.first?.0)
+        let snapshot = try #require(h.engine.snapshots[page])
+        h.engine.apply(snapshot.page.addEdit([stroke]), to: page)
+
+        h.engine.willReceiveTouch(at: CGPoint(x: 100, y: 900)) // page 3
+        h.engine.willReceiveTouch(at: CGPoint(x: 100, y: 400)) // back to page 2: rebuilt from the snapshot
+        let rebuilt = try #require(h.engine.canvas.drawing.strokes.last)
+        #expect(rebuilt.randomSeed == captured.randomSeed)
+        #expect(rebuilt.ink.inkType == captured.ink.inkType)
+        #expect(rebuilt.path.map(\.size) == captured.path.map(\.size))
+        #expect(rebuilt.path.map(\.opacity) == captured.path.map(\.opacity))
+        #expect(rebuilt.path.map(\.location) == captured.path.map(\.location))
+    }
+
+    @Test func pageKeepsItsRasterUntilTheCanvasHasDrawnIt() throws {
+        let h = Harness()
+        h.scroll(toY: 900)
+        h.engine.canvasViewDidFinishRendering(h.engine.canvas)
+        let page2 = try #require(h.engine.pageViews[h.frames[1].id])
+        #expect(!page2.showsInk)
+
+        h.engine.willReceiveTouch(at: CGPoint(x: 100, y: 900)) // page 3 becomes active
+        let page3 = try #require(h.engine.pageViews[h.frames[2].id])
+        #expect(page3.showsInk) // canvas hasn't drawn page 3 yet
+        #expect(page2.showsInk)
+        h.engine.canvasViewDidFinishRendering(h.engine.canvas)
+        #expect(!page3.showsInk)
+        #expect(page2.showsInk)
+    }
+
+    @Test func pendingStrokesAreInTheInactiveRaster() throws {
+        let h = Harness()
+        h.scroll(toY: 900)
+        h.userDraws(RenderFixtures.line(1, from: CGPoint(x: 10, y: 100), to: CGPoint(x: 200, y: 120)))
+        // Leave before the document echoes the stroke: the raster must still include it.
+        h.engine.willReceiveTouch(at: CGPoint(x: 100, y: 900))
+        let key = try #require(h.engine.pageViews[h.frames[1].id]?.requestedKey)
+        #expect(key.strokeCount == 1)
+        #expect(key.pendingCount == 1)
+    }
+
     @Test func pagesLeavingTheViewportAreDropped() {
         let h = Harness()
         h.scroll(toY: 0)

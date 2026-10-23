@@ -17,6 +17,10 @@ import InkModel
 ///          recolor 4:        u32 n | n × (u128 id | color from | color to)
 /// placed:  u32 n | n × (u32 index | stroke)             stroke and color as in ``StrokeCodec``
 /// ```
+/// Strokes in records use the ``StrokeCodec`` layout of the same version (version 2 adds the rendering
+/// block). Version 1 journals replay; ``DocumentStore`` folds them into a stroke file at once, so new
+/// records never land in an old-format journal.
+///
 /// The header names the stroke file the journal applies on top of (`baseLength`, `baseCRC`: see
 /// ``StrokesIdentity``). Checkpoints rewrite the stroke file before deleting the journal, so a journal
 /// whose base no longer matches is already folded in and is discarded rather than replayed twice.
@@ -27,7 +31,7 @@ import InkModel
 enum Journal {
     static let magic: [UInt8] = Array("INKW".utf8)
     /// Version written to, and the newest accepted from, the header.
-    static let formatVersion: UInt16 = 1
+    static let formatVersion: UInt16 = 2
     static let headerLength = 32
     static let recordHeaderLength = 8
     /// Largest record payload accepted; bounds allocations driven by a (possibly damaged) length.
@@ -39,6 +43,8 @@ enum Journal {
         var baseRev: UInt64
         /// Stroke file the journal applies on top of.
         var base: StrokesIdentity
+        /// Format of the file (and of its records).
+        var version: UInt16 = Journal.formatVersion
     }
 
     /// One decoded record.
@@ -87,7 +93,7 @@ enum Journal {
     static func encodeHeader(_ header: Header) -> [UInt8] {
         var w = ByteWriter(capacity: headerLength)
         w.bytes.append(contentsOf: magic)
-        w.append(formatVersion)
+        w.append(header.version)
         w.append(UInt16(0))
         w.append(header.baseRev)
         w.append(header.base.length)
@@ -98,7 +104,8 @@ enum Journal {
 
     /// One framed record.
     /// - Throws: ``JournalTooLarge`` if the payload exceeds ``maxPayloadLength``.
-    static func encodeRecord(rev: UInt64, edit: PageEdit) throws(JournalTooLarge) -> [UInt8] {
+    /// - Parameter version: Stroke layout (tests write version 1 records with it).
+    static func encodeRecord(rev: UInt64, edit: PageEdit, version: UInt16 = formatVersion) throws(JournalTooLarge) -> [UInt8] {
         var w = ByteWriter(capacity: recordHeaderLength + payloadSizeHint(edit))
         w.append(UInt32(0))
         w.append(UInt32(0))
@@ -106,14 +113,14 @@ enum Journal {
         switch edit {
         case let .add(placed):
             w.append(UInt8(0))
-            w.append(placed)
+            w.append(placed, version: version)
         case let .remove(placed):
             w.append(UInt8(1))
-            w.append(placed)
+            w.append(placed, version: version)
         case let .replace(old, new):
             w.append(UInt8(2))
-            w.append(old)
-            w.append(new)
+            w.append(old, version: version)
+            w.append(new, version: version)
         case let .transform(ids, forward, backward):
             w.append(UInt8(3))
             w.append(UInt32(ids.count))
@@ -147,7 +154,7 @@ enum Journal {
 
     private static func payloadSizeHint(_ edit: PageEdit) -> Int {
         func size(_ placed: [PlacedStroke]) -> Int {
-            placed.reduce(4) { $0 + 4 + StrokeCodec.strokeHeaderLength + $1.stroke.samples.count * StrokeCodec.sampleLength }
+            placed.reduce(4) { $0 + 4 + StrokeCodec.encodedLength($1.stroke) }
         }
         return switch edit {
         case let .add(p), let .remove(p): 9 + size(p)
@@ -189,11 +196,11 @@ enum Journal {
         guard version >= 1, version <= formatVersion, flags == 0 else {
             throw .unsupportedFormatVersion(found: Int(version), supported: Int(formatVersion))
         }
-        let header = Header(baseRev: u64(8), base: StrokesIdentity(length: u64(16), crc: u32(24)))
+        let header = Header(baseRev: u64(8), base: StrokesIdentity(length: u64(16), crc: u32(24)), version: version)
         var scan = Scan(header: header, validLength: headerLength)
         var offset = headerLength
         while offset < raw.count {
-            switch readRecord(raw, at: offset) {
+            switch readRecord(raw, at: offset, version: version) {
             case let .success((record, end)):
                 offset = end
                 scan.records.append(record)
@@ -208,7 +215,7 @@ enum Journal {
     }
 
     /// Reads the framed record at `offset` (header already validated); returns it with its end offset.
-    private static func readRecord(_ raw: UnsafeRawBufferPointer, at offset: Int) -> Result<(Record, Int), DamageKind> {
+    private static func readRecord(_ raw: UnsafeRawBufferPointer, at offset: Int, version: UInt16) -> Result<(Record, Int), DamageKind> {
         guard raw.count - offset >= recordHeaderLength else { return .failure(.tornRecord) }
         let length = Int(UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: offset, as: UInt32.self)))
         guard length <= maxPayloadLength else { return .failure(.invalidRecord) }
@@ -219,7 +226,7 @@ enum Journal {
         crc = CRC32.update(crc, payload)
         let stored = UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: offset + 4, as: UInt32.self))
         guard CRC32.finalize(crc) == stored else { return .failure(.checksumMismatch) }
-        guard let record = decodePayload(payload) else { return .failure(.invalidRecord) }
+        guard let record = decodePayload(payload, version: version) else { return .failure(.invalidRecord) }
         return .success((record, end))
     }
 }
@@ -228,28 +235,28 @@ enum Journal {
 
 extension Journal {
     /// Decodes one checksummed payload; `nil` if malformed (wrong lengths, unknown kind, trailing bytes).
-    static func decodePayload(_ payload: UnsafeRawBufferPointer) -> Record? {
+    static func decodePayload(_ payload: UnsafeRawBufferPointer, version: UInt16 = formatVersion) -> Record? {
         var r = ByteReader(buffer: payload)
         guard r.remaining >= 9 else { return nil }
         let rev = UInt64(littleEndian: r.read(UInt64.self))
         let kind = r.read(UInt8.self)
-        guard let edit = readEdit(kind: kind, &r), r.remaining == 0 else { return nil }
+        guard let edit = readEdit(kind: kind, &r, version: version), r.remaining == 0 else { return nil }
         return Record(rev: rev, edit: edit)
     }
 
-    private static func readEdit(kind: UInt8, _ r: inout ByteReader) -> PageEdit? {
+    private static func readEdit(kind: UInt8, _ r: inout ByteReader, version: UInt16) -> PageEdit? {
         switch kind {
-        case 0: readPlaced(&r).map(PageEdit.add)
-        case 1: readPlaced(&r).map(PageEdit.remove)
-        case 2: readReplaceEdit(&r)
+        case 0: readPlaced(&r, version: version).map(PageEdit.add)
+        case 1: readPlaced(&r, version: version).map(PageEdit.remove)
+        case 2: readReplaceEdit(&r, version: version)
         case 3: readTransformEdit(&r)
         case 4: readRecolorEdit(&r)
         default: nil
         }
     }
 
-    private static func readReplaceEdit(_ r: inout ByteReader) -> PageEdit? {
-        guard let old = readPlaced(&r), let new = readPlaced(&r) else { return nil }
+    private static func readReplaceEdit(_ r: inout ByteReader, version: UInt16) -> PageEdit? {
+        guard let old = readPlaced(&r, version: version), let new = readPlaced(&r, version: version) else { return nil }
         return .replace(old: old, new: new)
     }
 
@@ -279,14 +286,14 @@ extension Journal {
         return n <= r.remaining / itemSize ? n : nil
     }
 
-    private static func readPlaced(_ r: inout ByteReader) -> [PlacedStroke]? {
+    private static func readPlaced(_ r: inout ByteReader, version: UInt16) -> [PlacedStroke]? {
         guard let n = readCount(&r, itemSize: 4 + StrokeCodec.strokeHeaderLength) else { return nil }
         var placed: [PlacedStroke] = []
         placed.reserveCapacity(n)
         for _ in 0 ..< n {
             guard r.remaining >= 4 else { return nil }
             let index = Int(UInt32(littleEndian: r.read(UInt32.self)))
-            guard let stroke = try? StrokeCodec.readStroke(&r) else { return nil }
+            guard let stroke = try? StrokeCodec.readStroke(&r, version: version) else { return nil }
             placed.append(PlacedStroke(index: index, stroke: stroke))
         }
         return placed
@@ -376,11 +383,11 @@ extension Journal {
 }
 
 extension ByteWriter {
-    mutating func append(_ placed: [PlacedStroke]) {
+    mutating func append(_ placed: [PlacedStroke], version: UInt16 = Journal.formatVersion) {
         append(UInt32(placed.count))
         for p in placed {
             append(UInt32(clamping: p.index))
-            append(p.stroke)
+            append(p.stroke, version: version)
         }
     }
 

@@ -16,10 +16,14 @@ extension PencilKitInkEngine {
         }
         let zoom = viewport.zoomScale
         canvas.isHidden = false
-        if canvas.zoomScale != zoom {
+        if canvas.zoomScale != zoom || canvas.minimumZoomScale != zoom || canvas.maximumZoomScale != zoom {
+            // Widen the range just enough to set the zoom, then pin it: min == max leaves the canvas no
+            // pinch recognizer, so pinches reach the host scroll view and zoom the whole page.
             canvas.minimumZoomScale = min(canvas.minimumZoomScale, zoom)
             canvas.maximumZoomScale = max(canvas.maximumZoomScale, zoom)
             canvas.zoomScale = zoom
+            canvas.minimumZoomScale = zoom
+            canvas.maximumZoomScale = zoom
         }
         canvas.contentSize = CGSize(width: snapshot.size.width * zoom, height: snapshot.size.height * zoom)
         canvas.frame = visible
@@ -49,8 +53,10 @@ extension PencilKitInkEngine {
                 zoom: viewport.zoomScale,
                 colors: colors
             )
-            view.showsInk = page.id != activePage
-            guard let snapshot, page.id != activePage else { continue }
+            let isCanvasPage = page.id == activePage
+            // The canvas's page keeps its raster until the canvas has drawn it.
+            view.showsInk = !isCanvasPage || !canvasHasRendered
+            guard let snapshot, !isCanvasPage else { continue }
             refreshInk(view, snapshot: snapshot, pixelScale: pixelScale(for: page.frame.size, screenScale: screenScale))
         }
     }
@@ -61,27 +67,41 @@ extension PencilKitInkEngine {
         return min(max(screenScale, 1) * bucket, maximumRasterDimension / max(size.width, size.height, 1))
     }
 
+    /// Brings an inactive page's raster up to date: snapshot strokes plus strokes still pending on the
+    /// way to the document, rendered off main by PencilKit. Whatever is on screen (current raster, a
+    /// stale one from the cache, or the canvas snapshot) stays until the new raster replaces it.
     func refreshInk(_ view: PageLayerView, snapshot: PageSnapshot, pixelScale: CGFloat) {
-        let key = PageLayerView.InkKey(rev: snapshot.rev, theme: theme, pixelScale: pixelScale, strokeCount: snapshot.strokes.count)
-        guard view.inkKey != key else { return }
-        view.inkKey = key
-        guard !snapshot.strokes.isEmpty else {
-            view.setInk(nil)
+        let pendingStrokes = (pending[snapshot.id] ?? []).map(\.pk)
+        let key = PageLayerView.InkKey(
+            rev: snapshot.rev, theme: theme, pixelScale: pixelScale,
+            strokeCount: snapshot.strokes.count, pendingCount: pendingStrokes.count
+        )
+        if view.shownKey == key {
+            view.removePlaceholder()
+            return
+        }
+        guard view.requestedKey != key else { return }
+        view.requestedKey = key
+        let job = RenderJob(page: snapshot, palette: palette, theme: theme, pending: pendingStrokes)
+        guard !job.isEmpty else {
+            view.setInk(nil, key: key)
             return
         }
         let id = snapshot.id
         if let cached = rasters.image(for: id, key: key) {
-            view.setInk(cached)
+            view.setInk(cached, key: key)
             return
         }
-        let job = RenderJob(page: snapshot, palette: palette, theme: theme)
+        if view.shownKey == nil, !view.hasPlaceholder, let stale = rasters.latestImage(for: id) {
+            view.setStaleInk(stale)
+        }
         Task { [weak self, weak view] in
             let image = await Task.detached(priority: .userInitiated) { job.ink(scale: pixelScale) }.value
             if let image {
                 self?.rasters.insert(image, for: id, key: key)
             }
-            guard let view, view.inkKey == key else { return }
-            view.setInk(image)
+            guard let view, view.requestedKey == key else { return }
+            view.setInk(image, key: key)
         }
     }
 }

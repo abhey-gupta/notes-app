@@ -6,13 +6,16 @@ import UIKit
 
 /// `Stroke` ↔ `PKStroke` and `PenKind` ↔ `PKInk.InkType`.
 ///
-/// Each ``InkModel/Sample`` becomes one `PKStrokePoint` control point (and back), so sample count,
-/// positions, timing, tilt and pressure round-trip. Point size is the pen profile's width at that
-/// sample (pressure and tilt, no speed term), which PencilKit renders directly. PencilKit truncates
-/// force to 3 decimals, so normalized pressure round-trips within ~2.5e-4.
+/// Each ``InkModel/Sample`` becomes one `PKStrokePoint` control point (and back). A stroke's
+/// ``InkModel/Stroke/rendering`` holds what PencilKit drew (ink, random seed, per-point size and opacity),
+/// so `PKStroke → Stroke → PKStroke` gives the same points and renders the same pixels (#71). Strokes
+/// without one (v1 files, fixtures) get ``InkGeometry`` 's ``InkModel/Stroke/derivedRendering``: point
+/// size = base width × pen-profile scale, with a seed fixed by the stroke ID.
+///
+/// PencilKit keeps force to 3 decimals; normalized pressure maps back to the same value.
 public enum PencilKitConversion {
     /// `PKStrokePoint.force` is in `UITouch.force` units; Apple Pencil's `maximumPossibleForce` is 4.17.
-    /// Our samples are normalized `0...1`. Verify on device that PencilKit-captured strokes match.
+    /// Our samples are normalized `0...1`.
     public static let maximumForce: CGFloat = 25 / 6
 
     /// Closest PencilKit ink for a pen.
@@ -25,6 +28,11 @@ public enum PencilKitConversion {
         }
     }
 
+    /// The ink a stroke's rendering names, or its pen's if this PencilKit doesn't know it.
+    static func inkType(_ identifier: String, fallback kind: PenKind) -> PKInk.InkType {
+        PKInk.InkType(rawValue: identifier) ?? inkType(for: kind)
+    }
+
     /// Closest pen for a PencilKit ink.
     public static func penKind(for inkType: PKInk.InkType) -> PenKind {
         switch inkType {
@@ -35,37 +43,84 @@ public enum PencilKitConversion {
         }
     }
 
-    /// An inking tool for `kind`, width clamped to the ink's valid range.
-    public static func inkingTool(_ kind: PenKind, color: UIColor, width: Float) -> PKInkingTool {
+    // MARK: Width
+
+    /// The tool width (pt) that maps to PencilKit's default width for the pen's ink: the middle of the
+    /// toolbar's presets (`Tools.PenSettings.widths` 1.5/2.5/**4**/6/8, `HighlighterSettings.widths`
+    /// 10/**16**/24).
+    public static func referenceWidth(for kind: PenKind) -> Float {
+        kind == .highlighter ? 16 : 4
+    }
+
+    /// PencilKit tool width for a toolbar width: the ink's `defaultWidth` scaled by
+    /// `width / referenceWidth(for:)`, clamped to the ink's `validWidthRange`. So the middle preset
+    /// draws like PencilKit's own default (Notes' pen) and the others step finer/bolder from it.
+    public static func pencilKitWidth(for kind: PenKind, width: Float) -> CGFloat {
         let type = inkType(for: kind)
         let range = type.validWidthRange
-        return PKInkingTool(type, color: color, width: min(max(CGFloat(width), range.lowerBound), range.upperBound))
+        let scaled = type.defaultWidth * CGFloat(width / referenceWidth(for: kind))
+        return min(max(scaled.isFinite ? scaled : type.defaultWidth, range.lowerBound), range.upperBound)
     }
 
-    /// `stroke` as a PencilKit stroke drawn in `color` (already resolved for the paper theme).
+    /// An inking tool for `kind` at toolbar `width` (see ``pencilKitWidth(for:width:)``).
+    public static func inkingTool(_ kind: PenKind, color: UIColor, width: Float) -> PKInkingTool {
+        PKInkingTool(inkType(for: kind), color: color, width: pencilKitWidth(for: kind, width: width))
+    }
+
+    // MARK: Strokes
+
+    /// `stroke` as a PencilKit stroke drawn in `color` (already resolved for the paper theme), from its
+    /// stored rendering (exact) or the derived one.
     public static func pkStroke(from stroke: Stroke, color: UIColor) -> PKStroke {
-        let profile = PenProfile(stroke.tool)
-        let points = stroke.samples.map { s in
-            let size = CGFloat(stroke.width * profile.widthScale(force: s.force, speed: 0, altitude: s.altitude))
-            return PKStrokePoint(
-                location: CGPoint(x: CGFloat(s.x), y: CGFloat(s.y)),
-                timeOffset: TimeInterval(s.t),
-                size: CGSize(width: size, height: size),
-                opacity: 1,
-                force: CGFloat(s.force) * maximumForce,
-                azimuth: CGFloat(s.azimuth),
-                altitude: CGFloat(s.altitude)
-            )
+        let rendering = stroke.resolvedRendering
+        var points: [PKStrokePoint] = []
+        points.reserveCapacity(stroke.samples.count)
+        for (s, r) in zip(stroke.samples, rendering.points) {
+            points.append(pkPoint(s, r))
         }
         let path = PKStrokePath(controlPoints: points, creationDate: Date(timeIntervalSinceReferenceDate: 0))
-        return PKStroke(ink: PKInk(inkType(for: stroke.tool), color: color), path: path)
+        let ink = PKInk(inkType(rendering.ink, fallback: stroke.tool), color: color)
+        if #available(iOS 27, *), rendering.renderGroupID != nil || rendering.grainOffset != nil {
+            return PKStroke(
+                ink: ink, path: path, transform: .identity, mask: nil, randomSeed: rendering.randomSeed,
+                renderGroupID: rendering.renderGroupID,
+                renderState: rendering.grainOffset.map { PKStroke.RenderState(grainOffset: $0) }
+            )
+        }
+        return PKStroke(ink: ink, path: path, transform: .identity, mask: nil, randomSeed: rendering.randomSeed)
     }
 
-    /// A model stroke from a PencilKit stroke. The stroke's `transform` is baked into the samples.
+    private static func pkPoint(_ s: Sample, _ r: PointRendering) -> PKStrokePoint {
+        let width = CGFloat(r.width)
+        let location = CGPoint(x: CGFloat(s.x), y: CGFloat(s.y))
+        let size = CGSize(width: width, height: Quantum.height(CGFloat(r.height), width: width))
+        let opacity = CGFloat(r.opacity) + Quantum.opacity / 4
+        let azimuth = CGFloat(s.azimuth) + Quantum.azimuth / 4
+        let altitude = CGFloat(s.altitude) - Quantum.altitude / 4 // rounds up, unlike the others
+        let force = pencilKitForce(s.force)
+        let secondary = CGFloat(r.secondaryScale) // kept unquantized (Float32 or Double by ink)
+        let threshold = CGFloat(r.threshold) + Quantum.threshold / 4
+        if #available(iOS 27, *) {
+            return PKStrokePoint(
+                location: location, timeOffset: TimeInterval(s.t), size: size, opacity: opacity, force: force, azimuth: azimuth,
+                altitude: altitude, secondaryScale: secondary, threshold: threshold,
+                lateralJitter: CGFloat(r.lateralJitter) + Quantum.lateralJitter / 4
+            )
+        }
+        return PKStrokePoint(
+            location: location, timeOffset: TimeInterval(s.t), size: size, opacity: opacity, force: force, azimuth: azimuth,
+            altitude: altitude, secondaryScale: secondary, threshold: threshold
+        )
+    }
+
+    /// A model stroke from a PencilKit stroke, keeping its ink, seed and per-point size and opacity in
+    /// ``InkModel/Stroke/rendering``. The stroke's `transform` is baked into the samples (sizes scale by
+    /// `√|det|`); identity for everything PencilKit draws here. A `mask` (PencilKit's bitmap eraser) is
+    /// not kept: our eraser works on the model.
     /// - Parameters:
     ///   - tool: Pen; defaults to ``penKind(for:)`` of the ink.
     ///   - color: Ink color; defaults to the ink's color as `.custom`.
-    ///   - width: Base width; defaults to the median of point sizes divided by the profile's width scale.
+    ///   - width: Base width (pt, the toolbar width); defaults to the median point size.
     public static func stroke(
         from pk: PKStroke,
         id: StrokeID = StrokeID(),
@@ -74,28 +129,72 @@ public enum PencilKitConversion {
         width: Float? = nil
     ) -> Stroke {
         let kind = tool ?? penKind(for: pk.ink.inkType)
-        let profile = PenProfile(kind)
         let transform = pk.transform
         let rotation = Float(atan2(transform.b, transform.a))
-        let scale = Float(abs(transform.a * transform.d - transform.b * transform.c).squareRoot())
+        let scale = abs(transform.a * transform.d - transform.b * transform.c).squareRoot()
         var samples: [Sample] = []
-        var widths: [Float] = []
+        var points: [PointRendering] = []
         samples.reserveCapacity(pk.path.count)
+        points.reserveCapacity(pk.path.count)
         for point in pk.path {
             let p = point.location.applying(transform)
-            let s = Sample(
+            samples.append(Sample(
                 x: Float(p.x),
                 y: Float(p.y),
                 force: Float(min(max(point.force / maximumForce, 0), 1)),
                 altitude: Float(point.altitude),
                 azimuth: Float(point.azimuth) + rotation,
                 t: Float(point.timeOffset)
+            ))
+            var rendered = PointRendering(
+                width: Float(point.size.width * scale),
+                height: Float(point.size.height * scale),
+                opacity: Float(point.opacity),
+                secondaryScale: Double(point.secondaryScale),
+                threshold: Float(point.threshold)
             )
-            samples.append(s)
-            widths.append(Float(point.size.width) / profile.widthScale(force: s.force, speed: 0, altitude: s.altitude))
+            if #available(iOS 27, *) {
+                rendered.lateralJitter = Float(point.lateralJitter)
+            }
+            points.append(rendered)
         }
-        let baseWidth = width ?? median(widths).map { $0 * scale } ?? 2
-        return Stroke(id: id, tool: kind, color: color ?? .custom(RGBA8(pk.ink.color)), width: baseWidth, samples: samples)
+        var rendering = StrokeRendering(ink: pk.ink.inkType.rawValue, randomSeed: pk.randomSeed, points: points)
+        if #available(iOS 27, *) {
+            rendering.renderGroupID = pk.renderGroupID
+            rendering.grainOffset = pk.renderState?.grainOffset
+        }
+        let baseWidth = width ?? median(points.map(\.width)) ?? 2
+        return Stroke(
+            id: id, tool: kind, color: color ?? .custom(RGBA8(pk.ink.color)), width: baseWidth, samples: samples, rendering: rendering
+        )
+    }
+
+    /// Normalized pressure in PencilKit force units: the 0.001 step PencilKit keeps, aimed a quarter
+    /// step in so it truncates back to the same value.
+    static func pencilKitForce(_ force: Float) -> CGFloat {
+        ((CGFloat(force) * maximumForce / Quantum.force).rounded() + 0.25) * Quantum.force
+    }
+
+    /// How PencilKit quantizes `PKStrokePoint` fields (measured on iOS 27): location, time and width are
+    /// Float32; the rest snap to steps, truncating down (altitude: up). A value read back sits on a step
+    /// edge, often a hair off it after the Float32 round trip (or even in PencilKit's own arithmetic), so
+    /// writing it back as is can land one step off. Writing it a quarter step into the step (up, or down
+    /// for altitude) lands in the same step, which is what makes `PKStroke → Stroke → PKStroke` exact.
+    /// `LosslessRoundTripTests` fails if a PencilKit release changes this.
+    enum Quantum {
+        static let opacity: CGFloat = 1 / 65535
+        static let altitude: CGFloat = .pi / 2 / 65535
+        static let azimuth: CGFloat = 2 * .pi / 65535
+        static let force: CGFloat = 0.001
+        static let threshold: CGFloat = 1 / 65535
+        static let lateralJitter: CGFloat = 0.1
+        /// Height is stored as a multiple of width in this step.
+        static let aspect: CGFloat = 0.001
+
+        static func height(_ height: CGFloat, width: CGFloat) -> CGFloat {
+            guard width > 0, height.isFinite, width.isFinite else { return height }
+            return ((height / width / aspect).rounded() + 0.25) * aspect * width
+        }
     }
 
     private static func median(_ values: [Float]) -> Float? {

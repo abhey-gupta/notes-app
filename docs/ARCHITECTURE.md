@@ -69,7 +69,10 @@ Hybrid canvas:
 - **Active page** (the one under the Pencil): a `PKCanvasView` per visible page or one moved to the active page (decide by measurement in #21), `drawingPolicy = .pencilOnly` by default, scrolling disabled (our `UIScrollView` owns scroll/zoom).
 - **Other visible pages**: `PKDrawing.image(from:scale:)` rendered off-main into a page-image cache (zoom buckets, memory budget, LRU), so ink looks identical everywhere. This replaces the Metal tile cache.
 - **Commit path**: `PKCanvasViewDelegate.canvasViewDrawingDidChange` → diff new `PKStroke`s → `Stroke` (adapter conversion, already tested) → `PageEdit` → `EditStack` + `DocumentStore`. Our model remains the source of truth; `PKDrawing` is a view of it.
-- **Tools**: pens map to `PKInkingTool` ink types (fountain → `.fountainPen`, ballpoint → `.monoline`, brush → `.watercolor`/`.pen`, highlighter → `.marker`); eraser → `PKEraserTool(.vector)` / `.bitmap` (partial); lasso → `PKLassoTool` (move/copy/delete native; recolor/resize via our model on the selection). Pencil double-tap/squeeze via `UIPencilInteraction`.
+- **Lossless (#71)**: a captured `PKStroke` keeps its ink, `randomSeed`, render group and grain offset (iOS 27), and per-point size, opacity, `secondaryScale`, `threshold`, `lateralJitter` in `Stroke.rendering` (format v2, §4.3; live watercolor strokes set a render group and `secondaryScale`, without which they redraw ~8 % darker), so canvas rebuilds, inactive rasters, reloads and export draw exactly what PencilKit drew (`PKStroke → Stroke → file → Stroke → PKStroke` renders pixel-identical; tested). PencilKit quantizes point fields on store (opacity, altitude, threshold in 1/65535 steps, azimuth in 2π/65535, force and height/width to 0.001, lateral jitter to 0.1) and re-quantizing read-back values can land a step off, so the adapter writes them a quarter step into their bucket. Strokes without a rendering (v1, fixtures) derive sizes from the pen profile with a seed from the stroke ID.
+- **Rasters**: inactive pages are `PKDrawing.image` of the stored strokes plus strokes still on their way to the document, rendered with light traits (the canvas is pinned light). A page's raster is never cleared before its replacement is ready; the page the canvas just left shows a snapshot of the canvas until then, and the canvas's new page keeps its raster until `canvasViewDidFinishRendering`.
+- **Zoom**: the canvas zoom is pinned to the viewport's (`minimumZoomScale == maximumZoomScale`), so it has no pinch of its own and a pinch over it zooms our scroll view (the whole page).
+- **Tools**: pens map to `PKInkingTool` ink types (fountain → `.fountainPen`, ballpoint → `.pen`, brush → `.watercolor`, highlighter → `.marker`); eraser → `PKEraserTool(.vector)` / `.bitmap` (partial); lasso → `PKLassoTool` (move/copy/delete native; recolor/resize via our model on the selection). Pencil double-tap/squeeze via `UIPencilInteraction`. Widths: the middle toolbar preset (pen 4 pt, highlighter 16 pt) maps to the ink's `defaultWidth` (pen 2.68, fountain pen 4, watercolor 40, marker 20.6 on iOS 27) and the other presets scale with it, clamped to `validWidthRange`.
 - **Night paper**: PencilKit adapts ink colors for dark appearance; Night pages set the canvas to dark style. Verify against §10's remap.
 - **Undo**: PencilKit's internal undo is disabled/bypassed; all undo goes through `EditStack` (§6).
 
@@ -160,13 +163,15 @@ As built (#19, `MetalInkEngine`):
 ```swift
 struct Notebook { id: NotebookID; title; cover: CoverColor; paper: PaperStyle; theme: PaperTheme; keepsExactColors: Bool; pageSize: CGSize; pages: [PageID]; createdAt; modifiedAt; rev: UInt64 }
 struct Page     { id: PageID; template: PageTemplate; strokes: [Stroke]; rev: UInt64 }
-struct Stroke   { id: StrokeID (UUIDv7); tool: PenKind; color: InkColor; width: Float; samples: [Sample]; bounds: CGRect }
-struct Sample   { x, y: Float; force: Float /* 0...1 */; altitude: Float; azimuth: Float; t: Float /* s since stroke start */ }
+struct Stroke   { id: StrokeID (UUIDv7); tool: PenKind; color: InkColor; width: Float; samples: [Sample]; rendering: StrokeRendering?; bounds: CGRect }
+struct Sample   { x, y: Float; force: Float /* 0...1 */; altitude: Float; azimuth: Float; t: Float /* s since stroke start */ }  // 24 B
+struct StrokeRendering { ink: String /* PKInk.InkType raw value */; randomSeed: UInt32; points: [PointRendering] /* parallel to samples */; renderGroupID: UUID?; grainOffset: CGPoint? }
+struct PointRendering  { width, height: Float /* PKStrokePoint.size */; opacity, secondaryScale, threshold, lateralJitter: Float }
 enum   PageEdit { add([PlacedStroke]); remove([PlacedStroke]); replace(old: [PlacedStroke], new: [PlacedStroke]); transform([StrokeID], forward: CGAffineTransform, backward: CGAffineTransform); recolor([ColorChange]) }
 // PlacedStroke = (z-index, Stroke); ColorChange = (id, from, to). Build via Page.addEdit/removeEdit/replaceEdit/transformEdit/recolorEdit.
 ```
 
-Strokes store **raw samples, not outlines**, so improving the tessellation later re-renders old notes better. `PageEdit` is the one edit vocabulary used by tools, undo/redo, autosave journal, and (later) sync. Every `PageEdit` carries the prior state its undo needs (removed strokes with z-index, prior colors, inverse matrix), so `inverse()` is pure and `e.inverse().inverse() == e`.
+Strokes store **raw samples, not outlines**, so improving the tessellation later re-renders old notes better. PencilKit-captured strokes also carry `rendering`: exactly what PencilKit drew (§3, #71), kept out of `Sample` so the hot sample array stays 24 B. `InkGeometry` (hit tests, PDF export) uses the stored point sizes when present, the pen profile otherwise. `PageEdit` is the one edit vocabulary used by tools, undo/redo, autosave journal, and (later) sync. Every `PageEdit` carries the prior state its undo needs (removed strokes with z-index, prior colors, inverse matrix), so `inverse()` is pure and `e.inverse().inverse() == e`.
 
 ### 4.2 On-disk format: notebook package
 
@@ -182,6 +187,7 @@ A notebook is a directory package, exported UTType `com.abhey.notespace.notebook
   thumbs/
     <pageID>.heic        page thumbnail, 176×228 pt @2x
     cover.heic           first page at 344×196 pt @2x for library "recents"
+  backup-v1/             manifest.json + pages/ as they were before the v1 → v2 migration (§4.5)
 ```
 
 Per-page files are deliberate: page-scoped loads (open page 1 without reading page 90), page-scoped autosave, page-scoped sync conflicts later.
@@ -195,21 +201,24 @@ Custom little-endian binary, no schema library:
 ```
 header: magic "INKS" | u16 formatVersion | u32 strokeCount | u32 flags (bit0: lz4) | u32 bodyLength (uncompressed) | u32 crc32
 stroke: u128 id | u8 tool | InkColor (u8 kind + 4 B: semantic slot,0,0,0 or r,g,b,a) | f32 width | u32 sampleCount | samples[f32 x,y,force,altitude,azimuth,t]
+        | rendering (v2): u8 flags (bit0 present, bit1 square: h = w, bit2 uniform opacity, bit3 group, bit4 grain, bit5 extras)
+          [u8 inkLength | ink UTF-8 | u32 randomSeed | u128 group? | f64 grain x,y? | f32 opacity if uniform
+           | sampleCount × (f32 w [, f32 h] [, f32 opacity] [, f32 secondaryScale, threshold, lateralJitter])]
 ```
 
-Whole body after header compressed with `Compression` framework lz4 (`COMPRESSION_LZ4`), kept only if smaller. `bodyLength` sizes the decode buffer; CRC-32 covers the header and stored body, so damage is a typed error, never garbage ink. Decoder validates every length before reading and never traps (fuzzed). Measured (M-series, release): 400 × 60-sample page decodes in ~0.4 ms; 100-page notebook manifest + page 1 in ~0.9 ms. Raw Float32 samples barely compress (~2 %); quantize/delta-code later only if size matters.
+Whole body after header compressed with `Compression` framework lz4 (`COMPRESSION_LZ4`), kept only if smaller. `bodyLength` sizes the decode buffer; CRC-32 covers the header and stored body, so damage is a typed error, never garbage ink. Decoder validates every length before reading and never traps (fuzzed). Version 1 files (no rendering block) still decode. Measured (M-series Mac, release, #71): 400 × 60-sample page with full per-point rendering (the v2 worst case: every field per point, f64 secondaryScale, group, grain; 1.27 MB lz4) decodes in ~0.93 ms (typical pen data, square points + one opacity: ~0.67 ms; no rendering: ~0.43 ms); 100-page notebook manifest + page 1 in ~1.5 ms. Raw Float32 samples barely compress (~2 %); quantize/delta-code later only if size matters.
 
 ### 4.4 Autosave and crash safety
 
-- Every committed `PageEdit` is appended synchronously-cheap to `pages/<id>.wal` (one record, O(edit size)) from the `DocumentStore` actor (own serial queue). Pen-up to durable: < 50 ms, never on main. Measured (M-series Mac, release, shared loaded machine): one 120-sample stroke p50 0.3–0.5 ms, p95 0.7–2.2 ms.
-- WAL format (`Document.Journal`): 32 B header (`INKW`, version, base rev, base stroke-file length + CRC) then records `u32 length | u32 crc32 | u64 rev | u8 kind | binary PageEdit`. Each append is `pwrite` + `F_BARRIERFSYNC`: an app kill loses nothing that `apply` returned for; power loss/panic recovers a consistent, in-order prefix (may lose the newest edits still in the drive cache). `F_FULLFSYNC` would cost ~8× per append.
-- Checkpoint: after 2 s idle (one debounce task, not a timer per edit), on page leave (`evict(page:)`), on background/resign-active (`flush()`), or when WAL > 1 MB: rewrite `<id>.strokes` to a temp file, barrier-sync, `rename`, then manifest the same way with bumped `rev`s, then delete WAL. 100 dense dirty pages (~58 MB): 170–260 ms.
+- Every committed `PageEdit` is appended synchronously-cheap to `pages/<id>.wal` (one record, O(edit size)) from the `DocumentStore` actor (own serial queue). Pen-up to durable: < 50 ms (budget for the append itself: p95 < 5 ms), never on main. Measured (M-series Mac, release, shared loaded machine): one 120-sample stroke with full v2 rendering p50 0.28 ms, p95 0.52 ms (v1 strokes: p50 0.3–0.5 ms, p95 0.7–2.2 ms).
+- WAL format (`Document.Journal`): 32 B header (`INKW`, version, base rev, base stroke-file length + CRC) then records `u32 length | u32 crc32 | u64 rev | u8 kind | binary PageEdit` (strokes in the stroke-codec layout of the journal's version). A journal from an older version is replayed, then folded into a stroke file at once, so new records never land in it. Each append is `pwrite` + `F_BARRIERFSYNC`: an app kill loses nothing that `apply` returned for; power loss/panic recovers a consistent, in-order prefix (may lose the newest edits still in the drive cache). `F_FULLFSYNC` would cost ~8× per append.
+- Checkpoint: after 2 s idle (one debounce task, not a timer per edit), on page leave (`evict(page:)`), on background/resign-active (`flush()`), or when WAL > 1 MB: rewrite `<id>.strokes` to a temp file, barrier-sync, `rename`, then manifest the same way with bumped `rev`s, then delete WAL. 100 dense dirty pages: v1 data (~58 MB) 170–260 ms; v2 typical pen data ~390 ms, worst case ~505 ms (#71).
 - Open: if a `.wal` exists, replay it over `.strokes` before presenting. A torn or corrupt tail is detected by length/CRC and truncated; earlier records are kept. Replay is idempotent: a WAL whose base no longer matches the stroke file (checkpoint crashed before deleting it) is already folded in and is discarded, never replayed twice.
 - Never a "Save" button. Never a dirty-state dialog.
 
 ### 4.5 Versioning, migration, forward-compat
 
-- `formatVersion` in `manifest.json` and in each stroke file header. Integer, bumped on any incompatible change. `Document/Migrations/` holds `V1→V2` steps run on open, writing a backup `manifest.v1.json` once.
+- `formatVersion` in `manifest.json` and in each stroke file and journal header. Integer, bumped on any incompatible change. `Document/Migrations/` holds the steps run on open (`NotebookPackage.open`). **v1 → v2** (#71, PencilKit rendering data): copy `manifest.json` + `pages/` to `backup-v1/` once (staged, then renamed; APFS clones), load every inked page (journal replayed) and write it back as v2, then the manifest (`modifiedAt` untouched), then delete the journals. Crash-safe and idempotent: until the manifest says v2 the next open redoes it. v1 strokes keep no rendering (drawn from the pen profile, as before).
 - Open refuses newer `formatVersion` with a clear message (not a crash).
 - Unknown JSON keys are preserved round-trip (`extra: [String: JSONValue]` on `Manifest` and `PageEntry`).
 - **Sync-ready without sync**: every entity has a stable ID (UUIDv7, time-ordered); per-notebook and per-page `rev` counters; edits are already an append-only journal of `PageEdit`s. Adding iCloud later means shipping the journal, not changing the model. No file paths stored anywhere; IDs only.

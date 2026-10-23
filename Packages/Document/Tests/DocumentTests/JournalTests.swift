@@ -116,10 +116,10 @@ struct JournalTests {
 
     @Test func newerJournalIsRefusedNotDiscarded() throws {
         var header = Journal.encodeHeader(Journal.Header(baseRev: 0, base: .absent))
-        header[4] = 2
+        header[4] = 99
         let crc = header.prefix(28).withUnsafeBytes { CRC32.checksum($0) }
         header.replaceSubrange(28 ..< 32, with: withUnsafeBytes(of: crc.littleEndian) { Array($0) })
-        #expect(throws: DocumentError.unsupportedFormatVersion(found: 2, supported: 1)) {
+        #expect(throws: DocumentError.unsupportedFormatVersion(found: 99, supported: 2)) {
             try Journal.scan(Data(header))
         }
     }

@@ -89,9 +89,13 @@ extension PageEntry: Codable {
 /// `formatVersion`, the ``Notebook`` fields, and `pages: [PageEntry]`; keys sorted, dates as Unix
 /// milliseconds. Unknown keys at either level survive decode → encode.
 public struct Manifest: Hashable, Sendable {
-    /// Format version written by, and the newest readable by, this build (§4.5).
-    public static let formatVersion = 1
+    /// Format version written by, and the newest readable by, this build (§4.5). 2: stroke files and
+    /// journals carry PencilKit rendering data (#71).
+    public static let formatVersion = 2
 
+    /// Version this manifest was decoded from (``formatVersion`` for new ones). Older packages are
+    /// migrated on open (``NotebookPackage/open(at:)``). Not part of equality.
+    public internal(set) var sourceFormatVersion = Manifest.formatVersion
     /// Notebook metadata; ``Notebook/pages`` is the page order.
     public var notebook: Notebook
     /// Top-level keys this version does not know, preserved round-trip.
@@ -241,6 +245,7 @@ extension Manifest: Codable {
             rev: c.decode(UInt64.self, forKey: Key.rev.key)
         )
         try self.init(notebook: notebook, entries: pages, extra: c.unknownKeys(excluding: Self.known))
+        sourceFormatVersion = version
     }
 
     public func encode(to encoder: any Encoder) throws {

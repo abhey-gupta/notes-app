@@ -35,17 +35,32 @@ public struct Centerline: Sendable {
         arcLengths.last ?? 0
     }
 
-    /// Centerline for `stroke` with its pen's standard profile.
+    /// Centerline for `stroke`: radii from its stored PencilKit point sizes when it has a
+    /// ``InkModel/Stroke/rendering`` (half the larger side), else from its pen's standard profile.
     public init(stroke: Stroke, spacing: Float = 1) {
-        self.init(samples: stroke.samples, width: stroke.width, profile: PenProfile(stroke.tool), spacing: spacing)
+        let profile = PenProfile(stroke.tool)
+        if let rendering = stroke.rendering {
+            let radii = rendering.points.map { p in
+                let size = max(p.width, p.height)
+                return (size.isFinite ? max(size, Self.minimumWidth) : 1) / 2
+            }
+            self.init(samples: stroke.samples, halfWidth: 0, profile: profile, radii: radii, spacing: spacing)
+        } else {
+            self.init(samples: stroke.samples, width: stroke.width, profile: profile, spacing: spacing)
+        }
     }
 
     /// Centerline for raw `samples` drawn at base `width` with `profile`.
     /// - Parameter spacing: Target distance between resampled points (pt), clamped to `≥ 0.05`.
     public init(samples: [Sample], width: Float, profile: PenProfile, spacing: Float = 1) {
-        capStyle = profile.capStyle
         let halfWidth = (width.isFinite ? max(width, Self.minimumWidth) : 1) / 2
-        let filtered = Self.filter(samples, halfWidth: halfWidth, profile: profile)
+        self.init(samples: samples, halfWidth: halfWidth, profile: profile, radii: nil, spacing: spacing)
+    }
+
+    /// `radii`, if given, are per-sample half-widths used instead of the profile's.
+    private init(samples: [Sample], halfWidth: Float, profile: PenProfile, radii: [Float]?, spacing: Float) {
+        capStyle = profile.capStyle
+        let filtered = Self.filter(samples, halfWidth: halfWidth, profile: profile, radii: radii)
         switch filtered.points.count {
         case 0:
             return
@@ -70,18 +85,20 @@ public struct Centerline: Sendable {
         var box = BoundsBuilder()
     }
 
-    /// Drops non-finite and near-duplicate samples; radius per kept sample from the profile, using
-    /// EMA-smoothed speed (pt/s).
-    private static func filter(_ samples: [Sample], halfWidth: Float, profile: PenProfile) -> Filtered {
+    /// Drops non-finite and near-duplicate samples; radius per kept sample from `radii` (indexed like
+    /// `samples`) if given, else from the profile using EMA-smoothed speed (pt/s).
+    private static func filter(_ samples: [Sample], halfWidth: Float, profile: PenProfile, radii: [Float]?) -> Filtered {
         var out = Filtered()
         var pressureTilt: [Point2] = []
         var speeds: [Float] = []
+        var kept: [Int] = []
         out.points.reserveCapacity(samples.count)
         pressureTilt.reserveCapacity(samples.count)
         speeds.reserveCapacity(samples.count)
+        kept.reserveCapacity(samples.count)
         var lastT: Float = 0
         var speed: Float = 0
-        for s in samples where s.x.isFinite && s.y.isFinite {
+        for (index, s) in samples.enumerated() where s.x.isFinite && s.y.isFinite {
             let p = Point2(s.x, s.y)
             if let last = out.points.last {
                 let d = norm(p - last)
@@ -98,7 +115,12 @@ public struct Centerline: Sendable {
             out.points.append(p)
             pressureTilt.append(Point2(s.force, s.altitude))
             speeds.append(speed)
+            kept.append(index)
             out.box.add(p)
+        }
+        if let radii, radii.count == samples.count {
+            out.radii = kept.map { radii[$0] }
+            return out
         }
         // The first sample has no speed of its own; borrow the second's.
         if speeds.count > 1 {

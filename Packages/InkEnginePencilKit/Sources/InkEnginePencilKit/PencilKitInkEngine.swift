@@ -48,6 +48,10 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// Strokes reported via `didCommit` but not yet in the page snapshot, per page, in draw order.
     private(set) var pending: [PageID: [(id: StrokeID, pk: PKStroke)]] = [:]
     private(set) var hasSeenPencil = false
+    /// Whether the canvas has rendered the active page since it moved there; until then that page's
+    /// raster stays visible underneath, so the page never shows blank paper.
+    private(set) var canvasHasRendered = false
+    private var activation = 0
 
     var pageViews: [PageID: PageLayerView] = [:]
     private var isSettingDrawing = false
@@ -75,12 +79,13 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         canvas.overrideUserInterfaceStyle = .light
         canvas.isScrollEnabled = false
         canvas.bouncesZoom = false
-        canvas.pinchGestureRecognizer?.isEnabled = false
         canvas.contentInsetAdjustmentBehavior = .never
         canvas.showsVerticalScrollIndicator = false
         canvas.showsHorizontalScrollIndicator = false
-        canvas.minimumZoomScale = 0.1
-        canvas.maximumZoomScale = 8
+        // Zoom is pinned to the viewport's (``layoutCanvas()`` sets min = max = zoom), so the canvas has
+        // no pinch of its own and a pinch over it zooms the host scroll view (the whole page).
+        canvas.minimumZoomScale = 1
+        canvas.maximumZoomScale = 1
         canvas.isHidden = true
         canvas.delegate = self
         canvas.onPencilTouch = { [weak self] in self?.pencilSeen() }
@@ -163,13 +168,14 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     }
 
     public func invalidate(_: CGRect, in page: PageID) {
-        // The active canvas holds vectors; inactive pages re-rasterize.
+        // The active canvas holds vectors; inactive pages re-rasterize (keeping the old raster meanwhile).
         if page != activePage {
-            pageViews[page]?.inkKey = nil
+            pageViews[page]?.invalidateInk()
             layoutPages()
         }
     }
 
+    /// Thumbnails and export fallback: paper + template + ink, drawn by PencilKit from the stored strokes.
     public func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage? {
         guard size.width > 0, size.height > 0, scale > 0, page.size.width > 0, page.size.height > 0 else { return nil }
         let job = RenderJob(page: page, palette: palette, theme: theme)
@@ -187,17 +193,41 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     func activate(_ id: PageID?) {
         guard id != activePage else { return }
         absorbCanvasStrokes()
-        let previous = activePage
+        if let previous = activePage {
+            coverPageLeavingCanvas(previous)
+        }
         activePage = id
+        canvasHasRendered = false
+        activation += 1
         rebuildCanvas()
-        if let previous {
-            pageViews[previous]?.showsInk = true
-        }
-        if let id {
-            pageViews[id]?.showsInk = false
-        }
         layoutPages()
         layoutCanvas()
+        // `canvasViewDidFinishRendering` normally comes within a few frames; don't wait on it forever.
+        let current = activation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, activation == current else { return }
+            canvasDidRender()
+        }
+    }
+
+    /// The canvas is leaving `page`: until its raster is ready, a snapshot of what the canvas showed
+    /// stands in, so the ink doesn't blink out (or show a stale raster) as the canvas moves on.
+    private func coverPageLeavingCanvas(_ page: PageID) {
+        guard let view = pageViews[page], canvasHasRendered, !canvas.isHidden, !canvas.drawing.strokes.isEmpty,
+              let snapshot = canvas.snapshotView(afterScreenUpdates: false) else { return }
+        let zoom = max(viewport.zoomScale, 0.01)
+        let local = canvas.frame.offsetBy(dx: -view.frame.minX, dy: -view.frame.minY)
+        let pageRect = CGRect(x: local.minX / zoom, y: local.minY / zoom, width: local.width / zoom, height: local.height / zoom)
+        view.setPlaceholder(snapshot, pageRect: pageRect)
+    }
+
+    /// The canvas shows the active page: its raster can hide.
+    private func canvasDidRender() {
+        guard !canvasHasRendered else { return }
+        canvasHasRendered = true
+        if let page = activePage {
+            pageViews[page]?.showsInk = false
+        }
     }
 
     private func contentChanged(_ page: PageID, rebuild: Bool) {
@@ -305,6 +335,10 @@ extension PencilKitInkEngine: PKCanvasViewDelegate {
     public func canvasViewDrawingDidChange(_: PKCanvasView) {
         guard !isSettingDrawing else { return }
         absorbCanvasStrokes()
+    }
+
+    public func canvasViewDidFinishRendering(_: PKCanvasView) {
+        canvasDidRender()
     }
 }
 

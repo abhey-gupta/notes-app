@@ -9,6 +9,7 @@ import InkModel
 ///   pages/<pageID>.strokes   StrokeCodec file; absent = page has no strokes yet
 ///   pages/<pageID>.wal       autosave journal, reserved for the WAL (§4.4)
 ///   thumbs/<pageID>.heic     page thumbnail;  thumbs/cover.heic  library cover
+///   backup-v1/               manifest.json + pages/ as they were before the v1 → v2 migration
 /// ```
 ///
 /// A value holding the package URL and the manifest as last written. Reads are page-scoped:
@@ -154,9 +155,14 @@ public struct NotebookPackage: Sendable {
         }
     }
 
-    /// Opens a package, reading only `manifest.json`.
+    /// Opens a package, reading only `manifest.json`, unless it has an older format: then it is migrated
+    /// first, once (backup, stroke files, manifest; see ``Migrations``).
     public static func open(at url: URL) throws(DocumentError) -> NotebookPackage {
-        try NotebookPackage(url: url, manifest: readManifest(at: url))
+        var package = try NotebookPackage(url: url, manifest: readManifest(at: url))
+        if package.manifest.sourceFormatVersion < Manifest.formatVersion {
+            try Migrations.migrate(&package)
+        }
+        return package
     }
 
     /// Reads and decodes a package's manifest without opening it (library index rebuild).
@@ -226,7 +232,11 @@ public struct NotebookPackage: Sendable {
     /// ``savePages(_:)``, returning the identity of each stroke file written. Stroke files, then the
     /// manifest, are each barrier-synced and their directories synced, so once this returns the new
     /// state is ordered on media ahead of anything written after (e.g. journal deletion).
-    mutating func checkpoint(_ pages: some Collection<Page>) throws(DocumentError) -> [PageID: StrokesIdentity] {
+    /// - Parameter marksModified: Bump the notebook's `rev`/`modifiedAt` (not for format migrations).
+    mutating func checkpoint(
+        _ pages: some Collection<Page>,
+        marksModified: Bool = true
+    ) throws(DocumentError) -> [PageID: StrokesIdentity] {
         var next = manifest
         var files: [(URL, Data)] = []
         files.reserveCapacity(pages.count)
@@ -247,7 +257,7 @@ public struct NotebookPackage: Sendable {
             identities[page.id] = StrokesIdentity(data)
         }
         FileIO.syncDirectory(pagesDirectory)
-        try commit(next)
+        try commit(next, marksModified: marksModified)
         FileIO.syncDirectory(url)
         return identities
     }
@@ -309,11 +319,15 @@ public struct NotebookPackage: Sendable {
         package.appending(path: "manifest.json", directoryHint: .notDirectory)
     }
 
-    /// Bumps the notebook's `rev`/`modifiedAt`, writes the manifest atomically, then adopts it.
-    private mutating func commit(_ next: Manifest) throws(DocumentError) {
+    /// Bumps the notebook's `rev`/`modifiedAt` (if `marksModified`), writes the manifest atomically (in
+    /// the current format), then adopts it.
+    mutating func commit(_ next: Manifest, marksModified: Bool = true) throws(DocumentError) {
         var next = next
-        next.notebook.markModified(at: Date().roundedToMilliseconds)
+        if marksModified {
+            next.notebook.markModified(at: Date().roundedToMilliseconds)
+        }
         try Self.writeAtomically(next.encoded(), to: manifestURL)
+        next.sourceFormatVersion = Manifest.formatVersion
         manifest = next
     }
 
