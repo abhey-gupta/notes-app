@@ -38,6 +38,13 @@ final class MetalScreen: UIViewController, SpikeScreen {
         PerfHUD.unregister(id: "ink")
     }
 
+    private lazy var modeButton: UIButton = spikeButton("Mode: touch-driven") { [weak self] in
+        guard let self else { return }
+        inkView.useMetalDisplayLink.toggle()
+        inkView.recorder.resetAll()
+        modeButton.configuration?.title = inkView.useMetalDisplayLink ? "Mode: CAMetalDisplayLink" : "Mode: touch-driven"
+    }
+
     func toolbarItems() -> [UIView] {
         gesture.selectedSegmentIndex = 0
         gesture.addAction(UIAction { [weak self] _ in
@@ -54,6 +61,7 @@ final class MetalScreen: UIViewController, SpikeScreen {
                 UIPasteboard.general.string = inkView.recorder.report()
             },
             spikeButton("Clear ink") { [weak self] in self?.inkView.clear() },
+            modeButton,
         ]
     }
 
@@ -74,10 +82,27 @@ final class LatencyRecorder {
     var buckets = [LatencyStats(capacity: 5000), LatencyStats(capacity: 5000)]
     var bucket = 0
     var dropped = 0
+    var mode = "touch-driven"
+    /// Breakdown: touch → render call (input delivery), render call → presented (GPU + queue + vsync).
+    var delivery = LatencyStats(capacity: 5000)
+    var pipeline = LatencyStats(capacity: 5000)
+    /// Interval between consecutive presents during ink (≈8.3 ms at 120 Hz, 16.7 at 60).
+    var interval = LatencyStats(capacity: 5000)
+    private var lastPresented: Double = 0
     private let log = Logger(subsystem: "com.abhey.notespace.spike", category: "latency")
 
     var current: LatencyStats {
         buckets[bucket]
+    }
+
+    func recordSplit(delivery d: Double, pipeline p: Double, presented: Double) {
+        if d > 0, d < 1 { delivery.record(d) }
+        if p > 0, p < 1 { pipeline.record(p) }
+        if lastPresented > 0 {
+            let i = presented - lastPresented
+            if i > 0, i < 0.05 { interval.record(i) }
+        }
+        lastPresented = presented
     }
 
     func record(_ seconds: Double) {
@@ -91,6 +116,21 @@ final class LatencyRecorder {
     func reset() {
         buckets[bucket].reset()
         dropped = 0
+        delivery.reset()
+        pipelineReset()
+    }
+
+    func resetAll() {
+        buckets = [LatencyStats(capacity: 5000), LatencyStats(capacity: 5000)]
+        dropped = 0
+        delivery.reset()
+        pipelineReset()
+    }
+
+    private func pipelineReset() {
+        pipeline.reset()
+        interval.reset()
+        lastPresented = 0
     }
 
     func report() -> String {
@@ -100,6 +140,10 @@ final class LatencyRecorder {
             lines.append("\(name): \(MetalScreen.format(s))")
         }
         lines.append("dropped/unpresented: \(dropped)")
+        lines.append("  touch→render call: \(MetalScreen.format(delivery))")
+        lines.append("  render call→presented: \(MetalScreen.format(pipeline))")
+        lines.append("  present interval: \(MetalScreen.format(interval))")
+        lines.append("  max fps: \(UIScreen.main.maximumFramesPerSecond), mode: \(mode)")
         let text = lines.joined(separator: "\n")
         log.info("\(text, privacy: .public)")
         return text
@@ -122,6 +166,15 @@ final class MetalInkView: UIView {
     private let queue: MTLCommandQueue?
     private var pipeline: MTLRenderPipelineState?
     private var displayLink: CADisplayLink?
+    private var metalLink: CAMetalDisplayLink?
+    private var pendingTouchTimestamp: TimeInterval?
+    /// Mode B: render in `CAMetalDisplayLink` callbacks (preferredFrameLatency 1) instead of in touch events.
+    var useMetalDisplayLink = false {
+        didSet {
+            recorder.mode = useMetalDisplayLink ? "CAMetalDisplayLink" : "touch-driven"
+            if useMetalDisplayLink { startMetalLink() } else { stopMetalLink() }
+        }
+    }
 
     /// Committed strokes' vertices, one strip per stroke.
     private var committed: [StrokeVertex] = []
@@ -168,6 +221,27 @@ final class MetalInkView: UIView {
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) not supported")
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // Keep the 120 Hz request alive for the whole screen, not just while the pen is down.
+        if window != nil { startHighRate() } else { stopHighRate(); stopMetalLink() }
+    }
+
+    private func startMetalLink() {
+        guard metalLink == nil else { return }
+        let link = CAMetalDisplayLink(metalLayer: metalLayer)
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 120, maximum: 120, preferred: 120)
+        link.preferredFrameLatency = 1
+        link.delegate = self
+        link.add(to: .main, forMode: .common)
+        metalLink = link
+    }
+
+    private func stopMetalLink() {
+        metalLink?.invalidate()
+        metalLink = nil
     }
 
     override func layoutSubviews() {
@@ -224,7 +298,6 @@ final class MetalInkView: UIView {
         live = []
         predicted = []
         render(touchTimestamp: nil)
-        stopHighRate()
     }
 
     /// Appends coalesced touches, replaces the predicted tail, and draws immediately.
@@ -234,7 +307,12 @@ final class MetalInkView: UIView {
             live.append(sample(t))
         }
         predicted = predict ? (event?.predictedTouches(for: touch) ?? []).map(sample) : []
-        render(touchTimestamp: coalesced.last?.timestamp ?? touch.timestamp)
+        let ts = coalesced.last?.timestamp ?? touch.timestamp
+        if useMetalDisplayLink {
+            pendingTouchTimestamp = ts
+        } else {
+            render(touchTimestamp: ts)
+        }
     }
 
     private func sample(_ t: UITouch) -> Sample {
@@ -260,7 +338,6 @@ final class MetalInkView: UIView {
         )
         live = []
         render(touchTimestamp: nil)
-        stopHighRate()
     }
 
     // MARK: 120 Hz
@@ -281,8 +358,12 @@ final class MetalInkView: UIView {
 
     // MARK: Render
 
-    private func render(touchTimestamp: TimeInterval?) {
-        guard let pipeline, let queue, bounds.width > 0, let drawable = metalLayer.nextDrawable(),
+    private func render(touchTimestamp: TimeInterval?, drawable given: CAMetalDrawable? = nil) {
+        if useMetalDisplayLink, given == nil {
+            pendingTouchTimestamp = pendingTouchTimestamp ?? -1 // redraw on next link callback
+            return
+        }
+        guard let pipeline, let queue, bounds.width > 0, let drawable = given ?? metalLayer.nextDrawable(),
               let commands = queue.makeCommandBuffer() else { return }
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = drawable.texture
@@ -319,10 +400,16 @@ final class MetalInkView: UIView {
             #else
                 // presentedTime and UITouch.timestamp are both mach-absolute-time seconds (CACurrentMediaTime base).
                 let recorder = recorder
+                let submitAt = CACurrentMediaTime()
                 drawable.addPresentedHandler { presented in
                     let presentedTime = presented.presentedTime
                     Task { @MainActor in
                         recorder.record(presentedTime > 0 ? presentedTime - touchTimestamp : -1)
+                        if presentedTime > 0 {
+                            recorder.recordSplit(
+                                delivery: submitAt - touchTimestamp, pipeline: presentedTime - submitAt, presented: presentedTime
+                            )
+                        }
                     }
                 }
             #endif
@@ -337,6 +424,18 @@ private struct Uniforms {
     var ppp: Float
     var pad: Float = 0
     var color: SIMD4<Float>
+}
+
+extension MetalInkView: CAMetalDisplayLinkDelegate {
+    nonisolated func metalDisplayLink(_: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+        // Callback runs on the main run loop (link added to .main); drawable stays on this thread.
+        nonisolated(unsafe) let drawable = update.drawable
+        MainActor.assumeIsolated {
+            guard let pending = pendingTouchTimestamp else { return }
+            pendingTouchTimestamp = nil
+            render(touchTimestamp: pending > 0 ? pending : nil, drawable: drawable)
+        }
+    }
 }
 
 private final class DisplayLinkTarget: NSObject {
