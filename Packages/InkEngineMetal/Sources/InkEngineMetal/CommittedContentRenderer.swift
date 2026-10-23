@@ -2,39 +2,56 @@ import CoreGraphics
 import InkModel
 import Metal
 
-/// Committed content for one frame: the target's pixel size and the visible pages.
+/// Committed content for one frame: the target's size, the visible pages (plus, for tiles, their
+/// on-layout neighbours, ``ScenePage/isVisible`` `false`) and the zoom.
 struct ContentScene {
     var pixelWidth: Int
     var pixelHeight: Int
     var pages: [ScenePage]
     var blend: HighlightBlend
+    /// Target size in view points.
+    var pointSize: CGSize = .zero
+    /// Target pixels per view point.
+    var pixelsPerPoint: CGFloat = 1
+    /// Page points → view points.
+    var zoomScale: CGFloat = 1
+
+    var visiblePages: [ScenePage] {
+        pages.filter(\.isVisible)
+    }
 }
 
 /// Supplies committed page content (paper, template, highlighters, ink) beneath the live stroke.
 ///
 /// The live path stays the same whatever the implementation: each frame calls ``prepare(_:commandBuffer:)``
 /// (cheap when nothing changed) and then ``draw(in:)`` as the first draw of the drawable pass, then
-/// draws pending and live ink on top. Today ``ViewportCompositeRenderer`` keeps one offscreen texture
-/// of the whole viewport; the tile cache (#22, ARCHITECTURE.md §5.4) replaces it with a renderer that
-/// keeps per-page tiles, re-renders only tiles intersecting invalidated rects (``setNeedsUpdate(page:rect:)``)
-/// and draws tile quads. Both render page content with ``SceneEncoder``.
+/// draws pending and live ink on top. ``TiledContentRenderer`` (ARCHITECTURE.md §5.4) keeps per-page
+/// tiles rendered off main and re-renders only tiles intersecting invalidated rects;
+/// ``ViewportCompositeRenderer`` (one viewport-sized texture re-rendered on any change) stays for A/B.
+/// Both render page content with ``SceneEncoder``.
 @MainActor
 protocol CommittedContentRenderer: AnyObject {
-    /// Content changed: in `rect` (page space) of `page`, all of `page` (`rect == nil`), or everything
-    /// (`page == nil`: viewport, theme, layout).
-    func setNeedsUpdate(page: PageID?, rect: CGRect?)
-    /// Encodes whatever offscreen work is needed before ``draw(in:)`` can show `scene`.
-    /// - Returns: Whether anything was rendered.
+    /// `page`'s committed content changed within `rect` (page space; `nil`: anywhere on the page).
+    func invalidate(page: PageID, rect: CGRect?)
+    /// What's shown changed (viewport, target size, page set or builds), not the content of any page.
+    func setNeedsDisplay()
+    /// Encodes whatever offscreen work is needed before ``draw(in:)`` can show `scene`. Never waits.
+    /// - Returns: Whether anything was rendered into `commandBuffer`.
     @discardableResult
     func prepare(_ scene: ContentScene, commandBuffer: any MTLCommandBuffer) -> Bool
     /// Draws the prepared content into the frame pass (a target of the scene's pixel size).
     func draw(in encoder: any MTLRenderCommandEncoder)
-    /// Offscreen re-renders so far (tests, HUD).
+    /// Whether everything the last prepared frame shows of `page` reflects its newest invalidation
+    /// (pending strokes are drawn on top until then). `true` for pages not shown.
+    func isSettled(page: PageID) -> Bool
+    /// Offscreen re-renders so far (composites or tiles; tests, HUD).
     var renderCount: Int { get }
 }
 
-/// Interim committed-content renderer: one viewport-sized texture, re-rendered only when the viewport,
-/// pages, theme or committed ink change. A live-stroke frame just copies it (one fullscreen triangle).
+/// Committed content as one viewport-sized texture, re-rendered whenever the viewport, pages, theme or
+/// committed ink change (so every scroll frame re-renders the visible pages). A live-stroke frame just
+/// copies it (one fullscreen triangle). Kept behind ``CommittedContentMode/viewportComposite`` for A/B
+/// against tiles until device verification.
 @MainActor
 final class ViewportCompositeRenderer: CommittedContentRenderer {
     private let gpu: GPUContext
@@ -47,8 +64,17 @@ final class ViewportCompositeRenderer: CommittedContentRenderer {
         self.gpu = gpu
     }
 
-    func setNeedsUpdate(page _: PageID?, rect _: CGRect?) {
+    func invalidate(page _: PageID, rect _: CGRect?) {
         isDirty = true
+    }
+
+    func setNeedsDisplay() {
+        isDirty = true
+    }
+
+    /// Re-renders in the frame's own command buffer, so whatever it shows is current.
+    func isSettled(page _: PageID) -> Bool {
+        !isDirty
     }
 
     @discardableResult
@@ -60,12 +86,13 @@ final class ViewportCompositeRenderer: CommittedContentRenderer {
             isDirty = true
         }
         guard isDirty, let composite else { return false }
-        if coverage == nil, scene.pages.contains(where: { !($0.buffers?.highlightGroups.isEmpty ?? true) }) {
+        let pages = scene.visiblePages
+        if coverage == nil, pages.contains(where: { !($0.buffers?.highlightGroups.isEmpty ?? true) }) {
             coverage = gpu.makeTarget(width: scene.pixelWidth, height: scene.pixelHeight, label: "ink.composite.coverage")
         }
         let coverage = coverage
         SceneEncoder.encode(
-            scene.pages,
+            pages,
             into: SceneTarget(texture: composite, coverage: { coverage }),
             blend: scene.blend,
             pipelines: gpu.pipelines,

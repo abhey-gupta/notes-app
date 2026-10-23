@@ -3,6 +3,7 @@ import InkEngine
 import InkGeometry
 import InkModel
 import Metal
+import Perf
 
 /// A stroke drawn over committed content this frame (pending, live, overlay).
 private struct FrameStroke {
@@ -49,7 +50,7 @@ private func draw(_ strokes: [FrameStroke], upload: (buffer: any MTLBuffer, offs
 }
 
 /// The drawable's size and scale for one frame.
-private struct FrameTarget {
+struct FrameTarget {
     var width: Int
     var height: Int
     var bounds: CGSize
@@ -63,17 +64,19 @@ extension MetalInkEngine {
         let (width, height) = hostView.pixelSize
         let bounds = hostView.bounds.size
         guard width > 0, height > 0, bounds.width > 0, bounds.height > 0 else { return }
+        let signpost = Signpost.canvasFrame.begin()
+        defer { signpost.end() }
         let target = FrameTarget(width: width, height: height, bounds: bounds, pixelsPerPoint: CGFloat(width) / bounds.width)
+        guard let drawable = hostView.metalLayer.nextDrawable(), let commandBuffer = gpu.frameQueue.makeCommandBuffer() else { return }
+        commandBuffer.label = "ink.frame"
+        content.prepare(makeScene(target), commandBuffer: commandBuffer)
+        // Tiles that just landed may already show pending strokes: stop drawing them on top in the
+        // same frame, so nothing is drawn twice or vanishes.
+        prunePending()
 
         var uploads: [[StrokeVertex]] = []
         let strokes = frameStrokes(target, uploads: &uploads)
         let upload = ring.upload(uploads)
-        guard let drawable = hostView.metalLayer.nextDrawable(), let commandBuffer = gpu.frameQueue.makeCommandBuffer() else {
-            ring.finish(nil)
-            return
-        }
-        commandBuffer.label = "ink.frame"
-        content.prepare(makeScene(target), commandBuffer: commandBuffer)
 
         // Highlighters over committed content: coverage first (no self-overlap darkening). Multiply
         // and screen commute, so drawing them over committed ink until the next composite looks the
@@ -155,36 +158,61 @@ extension MetalInkEngine {
         return strokes
     }
 
-    /// Committed content for the current viewport. Each page shows the paper of the theme its last
-    /// build was made for, so paper and ink never disagree during a theme switch.
-    private func makeScene(_ target: FrameTarget) -> ContentScene {
-        var pages: [ScenePage] = []
-        for visible in viewport.pages {
-            guard let scissor = SceneEncoder.scissor(
-                viewport.viewRect(of: visible),
+    /// Committed content for the current viewport: the visible pages plus, for tile prefetch, up to
+    /// ``tileRadius`` neighbours on each side in ``Viewport/pages`` (hosts pass visible ± 1 frames there;
+    /// off-screen pages are never drawn). Each page shows the paper of the theme its last build was
+    /// made for, so paper and ink never disagree during a theme switch.
+    func makeScene(_ target: FrameTarget) -> ContentScene {
+        let scissors = viewport.pages.map { page in
+            SceneEncoder.scissor(
+                viewport.viewRect(of: page),
                 pixelsPerPoint: target.pixelsPerPoint,
                 targetWidth: target.width,
                 targetHeight: target.height
-            ) else { continue }
-            let buffers = pageBuffers[visible.id]
-            let shown = buffers?.theme ?? theme
-            pages.append(ScenePage(
-                transform: PageTransform(
-                    pageToTarget: viewport.pageToView(visible),
-                    targetSize: target.bounds,
-                    pixelsPerPoint: target.pixelsPerPoint
-                ),
-                background: BackgroundUniforms(
-                    template: snapshots[visible.id]?.page.template ?? .blank,
-                    size: visible.frame.size,
-                    paper: palette.paper(shown),
-                    line: palette.templateLine(shown)
-                ),
-                buffers: buffers,
-                scissor: scissor
-            ))
+            )
         }
-        return ContentScene(pixelWidth: target.width, pixelHeight: target.height, pages: pages, blend: HighlightBlend(theme))
+        let shown = scissors.indices.filter { scissors[$0] != nil }
+        var pages: [ScenePage] = []
+        if let first = shown.first, let last = shown.last {
+            let lo = max(first - Self.tileRadius, 0)
+            let hi = min(last + Self.tileRadius, viewport.pages.count - 1)
+            for i in lo ... hi {
+                pages.append(scenePage(viewport.pages[i], scissor: scissors[i], target))
+            }
+        }
+        return ContentScene(
+            pixelWidth: target.width,
+            pixelHeight: target.height,
+            pages: pages,
+            blend: HighlightBlend(theme),
+            pointSize: target.bounds,
+            pixelsPerPoint: target.pixelsPerPoint,
+            zoomScale: viewport.zoomScale
+        )
+    }
+
+    private func scenePage(_ page: VisiblePage, scissor: MTLScissorRect?, _ target: FrameTarget) -> ScenePage {
+        let buffers = pageBuffers[page.id]
+        let shown = buffers?.theme ?? theme
+        return ScenePage(
+            transform: PageTransform(
+                pageToTarget: viewport.pageToView(page),
+                targetSize: target.bounds,
+                pixelsPerPoint: target.pixelsPerPoint
+            ),
+            background: BackgroundUniforms(
+                template: snapshots[page.id]?.page.template ?? .blank,
+                size: page.frame.size,
+                paper: palette.paper(shown),
+                line: palette.templateLine(shown)
+            ),
+            buffers: buffers,
+            scissor: scissor ?? MTLScissorRect(),
+            id: page.id,
+            size: page.frame.size,
+            viewRect: viewport.viewRect(of: page),
+            isVisible: scissor != nil
+        )
     }
 
     private func frameCoverageTexture(width: Int, height: Int) -> (any MTLTexture)? {

@@ -12,6 +12,8 @@ let package = Package(
         .package(path: "../Perf"),
         // Tests only: cross-checks renders against the PencilKit adapter (ARCHITECTURE.md §13).
         .package(path: "../InkEnginePencilKit"),
+        // Tests only: realistic 100-page notebook for the tile scroll simulation (ARCHITECTURE.md §12).
+        .package(path: "../Fixtures"),
     ],
     targets: [
         // `Shaders/*.metal` compile into the module bundle's default library at build time.
@@ -22,6 +24,7 @@ let package = Package(
                 "InkEngineMetal",
                 .product(name: "InkEngineTestSupport", package: "InkEngine"),
                 "InkEnginePencilKit",
+                .product(name: "FixtureGen", package: "Fixtures"),
             ],
             resources: [.copy("Goldens")]
         ),

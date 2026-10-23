@@ -22,6 +22,26 @@ struct ScenePage {
     var buffers: PageBuffers?
     /// The page's rect in target pixels, clipped to the target. Ink never draws outside its page.
     var scissor: MTLScissorRect
+    /// Strips to draw; `nil`: all of ``buffers``.
+    var selection: StrokeSelection?
+    /// Identity and placement, for renderers that cache per page (tiles).
+    var id: PageID?
+    /// Page size (pt).
+    var size: CGSize = .zero
+    /// The page's rect in the frame's view space (pt); may extend beyond the view.
+    var viewRect: CGRect = .null
+    /// On screen. Off-screen pages in a scene are neighbours to prefetch, never drawn.
+    var isVisible = true
+
+    /// Ink strips to draw.
+    var inkRanges: [Range<Int>] {
+        selection?.ink ?? buffers.map { $0.ink.isEmpty ? [] : [$0.ink] } ?? []
+    }
+
+    /// Highlighter groups to draw, one coverage pass each.
+    var highlightRanges: [[Range<Int>]] {
+        selection?.highlightGroups ?? buffers?.highlightGroups.map { [$0] } ?? []
+    }
 }
 
 /// Where ``SceneEncoder`` draws: a target texture (cleared to transparent) and, on demand, a coverage
@@ -33,7 +53,7 @@ struct SceneTarget {
 }
 
 /// Encodes committed page content into a texture: paper + template, then highlighters beneath all
-/// ink, then ink. Shared by the viewport composite, offscreen renders and (later) tiles.
+/// ink, then ink. Shared by the viewport composite, offscreen renders and tiles.
 ///
 /// Passes, with `G` = most highlighter groups on any page:
 /// - `G == 0`: one pass on the target: backgrounds, ink.
@@ -48,7 +68,8 @@ enum SceneEncoder {
         pipelines: GPUContext.Pipelines,
         commandBuffer: any MTLCommandBuffer
     ) {
-        let groups = pages.map { $0.buffers?.highlightGroups.count ?? 0 }.max() ?? 0
+        let highlights = pages.map(\.highlightRanges)
+        let groups = highlights.map(\.count).max() ?? 0
         let coverageTexture = groups > 0 ? target.coverage() : nil
         let clear = MTLClearColor()
         guard let coverageTexture else {
@@ -61,10 +82,10 @@ enum SceneEncoder {
         for k in 0 ..< groups {
             if let encoder = beginPass(coverageTexture, load: .clear, MTLClearColor(), commandBuffer, "highlight.coverage") {
                 encoder.setRenderPipelineState(pipelines.coverageBatched)
-                for page in pages {
-                    guard let buffers = page.buffers, k < buffers.highlightGroups.count else { continue }
+                for (page, ranges) in zip(pages, highlights) {
+                    guard let buffers = page.buffers, k < ranges.count else { continue }
                     encoder.setScissorRect(page.scissor)
-                    drawStrips(buffers, range: buffers.highlightGroups[k], transform: page.transform, encoder)
+                    drawStrips(buffers, ranges: ranges[k], transform: page.transform, encoder)
                 }
                 encoder.endEncoding()
             }
@@ -133,34 +154,40 @@ enum SceneEncoder {
     private static func drawBackgrounds(_ pages: [ScenePage], _ encoder: any MTLRenderCommandEncoder, _ pipelines: GPUContext.Pipelines) {
         encoder.setRenderPipelineState(pipelines.background)
         for page in pages {
-            var transform = page.transform
-            var background = page.background
-            encoder.setScissorRect(page.scissor)
-            encoder.setVertexBytes(&transform, length: MemoryLayout<PageTransform>.stride, index: 2)
-            encoder.setVertexBytes(&background, length: MemoryLayout<BackgroundUniforms>.stride, index: 3)
-            encoder.setFragmentBytes(&background, length: MemoryLayout<BackgroundUniforms>.stride, index: 0)
-            encoder.setFragmentBytes(&transform, length: MemoryLayout<PageTransform>.stride, index: 1)
-            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+            drawBackground(page, scissor: page.scissor, encoder)
         }
+    }
+
+    /// Paper + template of `page` within `scissor` (background pipeline already set).
+    static func drawBackground(_ page: ScenePage, scissor: MTLScissorRect, _ encoder: any MTLRenderCommandEncoder) {
+        var transform = page.transform
+        var background = page.background
+        encoder.setScissorRect(scissor)
+        encoder.setVertexBytes(&transform, length: MemoryLayout<PageTransform>.stride, index: 2)
+        encoder.setVertexBytes(&background, length: MemoryLayout<BackgroundUniforms>.stride, index: 3)
+        encoder.setFragmentBytes(&background, length: MemoryLayout<BackgroundUniforms>.stride, index: 0)
+        encoder.setFragmentBytes(&transform, length: MemoryLayout<PageTransform>.stride, index: 1)
+        encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
     }
 
     private static func drawInk(_ pages: [ScenePage], _ encoder: any MTLRenderCommandEncoder, _ pipelines: GPUContext.Pipelines) {
         encoder.setRenderPipelineState(pipelines.inkBatched)
         for page in pages {
-            guard let buffers = page.buffers, !buffers.ink.isEmpty else { continue }
+            let ranges = page.inkRanges
+            guard let buffers = page.buffers, !ranges.isEmpty else { continue }
             encoder.setScissorRect(page.scissor)
-            drawStrips(buffers, range: buffers.ink, transform: page.transform, encoder)
+            drawStrips(buffers, ranges: ranges, transform: page.transform, encoder)
         }
     }
 
-    /// One indexed strip draw over `range` of the page's index buffer (pipeline already set).
+    /// One indexed strip draw per range of the page's index buffer (pipeline already set).
     private static func drawStrips(
         _ buffers: PageBuffers,
-        range: Range<Int>,
+        ranges: [Range<Int>],
         transform: PageTransform,
         _ encoder: any MTLRenderCommandEncoder
     ) {
-        guard !range.isEmpty, let vertices = buffers.vertices, let strokeIndices = buffers.strokeIndices,
+        guard ranges.contains(where: { !$0.isEmpty }), let vertices = buffers.vertices, let strokeIndices = buffers.strokeIndices,
               let indices = buffers.indices, let styles = buffers.styles else { return }
         var transform = transform
         encoder.setVertexBuffer(vertices, offset: 0, index: 0)
@@ -168,12 +195,14 @@ enum SceneEncoder {
         encoder.setVertexBytes(&transform, length: MemoryLayout<PageTransform>.stride, index: 2)
         encoder.setFragmentBuffer(styles, offset: 0, index: 0)
         encoder.setFragmentBytes(&transform, length: MemoryLayout<PageTransform>.stride, index: 1)
-        encoder.drawIndexedPrimitives(
-            type: .triangleStrip,
-            indexCount: range.count,
-            indexType: .uint32,
-            indexBuffer: indices,
-            indexBufferOffset: range.lowerBound * MemoryLayout<UInt32>.stride
-        )
+        for range in ranges where !range.isEmpty {
+            encoder.drawIndexedPrimitives(
+                type: .triangleStrip,
+                indexCount: range.count,
+                indexType: .uint32,
+                indexBuffer: indices,
+                indexBufferOffset: range.lowerBound * MemoryLayout<UInt32>.stride
+            )
+        }
     }
 }

@@ -34,6 +34,8 @@ final class GPUContext: Sendable {
         let background: any MTLRenderPipelineState
         /// Committed-content texture → frame.
         let composite: any MTLRenderPipelineState
+        /// Tile / thumbnail region → frame (bilinear).
+        let tile: any MTLRenderPipelineState
     }
 
     enum Failure: Error {
@@ -115,5 +117,6 @@ extension GPUContext.Pipelines {
         resolveScreen = try make("highlight.screen", "fullscreen_vertex", "highlight_screen_fragment", .screen)
         background = try make("background", "background_vertex", "background_fragment", .none)
         composite = try make("composite", "fullscreen_vertex", "composite_fragment", .none)
+        tile = try make("tile", "tile_vertex", "tile_fragment", .none)
     }
 }

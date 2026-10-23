@@ -75,6 +75,14 @@ struct StrokeStyle: Equatable {
     }
 }
 
+/// A tile region in the frame: destination in clip space, source in texture coordinates.
+struct TileQuad: Equatable {
+    /// Clip-space `x0, y0, x1, y1`.
+    var dst: SIMD4<Float>
+    /// Texture `u0, v0, u1, v1`.
+    var uv: SIMD4<Float>
+}
+
 /// Procedural page template parameters.
 struct BackgroundUniforms: Equatable {
     var paper: SIMD4<Float>

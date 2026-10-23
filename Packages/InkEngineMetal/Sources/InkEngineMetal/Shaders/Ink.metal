@@ -199,6 +199,35 @@ fragment float4 composite_fragment(FullscreenOut in [[stage_in]],
     return composite.read(uint2(in.position.xy));
 }
 
+// MARK: - Tiles
+
+// A tile (or thumbnail) region drawn into the frame: destination rect in clip space and the matching
+// texture rect (TileQuad in ShaderTypes.swift).
+struct TileQuad {
+    float4 dst;        // clip x0, y0, x1, y1
+    float4 uv;         // u0, v0, u1, v1
+};
+
+struct TileOut {
+    float4 position [[position]];
+    float2 uv;
+};
+
+vertex TileOut tile_vertex(uint vid [[vertex_id]], constant TileQuad &q [[buffer(0)]]) {
+    float2 corner = float2(vid & 1, vid >> 1);
+    TileOut o;
+    o.position = float4(mix(q.dst.xy, q.dst.zw, corner), 0, 1);
+    o.uv = mix(q.uv.xy, q.uv.zw, corner);
+    return o;
+}
+
+// Bilinear: exact at 1:1 (pixel centers land on texel centers), smooth when a bucket is scaled during
+// a pinch or while a fallback shows.
+fragment float4 tile_fragment(TileOut in [[stage_in]], texture2d<float> tile [[texture(0)]]) {
+    constexpr sampler s(filter::linear, address::clamp_to_edge);
+    return tile.sample(s, in.uv);
+}
+
 // Multiply resolve (light paper): dst × mix(1, color, coverage). Blend: src × dst.
 fragment float4 highlight_multiply_fragment(FullscreenOut in [[stage_in]],
                                             texture2d<float, access::read> coverage [[texture(0)]]) {

@@ -16,8 +16,8 @@ struct Harness {
     let frames = RenderFixtures.stackedPages(3)
     var snapshots: [PageSnapshot]
 
-    init() throws {
-        engine = try #require(MetalInkEngine(palette: FixturePalette()))
+    init(contentMode: CommittedContentMode = .tiles) throws {
+        engine = try #require(MetalInkEngine(palette: FixturePalette(), contentMode: contentMode))
         snapshots = frames.map { PageSnapshot(page: Page(id: $0.id, template: .lined(spacing: 24)), size: RenderFixtures.pageSize) }
         snapshots[1] = snapshots[1].appending([
             RenderFixtures.line(1, from: CGPoint(x: 50, y: 50), to: CGPoint(x: 300, y: 50)),
@@ -207,9 +207,17 @@ struct InputTests {
         #expect(h.engine.pending[h.page2]?.count == 1)
         #expect(h.engine.live == nil)
 
-        // The document echoes it: the build re-uses the geometry seeded at commit and drops the pending copy.
+        // The document echoes it: the build re-uses the geometry seeded at commit. The pending copy stays
+        // on top until everything shown of the page (tiles re-rendered with the build) includes it.
         h.engine.apply(h.snapshots[1].page.addEdit([stroke]), to: h.page2)
         await h.engine.waitForBuilds()
+        for _ in 0 ..< 5000 where h.engine.pending[h.page2]?.isEmpty == false {
+            #expect(!h.engine.content.isSettled(page: h.page2) || h.engine.pending[h.page2]?.count == 1)
+            h.engine.drawFrame()
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        #expect(h.engine.content.isSettled(page: h.page2))
+        try await h.engine.settle()
         #expect(h.engine.pending[h.page2]?.isEmpty != false)
         #expect(h.engine.tessellationCount == 3)
     }
@@ -243,7 +251,7 @@ struct InputTests {
 @MainActor
 struct FrameTests {
     @Test func liveFramesReuseTheCompositeUntilContentChanges() async throws {
-        let h = try Harness()
+        let h = try Harness(contentMode: .viewportComposite)
         await h.engine.waitForBuilds()
         let frames = h.engine.frameCount
         h.engine.drawFrame()
@@ -267,6 +275,21 @@ struct FrameTests {
         h.engine.drawFrame()
         h.engine.drawFrame()
         #expect(h.engine.content.renderCount == renders + 1)
+    }
+
+    @Test func liveFramesNeverRenderTiles() async throws {
+        let h = try Harness()
+        try await h.engine.settle()
+        let tiles = try #require(h.engine.tiles)
+        let renders = tiles.renderCount
+        let plans = tiles.stats.plans
+        h.engine.setTool(ToolConfiguration(tool: .pen(.fountain), color: .primary, width: 3))
+        h.draw((0 ..< 30).map { CGPoint(x: 100 + CGFloat($0) * 8, y: 300) })
+        h.engine.setTool(ToolConfiguration(tool: .pen(.highlighter), color: .semantic(.accent), width: 14))
+        h.draw((0 ..< 10).map { CGPoint(x: 100 + CGFloat($0) * 8, y: 400) })
+        // Ink frames re-use the plan: no tile renders, no re-planning.
+        #expect(tiles.renderCount == renders)
+        #expect(tiles.stats.plans == plans)
     }
 
     @Test func displayLinkRunsOnlyWhileActive() async throws {
