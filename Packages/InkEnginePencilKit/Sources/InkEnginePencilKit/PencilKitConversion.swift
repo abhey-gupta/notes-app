@@ -45,16 +45,30 @@ public enum PencilKitConversion {
 
     // MARK: Width
 
-    /// The tool width (pt) that maps to PencilKit's default width for the pen's ink: the middle of the
-    /// toolbar's presets (`Tools.PenSettings.widths` 1.5/2.5/**4**/6/8, `HighlighterSettings.widths`
-    /// 10/**16**/24).
+    /// The toolbar width (pt) that maps to PencilKit's default width for the pen's ink.
+    ///
+    /// Chosen so the default preset (`Tools.PenSettings.widths[1]`, 2.5) is a fine pen (≈ 1.6–1.8
+    /// PencilKit width, like Goodnotes/Notability defaults) and the smallest sits at or near the ink's
+    /// minimum. PencilKit widths on iOS 27 for presets 1.5 / **2.5** / 4 / 6 / 8 (defaults and ranges:
+    /// pen 2.68 in 0.88–25.7, fountain pen 4 in 1.5–14, watercolor 40 in 10–80, marker 20.6 in 7.5–60):
+    /// - ballpoint (`.pen`, reference 4.2): 0.96 / **1.6** / 2.55 / 3.83 / 5.1
+    /// - fountain (`.fountainPen`, 5.5): 1.5 (clamped from 1.09) / **1.82** / 2.91 / 4.36 / 5.82
+    /// - brush (`.watercolor`, 5): 12 / **20** / 32 / 48 / 64
+    /// - highlighter (`.marker`, 16; presets 10 / **16** / 24): 12.9 / **20.6** / 30.9
+    ///
+    /// Strokes keep the point sizes PencilKit drew (format v2), so changing these only affects new ink.
     public static func referenceWidth(for kind: PenKind) -> Float {
-        kind == .highlighter ? 16 : 4
+        switch kind {
+        case .ballpoint: 4.2
+        case .fountain: 5.5
+        case .brush: 5
+        case .highlighter: 16
+        }
     }
 
     /// PencilKit tool width for a toolbar width: the ink's `defaultWidth` scaled by
-    /// `width / referenceWidth(for:)`, clamped to the ink's `validWidthRange`. So the middle preset
-    /// draws like PencilKit's own default (Notes' pen) and the others step finer/bolder from it.
+    /// `width / referenceWidth(for:)`, clamped to the ink's `validWidthRange` (table at
+    /// ``referenceWidth(for:)``).
     public static func pencilKitWidth(for kind: PenKind, width: Float) -> CGFloat {
         let type = inkType(for: kind)
         let range = type.validWidthRange

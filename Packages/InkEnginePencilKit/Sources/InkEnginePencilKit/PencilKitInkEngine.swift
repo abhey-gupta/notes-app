@@ -56,6 +56,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     private var activation = 0
 
     var pageViews: [PageID: PageLayerView] = [:]
+    /// Canvas geometry held while a zoom gesture runs (see ``layoutCanvas()``).
+    var zoom = CanvasZoomState()
     private var isSettingDrawing = false
     private var isUsingTool = false
     private var needsCanvasRebuild = false
@@ -345,6 +347,7 @@ extension PencilKitInkEngine: PKCanvasViewDelegate {
     public func canvasViewDidFinishRendering(_: PKCanvasView) {
         canvasDidRender()
         canvasDidRenderSelection()
+        zoomDidSettle()
     }
 }
 

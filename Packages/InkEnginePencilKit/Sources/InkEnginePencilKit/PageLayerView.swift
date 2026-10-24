@@ -51,6 +51,17 @@ final class PageLayerView: UIView {
         didSet { updateInkVisibility() }
     }
 
+    /// A page-space rect the raster leaves out (the canvas covers it), e.g. mid-zoom.
+    var inkHole: CGRect? {
+        didSet {
+            if inkHole != oldValue {
+                updateInkHole()
+            }
+        }
+    }
+
+    private var holeMask: CAShapeLayer?
+
     var hasPlaceholder: Bool {
         placeholder != nil
     }
@@ -95,6 +106,7 @@ final class PageLayerView: UIView {
         if let placeholder {
             placeholder.view.frame = Self.scaled(placeholder.pageRect, by: zoom)
         }
+        updateInkHole()
         CATransaction.commit()
     }
 
@@ -139,6 +151,28 @@ final class PageLayerView: UIView {
         placeholder.view.removeFromSuperview()
         self.placeholder = nil
         updateInkVisibility()
+    }
+
+    private func updateInkHole() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        guard let inkHole else {
+            inkLayer.mask = nil
+            holeMask = nil
+            return
+        }
+        let mask = holeMask ?? CAShapeLayer()
+        mask.fillRule = .evenOdd
+        mask.frame = inkLayer.bounds
+        let path = CGMutablePath()
+        path.addRect(inkLayer.bounds)
+        path.addRect(Self.scaled(inkHole, by: zoom))
+        mask.path = path
+        if holeMask == nil {
+            holeMask = mask
+            inkLayer.mask = mask
+        }
     }
 
     private func updateInkVisibility() {

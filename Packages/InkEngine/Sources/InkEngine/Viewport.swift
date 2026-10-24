@@ -29,13 +29,24 @@ public struct Viewport: Hashable, Sendable {
     public var size: CGSize
     /// Visible pages, top to bottom.
     public var pages: [VisiblePage]
+    /// A zoom gesture (pinch, or its bounce back into range) is in progress: `zoomScale` changes every
+    /// frame until a viewport with this `false` settles it. Engines may defer expensive re-rendering
+    /// (the PencilKit canvas scales its last rendering instead, ARCHITECTURE.md §3).
+    public var isZooming: Bool
 
     /// Creates a viewport.
-    public init(contentOffset: CGPoint = .zero, zoomScale: CGFloat = 1, size: CGSize = .zero, pages: [VisiblePage] = []) {
+    public init(
+        contentOffset: CGPoint = .zero,
+        zoomScale: CGFloat = 1,
+        size: CGSize = .zero,
+        pages: [VisiblePage] = [],
+        isZooming: Bool = false
+    ) {
         self.contentOffset = contentOffset
         self.zoomScale = zoomScale
         self.size = size
         self.pages = pages
+        self.isZooming = isZooming
     }
 
     /// Empty viewport.

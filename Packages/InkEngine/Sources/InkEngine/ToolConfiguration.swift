@@ -29,8 +29,8 @@ public struct ToolConfiguration: Hashable, Sendable {
         self.allowsFingerDrawing = allowsFingerDrawing
     }
 
-    /// Primary fountain pen, 2 pt.
-    public static let `default` = ToolConfiguration(tool: .pen(.fountain))
+    /// Primary ballpoint, 2 pt.
+    public static let `default` = ToolConfiguration(tool: .pen(.ballpoint))
 
     /// The pen kind, if the tool is a pen.
     public var penKind: PenKind? {

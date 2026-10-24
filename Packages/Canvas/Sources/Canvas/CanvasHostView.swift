@@ -84,6 +84,8 @@
         private var lastBoundsSize: CGSize = .zero
         private var fitZoom: CGFloat = 1
         private var isUpdatingInsets = false
+        /// Zoom gesture tracking (`CanvasHostView+Zoom.swift`).
+        var isPinching = false, engineIsZooming = false
         private let dismissGestures = DismissGestureClaim()
 
         /// Creates a host around `engine`.
@@ -134,6 +136,7 @@
             }
             scrollView.addGestureRecognizer(touchObserver)
             scrollView.pinchGestureRecognizer?.addTarget(scrollView, action: #selector(CanvasScrollView.applyPinch(_:)))
+            scrollView.pinchGestureRecognizer?.addTarget(self, action: #selector(pinchChanged(_:)))
             updateNavigationGestures()
         }
 
@@ -291,7 +294,8 @@
                 contentOffset: bounds.origin,
                 zoomScale: z,
                 size: bounds.size,
-                pages: visible.map { VisiblePage(id: layout.pageIDs[$0], frame: layout.frames[$0]) }
+                pages: visible.map { VisiblePage(id: layout.pageIDs[$0], frame: layout.frames[$0]) },
+                isZooming: isZooming
             )
         }
 
@@ -301,7 +305,7 @@
 
         /// One per scroll/zoom frame: pin the engine view, move the add-page button, tell the engine, then
         /// update the indicator and (if the visible pages changed) the page window.
-        private func viewportDidChange() {
+        func viewportDidChange() {
             let interval = Signpost.canvasFrame.begin()
             defer { interval.end() }
             let bounds = scrollView.bounds
@@ -313,6 +317,7 @@
             placeAddPageButton(zoom: z)
 
             let viewport = makeViewport()
+            engineIsZooming = viewport.isZooming
             engine.setViewport(viewport)
             updateOverlay(viewport)
 
@@ -363,6 +368,10 @@
 
         public func scrollViewWillBeginZooming(_: UIScrollView, with _: UIView?) {
             delegate?.canvasHostWillBeginNavigating(self)
+        }
+
+        public func scrollViewDidEndZooming(_: UIScrollView, with _: UIView?, atScale _: CGFloat) {
+            settleZoom() // after a bounce back into range
         }
     }
 
