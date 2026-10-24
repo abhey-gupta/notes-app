@@ -22,10 +22,15 @@ struct RenderJob: Sendable {
 
     /// Ink only, transparent, page space at `scale` px/pt.
     func ink(scale: CGFloat) -> CGImage? {
+        ink(in: CGRect(origin: .zero, size: page.size), scale: scale)
+    }
+
+    /// Ink only, transparent, `rect` (page space) at `scale` px/pt.
+    func ink(in rect: CGRect, scale: CGFloat) -> CGImage? {
         let drawing = drawing()
         var image: CGImage?
         Self.traits.performAsCurrent {
-            image = drawing.image(from: CGRect(origin: .zero, size: page.size), scale: scale).cgImage
+            image = drawing.image(from: rect, scale: scale).cgImage
         }
         return image
     }

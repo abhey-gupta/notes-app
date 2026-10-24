@@ -15,6 +15,9 @@ public enum Symbol: String, CaseIterable, Sendable {
     case settings = "gearshape"
     case add = "plus"
     case focus = "viewfinder"
+    case palette = "paintpalette"
+    case duplicate = "plus.square.on.square"
+    case delete = "trash"
 
     public var name: String {
         rawValue

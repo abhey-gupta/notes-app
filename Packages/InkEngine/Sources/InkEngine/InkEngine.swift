@@ -28,6 +28,12 @@ public protocol InkEngine: AnyObject {
     func apply(_ edit: PageEdit, to page: PageID)
     /// Redraws `rect` (page space) of `page`.
     func invalidate(_ rect: CGRect, in page: PageID)
+    /// Lasso drag preview: lifts the strokes and draws them transformed; `nil` puts them back (call it
+    /// after the baked edit has been applied, so they reappear where they landed). Called every drag frame.
+    func setSelectionPreview(_ preview: SelectionPreview?)
+    /// A selection was made: get its drag preview ready (off main) so a drag starts without a stall.
+    /// An empty set drops it.
+    func prepareSelectionPreview(_ strokes: Set<StrokeID>, on page: PageID)
     /// Renders a page (background + ink) at `size` points × `scale` for thumbnails and raster export.
     /// `nil` only if the size is degenerate or the bitmap can't be allocated.
     func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage?
