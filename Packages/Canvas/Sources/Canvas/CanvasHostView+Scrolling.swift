@@ -10,14 +10,14 @@
 
         public func scrollViewDidScroll(_: UIScrollView) {
             if isPinchActive {
-                pinHorizontalOffset()
+                pinOffset()
             }
             viewportDidChange()
         }
 
         public func scrollViewDidZoom(_ scrollView: UIScrollView) {
             updateInsets()
-            pinHorizontalOffset()
+            pinOffset()
             state.zoomScale = scrollView.zoomScale
             viewportDidChange()
         }

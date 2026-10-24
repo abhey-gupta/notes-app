@@ -27,18 +27,25 @@
             settleZoom()
         }
 
-        /// Keeps a zoom horizontally symmetric: no horizontal rubber-banding while pinching, so nothing
-        /// snaps sideways (and the canvas re-renders mid-snap) on release. A page narrower than the view
-        /// stays centered; a wider one stays within its edges.
-        func pinHorizontalOffset() {
-            let x = canvasScrollView.contentOffset.x
+        /// Keeps the offset within the content's edges on every frame of a pinch, so the two-finger pan never
+        /// rubber-bands past the top or bottom (nor sideways; a narrow page stays centered). Traced on a
+        /// real iPad: when a zoom ends with the offset out of range, `UIScrollView` animates it back with a
+        /// `UIView` animation that our scroll callbacks run inside, so the engine view and the canvas inherited
+        /// the animation and glided while the paper (laid out with actions disabled) jumped: the ink drifted
+        /// off the page for ~0.2 s and snapped back. Nothing reports that animation (`isDecelerating`,
+        /// `isZoomBouncing` stay false), so it is prevented rather than waited out.
+        func pinOffset() {
+            let offset = canvasScrollView.contentOffset
             let inset = canvasScrollView.contentInset
-            let pinned = PageLayout.pinnedOffsetX(
-                x, contentWidth: layout.contentSize.width * canvasScrollView.zoomScale,
-                viewWidth: bounds.width, leftInset: inset.left, rightInset: inset.right
+            let z = canvasScrollView.zoomScale
+            let pinned = PageLayout.pinnedOffset(
+                offset,
+                contentSize: CGSize(width: layout.contentSize.width * z, height: layout.contentSize.height * z),
+                viewSize: bounds.size,
+                insets: PageLayout.Insets(top: inset.top, left: inset.left, bottom: inset.bottom, right: inset.right)
             )
-            if pinned != x {
-                canvasScrollView.contentOffset.x = pinned
+            if pinned != offset {
+                canvasScrollView.contentOffset = pinned
             }
         }
 

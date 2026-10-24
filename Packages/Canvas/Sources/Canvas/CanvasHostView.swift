@@ -305,21 +305,27 @@
 
         /// One per scroll/zoom frame: pin the engine view, move the add-page button, tell the engine, then
         /// update the indicator and (if the visible pages changed) the page window.
+        ///
+        /// Without animation: `UIScrollView` runs some of its callbacks inside `UIView` animation blocks
+        /// (the offset correction at the end of a zoom), and views placed from here must land where the
+        /// viewport says this frame, not glide there.
         func viewportDidChange() {
             let interval = Signpost.canvasFrame.begin()
             defer { interval.end() }
             let bounds = scrollView.bounds
             let z = scrollView.zoomScale
             guard bounds.width > 0, bounds.height > 0, z > 0 else { return }
-            if engine.view.frame != bounds {
-                engine.view.frame = bounds
-            }
-            placeAddPageButton(zoom: z)
+            UIView.performWithoutAnimation {
+                if engine.view.frame != bounds {
+                    engine.view.frame = bounds
+                }
+                placeAddPageButton(zoom: z)
 
-            let viewport = makeViewport()
-            engineIsZooming = viewport.isZooming
-            engine.setViewport(viewport)
-            updateOverlay(viewport)
+                let viewport = makeViewport()
+                engineIsZooming = viewport.isZooming
+                engine.setViewport(viewport)
+                updateOverlay(viewport)
+            }
 
             let content = contentRect(bounds, zoom: z)
             if let current = layout.nearestPage(toY: content.midY), current != state.currentPage {
@@ -332,8 +338,12 @@
                 delegate?.canvasHost(self, didChange: next)
             }
         }
+    }
 
-        private func placeAddPageButton(zoom z: CGFloat) {
+    // MARK: Add page
+
+    fileprivate extension CanvasHostView {
+        func placeAddPageButton(zoom z: CGFloat) {
             let footer = layout.footerFrame
             let size = addPageButton.intrinsicContentSize
             let center = CGPoint(x: footer.midX * z, y: footer.minY * z + 28 + size.height / 2)
@@ -342,7 +352,7 @@
             addPageButton.isHidden = !showsAddPage || layout.pageCount == 0
         }
 
-        private func requestNewPage() {
+        func requestNewPage() {
             delegate?.canvasHostDidRequestNewPage(self)
         }
     }

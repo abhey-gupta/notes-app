@@ -138,14 +138,44 @@ public struct PageLayout: Hashable, Sendable {
 }
 
 extension PageLayout {
-    /// Horizontal scroll offset clamped to the content's edges (insets included): with content narrower
-    /// than the view (and insets that center it) the only valid offset is the centered one. Applied while
-    /// zooming so a pinch never drifts sideways and snaps back on release.
-    static func pinnedOffsetX(
-        _ x: CGFloat, contentWidth: CGFloat, viewWidth: CGFloat, leftInset: CGFloat, rightInset: CGFloat
+    /// Scroll view content insets (`UIEdgeInsets` without UIKit, so this tests on macOS).
+    struct Insets: Hashable {
+        var top: CGFloat, left: CGFloat, bottom: CGFloat, right: CGFloat
+    }
+
+    /// A scroll offset along one axis clamped to the content's edges (insets included): the range
+    /// `UIScrollView` rubber-bands back into. With content shorter than the view (and insets that center it)
+    /// the only valid offset is the centered one. Applied on every frame of a pinch (both axes), so the
+    /// two-finger pan never overscrolls: UIKit would animate the overscroll back at the end of the zoom, and
+    /// that animation is what made the ink drift against the paper on release (ARCHITECTURE.md §3, Zoom).
+    static func pinnedOffset(
+        _ offset: CGFloat, contentLength: CGFloat, viewLength: CGFloat, leadingInset: CGFloat, trailingInset: CGFloat
     ) -> CGFloat {
-        let minX = -leftInset
-        let maxX = max(contentWidth + rightInset - viewWidth, minX)
-        return min(max(x, minX), maxX)
+        let minimum = -leadingInset
+        let maximum = max(contentLength + trailingInset - viewLength, minimum)
+        return min(max(offset, minimum), maximum)
+    }
+
+    /// Both axes of a scroll offset clamped to the content's edges
+    /// (``pinnedOffset(_:contentLength:viewLength:leadingInset:trailingInset:)``).
+    static func pinnedOffset(
+        _ offset: CGPoint, contentSize: CGSize, viewSize: CGSize, insets: Insets
+    ) -> CGPoint {
+        CGPoint(
+            x: pinnedOffset(
+                offset.x,
+                contentLength: contentSize.width,
+                viewLength: viewSize.width,
+                leadingInset: insets.left,
+                trailingInset: insets.right
+            ),
+            y: pinnedOffset(
+                offset.y,
+                contentLength: contentSize.height,
+                viewLength: viewSize.height,
+                leadingInset: insets.top,
+                trailingInset: insets.bottom
+            )
+        )
     }
 }

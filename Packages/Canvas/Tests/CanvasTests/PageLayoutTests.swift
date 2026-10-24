@@ -167,17 +167,50 @@ struct PageWindowTests {
     @Test func narrowContentStaysCentered() {
         // 1000 pt view, 600 pt page: insets of 200 center it; any offset maps to -200.
         for x: CGFloat in [-400, -200, -150, 0, 300] {
-            #expect(PageLayout.pinnedOffsetX(x, contentWidth: 600, viewWidth: 1000, leftInset: 200, rightInset: 200) == -200)
+            #expect(PageLayout.pinnedOffset(x, contentLength: 600, viewLength: 1000, leadingInset: 200, trailingInset: 200) == -200)
         }
     }
 
     @Test func wideContentStaysWithinEdges() {
         /// 1000 pt view, 1600 pt page, 16 pt margins: offsets -16...616.
         func pin(_ x: CGFloat) -> CGFloat {
-            PageLayout.pinnedOffsetX(x, contentWidth: 1600, viewWidth: 1000, leftInset: 16, rightInset: 16)
+            PageLayout.pinnedOffset(x, contentLength: 1600, viewLength: 1000, leadingInset: 16, trailingInset: 16)
         }
         #expect(pin(-80) == -16)
         #expect(pin(300) == 300)
         #expect(pin(700) == 616)
+    }
+
+    /// The real-iPad trace: a 970×1389 view, top inset 80, bottom 116, page 842 pt zoomed 1.34 plus a 96 pt
+    /// footer (1257 pt): the two-finger pan had pushed the offset to y = 57 (range -80...-16) and UIKit
+    /// animated it back at the end of the zoom, dragging the ink with it.
+    @Test func verticalOverscrollDuringAPinchIsPinned() {
+        let content = CGSize(width: 595 * 1.34, height: (842 + 96) * 1.34)
+        let view = CGSize(width: 970, height: 1389)
+        let insets = PageLayout.Insets(top: 80, left: 86, bottom: 116, right: 86)
+        let pinned = PageLayout.pinnedOffset(CGPoint(x: -86, y: 57.45), contentSize: content, viewSize: view, insets: insets)
+        #expect(pinned.x == -86)
+        #expect(abs(pinned.y - (content.height + 116 - 1389)) < 1e-9)
+        // Past the top: back to the top inset. In range: untouched.
+        #expect(PageLayout.pinnedOffset(CGPoint(x: -86, y: -304), contentSize: content, viewSize: view, insets: insets).y == -80)
+        #expect(PageLayout.pinnedOffset(CGPoint(x: -86, y: -50), contentSize: content, viewSize: view, insets: insets) == CGPoint(
+            x: -86,
+            y: -50
+        ))
+        // A page shorter than the view (zoomed out): only the top-inset offset is valid.
+        let short = CGSize(width: 300, height: 475)
+        #expect(PageLayout.pinnedOffset(
+            CGPoint(x: -335, y: -304),
+            contentSize: short,
+            viewSize: view,
+            insets: PageLayout.Insets(top: 80, left: 335, bottom: 116, right: 335)
+        )
+        .y == -80)
+        #expect(PageLayout.pinnedOffset(
+            CGPoint(x: -335, y: 10),
+            contentSize: short,
+            viewSize: view,
+            insets: PageLayout.Insets(top: 80, left: 335, bottom: 116, right: 335)
+        ).y == -80)
     }
 }
