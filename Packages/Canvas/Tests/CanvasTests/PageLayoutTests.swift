@@ -161,4 +161,23 @@ struct PageWindowTests {
         #expect(w.loadOrder == [48, 49, 47, 46, 45])
         #expect(Set(w.loadOrder) == Set(w.resident))
     }
+
+    // MARK: Zoom pinning
+
+    @Test func narrowContentStaysCentered() {
+        // 1000 pt view, 600 pt page: insets of 200 center it; any offset maps to -200.
+        for x: CGFloat in [-400, -200, -150, 0, 300] {
+            #expect(PageLayout.pinnedOffsetX(x, contentWidth: 600, viewWidth: 1000, leftInset: 200, rightInset: 200) == -200)
+        }
+    }
+
+    @Test func wideContentStaysWithinEdges() {
+        /// 1000 pt view, 1600 pt page, 16 pt margins: offsets -16...616.
+        func pin(_ x: CGFloat) -> CGFloat {
+            PageLayout.pinnedOffsetX(x, contentWidth: 1600, viewWidth: 1000, leftInset: 16, rightInset: 16)
+        }
+        #expect(pin(-80) == -16)
+        #expect(pin(300) == 300)
+        #expect(pin(700) == 616)
+    }
 }

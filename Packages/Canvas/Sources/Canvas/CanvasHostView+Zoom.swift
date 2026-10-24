@@ -17,6 +17,21 @@
             settleZoom()
         }
 
+        /// Keeps a zoom horizontally symmetric: no horizontal rubber-banding while pinching, so nothing
+        /// snaps sideways (and the canvas re-renders mid-snap) on release. A page narrower than the view
+        /// stays centered; a wider one stays within its edges.
+        func pinHorizontalOffset() {
+            let x = canvasScrollView.contentOffset.x
+            let inset = canvasScrollView.contentInset
+            let pinned = PageLayout.pinnedOffsetX(
+                x, contentWidth: layout.contentSize.width * canvasScrollView.zoomScale,
+                viewWidth: bounds.width, leftInset: inset.left, rightInset: inset.right
+            )
+            if pinned != x {
+                canvasScrollView.contentOffset.x = pinned
+            }
+        }
+
         /// Once a zoom is over, sends the engine a settled viewport (it re-renders at the final zoom). Checked
         /// again on the next turn in case UIKit flips `isZoomBouncing` after its callbacks.
         func settleZoom() {

@@ -136,3 +136,16 @@ public struct PageLayout: Hashable, Sendable {
         return low
     }
 }
+
+extension PageLayout {
+    /// Horizontal scroll offset clamped to the content's edges (insets included): with content narrower
+    /// than the view (and insets that center it) the only valid offset is the centered one. Applied while
+    /// zooming so a pinch never drifts sideways and snaps back on release.
+    static func pinnedOffsetX(
+        _ x: CGFloat, contentWidth: CGFloat, viewWidth: CGFloat, leftInset: CGFloat, rightInset: CGFloat
+    ) -> CGFloat {
+        let minX = -leftInset
+        let maxX = max(contentWidth + rightInset - viewWidth, minX)
+        return min(max(x, minX), maxX)
+    }
+}
