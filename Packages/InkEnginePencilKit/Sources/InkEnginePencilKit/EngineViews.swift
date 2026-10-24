@@ -1,18 +1,10 @@
 import PencilKit
 import UIKit
 
-/// Engine root view. Reports pen-down hit tests so the canvas can move to the touched page first.
+/// Engine root view: content-sized, inside the host's zoom view (ARCHITECTURE.md §3, Zoom). Draws
+/// nothing itself, so its size costs no memory.
 @MainActor
-final class HostView: UIView {
-    var onHitTest: ((CGPoint) -> Void)?
-
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        if event?.type == .touches, self.point(inside: point, with: event) {
-            onHitTest?(point)
-        }
-        return super.hitTest(point, with: event)
-    }
-}
+final class HostView: UIView {}
 
 /// `PKCanvasView` with PencilKit's undo disabled (undo belongs to `Tools`) and a Pencil sighting hook.
 @MainActor

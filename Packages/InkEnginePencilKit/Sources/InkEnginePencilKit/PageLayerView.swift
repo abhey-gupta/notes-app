@@ -2,12 +2,12 @@ import InkModel
 import PencilKit
 import UIKit
 
-/// One visible page: paper color, vector template marks, and (unless the `PKCanvasView` is drawing this
-/// page) a raster of its ink.
+/// One visible page in content space: paper color, vector template marks, and a raster of its ink
+/// (outside ``inkHole``, the part a `PKCanvasView` has drawn).
 ///
 /// The raster is only ever replaced, never cleared ahead of its successor, so ink never blinks out while
-/// a new raster renders. A page the canvas just left shows a snapshot of the canvas (``setPlaceholder``)
-/// until its raster arrives.
+/// a new raster renders. The view sits in the host's zoom view, so zoom is the ancestor's transform; the
+/// template marks re-rasterize at ``layout(frame:template:markScale:colors:)``'s `markScale` to stay crisp.
 @MainActor
 final class PageLayerView: UIView {
     private let linesLayer = CAShapeLayer()
@@ -15,14 +15,10 @@ final class PageLayerView: UIView {
     let inkLayer = CALayer()
 
     private var templateKey: TemplateKey?
-    private var zoom: CGFloat = 1
-    /// Snapshot of the canvas shown until the raster for ``requestedKey`` arrives, with its page-space rect.
-    private var placeholder: (view: UIView, pageRect: CGRect)?
 
     private struct TemplateKey: Equatable {
         var template: PageTemplate
         var size: CGSize
-        var zoom: CGFloat
     }
 
     /// Paper fill and template mark colors.
@@ -46,12 +42,7 @@ final class PageLayerView: UIView {
         var pendingCount: Int
     }
 
-    /// Whether the raster may show (false while the canvas draws this page).
-    var showsInk = true {
-        didSet { updateInkVisibility() }
-    }
-
-    /// A page-space rect the raster leaves out (the canvas covers it), e.g. mid-zoom.
+    /// A page-space rect the raster leaves out (the canvas has drawn it).
     var inkHole: CGRect? {
         didSet {
             if inkHole != oldValue {
@@ -61,10 +52,6 @@ final class PageLayerView: UIView {
     }
 
     private var holeMask: CAShapeLayer?
-
-    var hasPlaceholder: Bool {
-        placeholder != nil
-    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -83,41 +70,40 @@ final class PageLayerView: UIView {
         fatalError("init(coder:) not supported")
     }
 
-    /// Lays out at `frame` (view space) for a page of `size` at `zoom`.
-    func layout(frame: CGRect, template: PageTemplate, size: CGSize, zoom: CGFloat, colors: Colors) {
+    /// Lays out at `frame` (content space, the page's size) with `template`; `markScale` (px per pt,
+    /// `nil` to keep the current one) is the template layers' `contentsScale`.
+    func layout(frame: CGRect, template: PageTemplate, markScale: CGFloat?, colors: Colors) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.frame = frame
-        self.zoom = zoom
         layer.backgroundColor = colors.paper
         linesLayer.strokeColor = colors.line
         dotsLayer.fillColor = colors.line
         linesLayer.frame = bounds
         dotsLayer.frame = bounds
         inkLayer.frame = bounds
-        let key = TemplateKey(template: template, size: size, zoom: zoom)
+        let key = TemplateKey(template: template, size: frame.size)
         if templateKey != key {
             templateKey = key
-            let paths = TemplatePaths(template, size: size)
-            var scale = CGAffineTransform(scaleX: zoom, y: zoom)
-            linesLayer.path = paths.lines.copy(using: &scale)
-            dotsLayer.path = paths.dots.copy(using: &scale)
+            let paths = TemplatePaths(template, size: frame.size)
+            linesLayer.path = paths.lines
+            dotsLayer.path = paths.dots
         }
-        if let placeholder {
-            placeholder.view.frame = Self.scaled(placeholder.pageRect, by: zoom)
+        if let markScale, linesLayer.contentsScale != markScale {
+            linesLayer.contentsScale = markScale
+            dotsLayer.contentsScale = markScale
         }
         updateInkHole()
         CATransaction.commit()
     }
 
-    /// Shows the raster for `key` (`nil` image: the page has no ink) and drops any placeholder.
+    /// Shows the raster for `key` (`nil` image: the page has no ink).
     func setInk(_ image: CGImage?, key: InkKey?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         inkLayer.contents = image
         shownKey = key
         CATransaction.commit()
-        removePlaceholder()
     }
 
     /// Shows an out-of-date raster of this page while the current one renders (better than no ink).
@@ -135,24 +121,6 @@ final class PageLayerView: UIView {
         shownKey = nil
     }
 
-    /// Covers `pageRect` (page space) with `view` (a snapshot of the canvas) and hides the raster until
-    /// ``setInk(_:key:)``.
-    func setPlaceholder(_ view: UIView, pageRect: CGRect) {
-        removePlaceholder()
-        view.isUserInteractionEnabled = false
-        view.frame = Self.scaled(pageRect, by: zoom)
-        addSubview(view)
-        placeholder = (view, pageRect)
-        updateInkVisibility()
-    }
-
-    func removePlaceholder() {
-        guard let placeholder else { return }
-        placeholder.view.removeFromSuperview()
-        self.placeholder = nil
-        updateInkVisibility()
-    }
-
     private func updateInkHole() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -167,24 +135,11 @@ final class PageLayerView: UIView {
         mask.frame = inkLayer.bounds
         let path = CGMutablePath()
         path.addRect(inkLayer.bounds)
-        path.addRect(Self.scaled(inkHole, by: zoom))
+        path.addRect(inkHole)
         mask.path = path
         if holeMask == nil {
             holeMask = mask
             inkLayer.mask = mask
         }
-    }
-
-    private func updateInkVisibility() {
-        let hidden = !showsInk || placeholder != nil
-        guard inkLayer.isHidden != hidden else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        inkLayer.isHidden = hidden
-        CATransaction.commit()
-    }
-
-    private static func scaled(_ rect: CGRect, by zoom: CGFloat) -> CGRect {
-        CGRect(x: rect.minX * zoom, y: rect.minY * zoom, width: rect.width * zoom, height: rect.height * zoom)
     }
 }

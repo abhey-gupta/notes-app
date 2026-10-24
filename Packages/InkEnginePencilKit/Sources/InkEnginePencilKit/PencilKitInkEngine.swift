@@ -6,18 +6,20 @@ import UIKit
 
 /// `InkEngine` backed by PencilKit: the shipping ink engine (spike #16, ARCHITECTURE.md §3).
 ///
-/// One `PKCanvasView` covers the *active* page (the one last touched, else the one nearest the
-/// viewport center), clipped to the visible rect and zoomed with the viewport. Other visible pages
-/// show a raster of their ink (`PKDrawing.image`, rendered off main, recent ones kept in an
-/// ``InkRasterCache`` that empties on memory warnings). Pens draw through PencilKit; eraser and lasso
-/// input goes through the shared ``InkEngine/InkInputView`` pipeline and is reported, never applied.
+/// The engine view is content-sized and sits inside the host's zoom view, so UIKit's one zoom transform
+/// moves paper and ink together. Every visible page has a ``PageLayerView`` (paper, template, a raster
+/// of its ink) and, from a small pool, a `PKCanvasView` covering its visible part (``PageCanvas``,
+/// ``CanvasPlacement``); the raster shows through where no canvas has drawn yet. Rasters are
+/// `PKDrawing.image`, rendered off main, recent ones kept in an ``InkRasterCache`` that empties on memory
+/// warnings. Pens draw through PencilKit; eraser and lasso input goes through the shared
+/// ``InkEngine/InkInputView`` pipeline and is reported, never applied.
 ///
-/// The canvas starts each page from the document snapshot. A finished PencilKit stroke is reported
-/// via `didCommit` and kept on the canvas as pending until the document echoes it back through
+/// A canvas starts its page from the document snapshot. A finished PencilKit stroke is reported via
+/// `didCommit` and kept on the canvas as pending until the document echoes it back through
 /// ``apply(_:to:)`` or ``setPages(_:)``; any other change rebuilds the canvas from the snapshot.
 /// PencilKit's own undo is disabled (undo goes through `Tools`).
 ///
-/// Ink colors are resolved by the ``InkEngine/InkPalette`` and the canvas is pinned to light
+/// Ink colors are resolved by the ``InkEngine/InkPalette`` and the canvases are pinned to light
 /// appearance, so PencilKit never applies its own dark-mode inversion.
 @MainActor
 public final class PencilKitInkEngine: NSObject, InkEngine {
@@ -27,41 +29,34 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     public weak var delegate: (any InkEngineDelegate)?
 
-    /// Longest side of an inactive page's ink raster (px). Bounds memory at high zoom (softer ink).
+    /// Longest side of a page's ink raster (px). Bounds memory at high zoom (softer ink).
     public var maximumRasterDimension: CGFloat = 4096
+    /// Canvases at once: the pages nearest the viewport center get one; others show their raster only.
+    /// Each canvas is at most viewport-sized (its Metal layer too).
+    public var maximumCanvases = 6
 
     let palette: any InkPalette
     let host = HostView()
     let pagesView = UIView()
-    let canvas = AdapterCanvasView()
+    /// The canvas pool: every `PKCanvasView` made so far, assigned to a page or free.
+    private(set) var canvases: [PageCanvas] = []
     let input = InkInputView()
-    /// Ink rasters of recently shown inactive pages.
+    /// Ink rasters of recently shown pages.
     let rasters = InkRasterCache()
-    /// Above the canvas: the live lasso path and lifted (lasso-dragged) strokes (`+Selection`).
+    /// Above the canvases: the live lasso path and lifted (lasso-dragged) strokes (`+Selection`).
     let selection = SelectionLayers()
 
     private(set) var viewport = Viewport.empty
     private(set) var snapshots: [PageID: PageSnapshot] = [:]
     private(set) var tool = ToolConfiguration.default
     private(set) var theme = PaperTheme.white
-    private(set) var activePage: PageID?
-    /// Stroke IDs parallel to `canvas.drawing.strokes`.
-    private(set) var canvasIDs: [StrokeID] = []
     /// Strokes reported via `didCommit` but not yet in the page snapshot, per page, in draw order.
     private(set) var pending: [PageID: [(id: StrokeID, pk: PKStroke)]] = [:]
     private(set) var hasSeenPencil = false
-    /// Whether the canvas has rendered the active page since it moved there; until then that page's
-    /// raster stays visible underneath, so the page never shows blank paper.
-    private(set) var canvasHasRendered = false
-    private var activation = 0
 
     var pageViews: [PageID: PageLayerView] = [:]
-    /// Canvas geometry held while a zoom gesture runs (see ``layoutCanvas()``).
-    var zoom = CanvasZoomState()
     private var isSettingDrawing = false
-    private var isUsingTool = false
-    private var needsCanvasRebuild = false
-    private var eraserProgress: (touch: TouchID, emitted: Int)?
+    var eraserProgress: (touch: TouchID, emitted: Int)?
     /// Full canvas rebuilds so far (tests check the commit echo path doesn't rebuild).
     private(set) var rebuildCount = 0
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "ink.pencilkit")
@@ -70,30 +65,11 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     public init(palette: any InkPalette) {
         self.palette = palette
         super.init()
-        host.clipsToBounds = true
         host.backgroundColor = .clear
-        host.onHitTest = { [weak self] point in self?.willReceiveTouch(at: point) }
         pagesView.isUserInteractionEnabled = false
         pagesView.frame = host.bounds
         pagesView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         host.addSubview(pagesView)
-
-        canvas.backgroundColor = .clear
-        canvas.isOpaque = false
-        canvas.overrideUserInterfaceStyle = .light
-        canvas.isScrollEnabled = false
-        canvas.bouncesZoom = false
-        canvas.contentInsetAdjustmentBehavior = .never
-        canvas.showsVerticalScrollIndicator = false
-        canvas.showsHorizontalScrollIndicator = false
-        // Zoom is pinned to the viewport's (``layoutCanvas()`` sets min = max = zoom), so the canvas has
-        // no pinch of its own and a pinch over it zooms the host scroll view (the whole page).
-        canvas.minimumZoomScale = 1
-        canvas.maximumZoomScale = 1
-        canvas.isHidden = true
-        canvas.delegate = self
-        canvas.onPencilTouch = { [weak self] in self?.pencilSeen() }
-        host.addSubview(canvas)
         setUpSelectionLayers()
 
         input.frame = host.bounds
@@ -115,11 +91,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     public func setViewport(_ viewport: Viewport) {
         self.viewport = viewport
-        if activePage.flatMap(viewport.page) == nil, !isUsingTool {
-            activate(viewport.centerPage?.id)
-        }
+        layoutCanvases()
         layoutPages()
-        layoutCanvas()
     }
 
     public func setPages(_ pages: [PageSnapshot]) {
@@ -132,11 +105,13 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             let appendedOnly = old[id].map { snapshot.strokes.starts(with: $0.strokes) } ?? false
             contentChanged(id, rebuild: !appendedOnly)
         }
-        if let active = activePage, old[active] != nil, snapshots[active] == nil {
-            rebuildCanvas()
+        for canvas in canvases {
+            if let page = canvas.page, old[page] != nil, snapshots[page] == nil {
+                rebuildCanvas(canvas)
+            }
         }
+        layoutCanvases()
         layoutPages()
-        layoutCanvas()
     }
 
     public func setTool(_ tool: ToolConfiguration) {
@@ -151,7 +126,9 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         guard theme != self.theme else { return }
         self.theme = theme
         applyTool()
-        rebuildCanvas()
+        for canvas in canvases where canvas.page != nil {
+            rebuildCanvas(canvas)
+        }
         layoutPages()
     }
 
@@ -173,8 +150,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     }
 
     public func invalidate(_: CGRect, in page: PageID) {
-        // The active canvas holds vectors; inactive pages re-rasterize (keeping the old raster meanwhile).
-        if page != activePage {
+        // A canvas holds vectors; a page without one re-rasterizes (keeping the old raster meanwhile).
+        if canvas(for: page) == nil {
             pageViews[page]?.invalidateInk()
             layoutPages()
         }
@@ -187,100 +164,118 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         return await Task.detached(priority: .userInitiated) { job.page(size: size, scale: scale) }.value
     }
 
-    // MARK: Active page
+    // MARK: Canvases
 
-    /// Pen-down hit test: makes the page under a touch active so the canvas is there to receive it.
-    func willReceiveTouch(at point: CGPoint) {
-        guard tool.penKind != nil || tool.tool == .lasso, !isUsingTool,
-              let page = viewport.page(at: point), page.id != activePage else { return }
-        activate(page.id)
+    /// The canvas drawing `page`, if it has one.
+    func canvas(for page: PageID) -> PageCanvas? {
+        canvases.first { $0.page == page }
     }
 
-    func activate(_ id: PageID?) {
-        guard id != activePage else { return }
-        absorbCanvasStrokes()
-        if let previous = activePage {
-            coverPageLeavingCanvas(previous)
+    /// The pooled canvas behind `view`.
+    func canvas(of view: PKCanvasView) -> PageCanvas? {
+        canvases.first { $0.view === view }
+    }
+
+    /// A free canvas, made if the pool allows it.
+    func freeCanvas() -> PageCanvas? {
+        if let free = canvases.first(where: { $0.page == nil }) {
+            return free
         }
-        activePage = id
-        canvasHasRendered = false
-        activation += 1
-        rebuildCanvas()
+        guard canvases.count < maximumCanvases else { return nil }
+        let canvas = PageCanvas()
+        canvas.view.delegate = self
+        canvas.view.onPencilTouch = { [weak self] in self?.pencilSeen() }
+        host.insertSubview(canvas.view, belowSubview: selection.view)
+        canvases.append(canvas)
+        applyTool(to: canvas)
+        return canvas
+    }
+
+    /// Gives `canvas` to `page`: its drawing is rebuilt and the page's raster stays until it has drawn.
+    func assign(_ canvas: PageCanvas, to page: PageID) {
+        release(canvas)
+        canvas.assign(page)
+        rebuildCanvas(canvas)
+        capRenderWait(canvas)
+    }
+
+    /// Waits for PencilKit to draw the canvas's current placement, at most 0.5 s: `canvasViewDidFinishRendering`
+    /// normally comes within a few frames, but the raster must not cover the ink forever if it doesn't.
+    func capRenderWait(_ canvas: PageCanvas) {
+        let token = canvas.awaitRender()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak canvas] in
+            guard let self, let canvas, canvas.renderWait == token, canvas.page != nil else { return }
+            canvasDidRender(canvas)
+        }
+    }
+
+    /// Takes `canvas` off its page (reporting any strokes PencilKit added), empties it and hides it. A
+    /// freed canvas holds no ink, so when it is handed to another page it can't show the old page's tiles
+    /// there while PencilKit draws the new drawing (the old one-canvas design's "ghost ink" after a pinch).
+    /// Never called while a stroke is in progress (``layoutCanvases()``): a stroke commits to the page its
+    /// canvas was drawing when it began.
+    func release(_ canvas: PageCanvas) {
+        guard canvas.page != nil else { return }
+        absorbCanvasStrokes(canvas)
+        canvas.assign(nil)
+        isSettingDrawing = true
+        canvas.view.drawing = PKDrawing()
+        isSettingDrawing = false
+        canvas.ids = []
+    }
+
+    /// PencilKit drew the canvas's page: the raster underneath can leave the drawn region to it. Fires
+    /// after every render (a page it just got, more page after a scroll or a settled zoom).
+    private func canvasDidRender(_ canvas: PageCanvas) {
+        guard let region = canvas.placement?.region, canvas.renderedRegion != region else { return }
+        canvas.renderedRegion = region
         layoutPages()
-        layoutCanvas()
-        // `canvasViewDidFinishRendering` normally comes within a few frames; don't wait on it forever.
-        let current = activation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self, activation == current else { return }
-            canvasDidRender()
-        }
-    }
-
-    /// The canvas is leaving `page`: until its raster is ready, a snapshot of what the canvas showed
-    /// stands in, so the ink doesn't blink out (or show a stale raster) as the canvas moves on.
-    private func coverPageLeavingCanvas(_ page: PageID) {
-        guard let view = pageViews[page], canvasHasRendered, !canvas.isHidden, !canvas.drawing.strokes.isEmpty,
-              let snapshot = canvas.snapshotView(afterScreenUpdates: false) else { return }
-        let zoom = max(viewport.zoomScale, 0.01)
-        let local = canvas.frame.offsetBy(dx: -view.frame.minX, dy: -view.frame.minY)
-        let pageRect = CGRect(x: local.minX / zoom, y: local.minY / zoom, width: local.width / zoom, height: local.height / zoom)
-        view.setPlaceholder(snapshot, pageRect: pageRect)
-    }
-
-    /// The canvas shows the active page: its raster can hide.
-    private func canvasDidRender() {
-        guard !canvasHasRendered else { return }
-        canvasHasRendered = true
-        if let page = activePage {
-            pageViews[page]?.showsInk = false
-        }
     }
 
     private func contentChanged(_ page: PageID, rebuild: Bool) {
-        if page == activePage {
+        if let canvas = canvas(for: page) {
             let shown = (snapshots[page]?.strokes.map(\.id) ?? []).filter { !selection.strokes.contains($0) }
             let desired = shown + (pending[page] ?? []).map(\.id)
-            if rebuild || desired != canvasIDs {
-                rebuildCanvas()
+            if rebuild || desired != canvas.ids {
+                rebuildCanvas(canvas)
             }
-        } else {
-            layoutPages()
         }
+        layoutPages()
     }
 
-    /// Reports strokes PencilKit added since the last sync.
-    private func absorbCanvasStrokes() {
-        guard let page = activePage else { return }
-        let strokes = canvas.drawing.strokes
-        guard strokes.count > canvasIDs.count else {
-            if strokes.count < canvasIDs.count {
-                rebuildCanvas() // something outside the seam removed strokes; restore the snapshot
+    /// Reports strokes PencilKit added to `canvas` since the last sync.
+    private func absorbCanvasStrokes(_ canvas: PageCanvas) {
+        guard let page = canvas.page else { return }
+        let strokes = canvas.view.drawing.strokes
+        guard strokes.count > canvas.ids.count else {
+            if strokes.count < canvas.ids.count {
+                rebuildCanvas(canvas) // something outside the seam removed strokes; restore the snapshot
             }
             return
         }
         let kind = tool.penKind ?? .ballpoint
-        for pk in strokes[canvasIDs.count...] {
+        for pk in strokes[canvas.ids.count...] {
             let stroke = PencilKitConversion.stroke(from: pk, tool: kind, color: tool.color, width: tool.width)
-            canvasIDs.append(stroke.id)
+            canvas.ids.append(stroke.id)
             pending[page, default: []].append((stroke.id, pk))
             delegate?.engine(self, didCommit: stroke, to: page)
         }
     }
 
-    /// Replaces the canvas drawing with the active page's snapshot plus pending strokes.
-    func rebuildCanvas() {
-        guard !isUsingTool else {
-            needsCanvasRebuild = true
+    /// Replaces `canvas`'s drawing with its page's snapshot plus pending strokes.
+    func rebuildCanvas(_ canvas: PageCanvas) {
+        guard !canvas.isUsingTool else {
+            canvas.needsRebuild = true
             return
         }
-        needsCanvasRebuild = false
+        canvas.needsRebuild = false
         rebuildCount += 1
-        if canvas.drawing.strokes.count > canvasIDs.count {
-            absorbCanvasStrokes()
+        if canvas.view.drawing.strokes.count > canvas.ids.count {
+            absorbCanvasStrokes(canvas)
         }
         var strokes: [PKStroke] = []
         var ids: [StrokeID] = []
-        if let page = activePage, let snapshot = snapshots[page] {
+        if let page = canvas.page, let snapshot = snapshots[page] {
             for stroke in snapshot.strokes where !selection.strokes.contains(stroke.id) {
                 strokes.append(PencilKitConversion.pkStroke(from: stroke, color: uiColor(stroke.color)))
                 ids.append(stroke.id)
@@ -291,28 +286,40 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             }
         }
         isSettingDrawing = true
-        canvas.drawing = PKDrawing(strokes: strokes)
+        canvas.view.drawing = PKDrawing(strokes: strokes)
         isSettingDrawing = false
-        canvasIDs = ids
+        canvas.ids = ids
+    }
+
+    /// Rebuilds the canvas of `page`, if it has one.
+    func rebuildCanvas(for page: PageID) {
+        if let canvas = canvas(for: page) {
+            rebuildCanvas(canvas)
+        }
     }
 
     // MARK: Tool
 
     private func applyTool() {
-        canvas.drawingPolicy = tool.allowsFingerDrawing && !hasSeenPencil ? .anyInput : .pencilOnly
         input.allowsFingerDrawing = tool.allowsFingerDrawing
-        switch tool.tool {
-        case let .pen(kind):
-            canvas.tool = PencilKitConversion.inkingTool(kind, color: uiColor(tool.color), width: tool.width)
-            canvas.isUserInteractionEnabled = true
-            input.isHidden = true
-        case .eraser, .lasso:
-            canvas.isUserInteractionEnabled = false
-            input.isHidden = false
+        input.isHidden = tool.penKind != nil
+        for canvas in canvases {
+            applyTool(to: canvas)
         }
     }
 
-    private func pencilSeen() {
+    private func applyTool(to canvas: PageCanvas) {
+        canvas.view.drawingPolicy = tool.allowsFingerDrawing && !hasSeenPencil ? .anyInput : .pencilOnly
+        switch tool.tool {
+        case let .pen(kind):
+            canvas.view.tool = PencilKitConversion.inkingTool(kind, color: uiColor(tool.color), width: tool.width)
+            canvas.view.isUserInteractionEnabled = true
+        case .eraser, .lasso:
+            canvas.view.isUserInteractionEnabled = false
+        }
+    }
+
+    func pencilSeen() {
         guard !hasSeenPencil else { return }
         hasSeenPencil = true
         applyTool()
@@ -326,67 +333,28 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 // MARK: - PKCanvasViewDelegate
 
 extension PencilKitInkEngine: PKCanvasViewDelegate {
-    public func canvasViewDidBeginUsingTool(_: PKCanvasView) {
-        isUsingTool = true
+    public func canvasViewDidBeginUsingTool(_ view: PKCanvasView) {
+        canvas(of: view)?.isUsingTool = true
         delegate?.engineDidBeginStroke(self)
     }
 
-    public func canvasViewDidEndUsingTool(_: PKCanvasView) {
-        isUsingTool = false
-        absorbCanvasStrokes()
-        if needsCanvasRebuild {
-            rebuildCanvas()
+    public func canvasViewDidEndUsingTool(_ view: PKCanvasView) {
+        guard let canvas = canvas(of: view) else { return }
+        canvas.isUsingTool = false
+        absorbCanvasStrokes(canvas)
+        if canvas.needsRebuild {
+            rebuildCanvas(canvas)
         }
     }
 
-    public func canvasViewDrawingDidChange(_: PKCanvasView) {
-        guard !isSettingDrawing else { return }
-        absorbCanvasStrokes()
+    public func canvasViewDrawingDidChange(_ view: PKCanvasView) {
+        guard !isSettingDrawing, let canvas = canvas(of: view) else { return }
+        absorbCanvasStrokes(canvas)
     }
 
-    public func canvasViewDidFinishRendering(_: PKCanvasView) {
-        canvasDidRender()
+    public func canvasViewDidFinishRendering(_ view: PKCanvasView) {
+        guard let canvas = canvas(of: view) else { return }
+        canvasDidRender(canvas)
         canvasDidRenderSelection()
-        zoomDidSettle()
-    }
-}
-
-// MARK: - Eraser / lasso input
-
-extension PencilKitInkEngine: InkInputViewDelegate {
-    public func inkInputView(_: InkInputView, targetAt point: CGPoint) -> InkInputTarget? {
-        guard let page = viewport.page(at: point) else { return nil }
-        return InkInputTarget(page: page.id, viewToPage: viewport.viewToPage(page))
-    }
-
-    public func inkInputView(_: InkInputView, didProduce event: InkInputTracker.Event) {
-        if tool.tool == .lasso {
-            drawLasso(event)
-        }
-        switch event {
-        case let .began(stroke):
-            if stroke.device == .pencil {
-                pencilSeen()
-            }
-            eraserProgress = (stroke.touch, 0)
-            delegate?.engineDidBeginStroke(self)
-            emitEraser(stroke)
-        case let .updated(stroke):
-            emitEraser(stroke)
-        case let .ended(stroke):
-            emitEraser(stroke)
-            if tool.tool == .lasso {
-                delegate?.engine(self, didReceiveLasso: stroke.samples.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }, to: stroke.page)
-            }
-        case .cancelled:
-            break
-        }
-    }
-
-    private func emitEraser(_ stroke: LiveStroke) {
-        guard tool.tool == .eraser, let progress = eraserProgress, progress.touch == stroke.touch,
-              stroke.samples.count > progress.emitted else { return }
-        eraserProgress = (stroke.touch, stroke.samples.count)
-        delegate?.engine(self, didReceiveEraser: Array(stroke.samples[progress.emitted...]), to: stroke.page)
     }
 }

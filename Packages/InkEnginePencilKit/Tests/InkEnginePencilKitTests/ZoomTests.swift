@@ -7,148 +7,103 @@ import PencilKit
 import Testing
 import UIKit
 
-/// Canvas placement during a pinch: ink stays on the paper every frame (real-iPad report: ink lagged the
-/// page mid-pinch and snapped back at the end).
+/// Zoom (ARCHITECTURE.md §3): the engine view sits in the host's zoom view, so paper and ink share one
+/// transform; canvases are left alone during a pinch and re-tiled once at the end, in place.
 @MainActor
 struct ZoomTests {
     // MARK: Math
 
     @Test(arguments: [0.5, 1, 1.37, 2, 4] as [CGFloat])
-    func scaledPlacementPutsPagePointsWhereThePaperIs(zoom: CGFloat) {
-        let region = CGRect(x: 40, y: 120, width: 400, height: 500) // page space, rendered at 1.3
-        let pageOrigin = CGPoint(x: -213.5, y: 77.25)
-        let placement = CanvasPlacement.scaled(
-            region: region, renderZoom: 1.3, pageOrigin: pageOrigin, zoom: zoom, pageSize: RenderFixtures.pageSize
-        )
-        #expect(placement.renderZoom == 1.3)
-        #expect(abs(placement.scale - zoom / 1.3) < 1e-12)
-        #expect(placement.contentSize == CGSize(width: 595 * 1.3, height: 842 * 1.3))
-        for p in [CGPoint(x: 40, y: 120), CGPoint(x: 440, y: 620), CGPoint(x: 123.4, y: 456.7), CGPoint(x: 0, y: 0)] {
-            let view = placement.viewPoint(p)
-            #expect(abs(view.x - (pageOrigin.x + zoom * p.x)) < 1e-9)
-            #expect(abs(view.y - (pageOrigin.y + zoom * p.y)) < 1e-9)
+    func placementCoversTheVisiblePartOfThePageInPlace(zoom: CGFloat) throws {
+        let pageFrame = CGRect(x: 0, y: 866, width: 595, height: 842)
+        let visible = CGRect(x: -40, y: 900, width: 700, height: 500)
+        let placement = try #require(CanvasPlacement.visible(pageFrame: pageFrame, in: visible, zoom: zoom))
+        #expect(placement.zoom == zoom)
+        #expect(placement.region == CGRect(x: 0, y: 34, width: 595, height: 500))
+        #expect(abs(placement.scale - 1 / zoom) < 1e-12)
+        #expect(placement.contentSize == CGSize(width: 595 * zoom, height: 842 * zoom))
+        #expect(placement.bounds.origin == CGPoint(x: 0, y: 34 * zoom), "contentOffset shows the region")
+        // Page points land where the paper puts them, whatever the zoom: content = page origin + point.
+        for p in [CGPoint(x: 0, y: 34), CGPoint(x: 300, y: 250), CGPoint(x: 595, y: 500), CGPoint(x: 123.4, y: 456.7)] {
+            let content = placement.contentPoint(p)
+            #expect(abs(content.x - p.x) < 1e-9)
+            #expect(abs(content.y - (866 + p.y)) < 1e-9)
         }
-        // The canvas covers exactly the region, wherever the zoom is.
         let frame = placement.frame
-        #expect(abs(frame.minX - (pageOrigin.x + region.minX * zoom)) < 1e-9)
-        #expect(abs(frame.maxY - (pageOrigin.y + region.maxY * zoom)) < 1e-9)
-        #expect(placement.region.equalTo(region) || abs(placement.region.maxX - region.maxX) < 1e-9)
+        #expect(abs(frame.minY - 900) < 1e-9 && abs(frame.maxY - 1400) < 1e-9 && abs(frame.width - 595) < 1e-9)
     }
 
-    @Test func settledPlacementIsTheVisibleRect() {
-        let pageRect = CGRect(x: 100, y: -300, width: 595 * 1.5, height: 842 * 1.5)
-        let visible = pageRect.intersection(CGRect(x: 0, y: 0, width: 1024, height: 1366))
-        let placement = CanvasPlacement.settled(visible: visible, pageRect: pageRect, zoom: 1.5, pageSize: RenderFixtures.pageSize)
-        #expect(placement.scale == 1)
-        #expect(placement.frame == visible)
-        #expect(placement.bounds.origin == CGPoint(x: 0, y: 300))
-        let scaled = CanvasPlacement.scaled(
-            region: placement.region, renderZoom: 1.5, pageOrigin: pageRect.origin, zoom: 1.5, pageSize: RenderFixtures.pageSize
-        )
-        #expect(scaled == placement)
+    @Test func noPlacementOffscreen() {
+        let pageFrame = CGRect(x: 0, y: 866, width: 595, height: 842)
+        #expect(CanvasPlacement.visible(pageFrame: pageFrame, in: CGRect(x: 0, y: 0, width: 600, height: 800), zoom: 1) == nil)
+        #expect(CanvasPlacement.visible(pageFrame: pageFrame, in: CGRect(x: 0, y: 1708, width: 600, height: 800), zoom: 1) == nil)
+        #expect(CanvasPlacement.visible(pageFrame: pageFrame, in: CGRect(x: 0, y: 900, width: 600, height: 800), zoom: 0) == nil)
     }
 
     // MARK: Engine
 
-    @Test func pinchHoldsCanvasZoomAndScalesItThenSettles() {
+    @Test func pinchLeavesCanvasesAloneThenRetilesThemInPlace() throws {
         let h = Harness()
         h.scroll(toY: 900)
-        h.engine.canvasViewDidFinishRendering(h.engine.canvas)
         let page = h.frames[1]
-        let bounds = h.engine.canvas.bounds
+        let canvas = try #require(h.engine.canvas(for: page.id))
+        h.engine.canvasViewDidFinishRendering(canvas.view)
+        let before = (canvas.view.bounds, canvas.view.center, canvas.view.transform, canvas.view.zoomScale)
+        let view = try #require(h.engine.pageViews[page.id])
+        #expect(view.inkHole == CGRect(x: 0, y: 34, width: 595, height: 808))
         let rebuilds = h.engine.rebuildCount
 
         for zoom in [1.1, 1.4, 0.8, 0.6] as [CGFloat] {
-            let viewport = h.viewport(offset: CGPoint(x: 0, y: 900 * zoom), zoom: zoom, isZooming: true)
-            h.engine.setViewport(viewport)
-            #expect(h.engine.canvas.zoomScale == 1, "PencilKit keeps its rendering mid-pinch")
-            #expect(h.engine.canvas.bounds == bounds)
-            #expect(h.engine.canvas.transform == CGAffineTransform(scaleX: zoom, y: zoom))
-            // Canvas content lands on the paper: page point → view, through the canvas's own geometry.
-            let pageRect = viewport.viewRect(of: page)
-            for p in [CGPoint(x: 50, y: 50), CGPoint(x: 300, y: 500)] {
-                let content = CGPoint(x: p.x * h.engine.canvas.zoomScale, y: p.y * h.engine.canvas.zoomScale)
-                let view = h.engine.canvas.convert(content, to: h.engine.view)
-                #expect(abs(view.x - (pageRect.minX + p.x * zoom)) < 1e-6)
-                #expect(abs(view.y - (pageRect.minY + p.y * zoom)) < 1e-6)
-            }
-            // Zoomed out, the page raster shows around what the canvas covers.
-            let view = h.engine.pageViews[page.id]
-            #expect(view?.showsInk == true)
-            #expect(view?.inkHole == CGRect(x: 0, y: 34, width: 595, height: 808))
+            h.engine.setViewport(h.viewport(offset: CGPoint(x: 0, y: 900 * zoom), zoom: zoom, isZooming: true))
+            #expect(canvas.view.zoomScale == before.3, "nothing for PencilKit to re-tile mid-pinch")
+            #expect(canvas.view.bounds == before.0)
+            #expect(canvas.view.center == before.1)
+            #expect(canvas.view.transform == before.2)
+            #expect(view.frame == page.frame, "paper is in content space: the zoom is the host's transform")
+            #expect(view.inkHole == CGRect(x: 0, y: 34, width: 595, height: 808), "raster still shows around the canvas")
+            #expect(h.engine.canvas(for: page.id) === canvas)
         }
         #expect(h.engine.rebuildCount == rebuilds)
 
-        // Pinch ends: the canvas takes the final zoom once, untransformed; the raster stays until it has drawn.
+        // Pinch ends: the canvas takes the final zoom once, scaled back so it covers the same page region.
         h.engine.setViewport(h.viewport(offset: CGPoint(x: 0, y: 540), zoom: 0.6, isZooming: false))
-        #expect(h.engine.canvas.zoomScale == 0.6)
-        #expect(h.engine.canvas.transform == .identity)
-        let visible = h.engine.viewport.viewRect(of: page).intersection(h.engine.view.bounds)
-        let frame = h.engine.canvas.frame
-        #expect([frame.minX - visible.minX, frame.minY - visible.minY, frame.width - visible.width, frame.height - visible.height]
-            .allSatisfy { abs($0) < 1e-9 })
-        #expect(h.engine.pageViews[page.id]?.showsInk == true)
-        h.engine.canvasViewDidFinishRendering(h.engine.canvas)
-        #expect(h.engine.pageViews[page.id]?.showsInk == false)
-        #expect(h.engine.pageViews[page.id]?.inkHole == nil)
-        #expect(h.engine.zoom.freeze == nil)
-    }
-
-    /// The host keeps `isZooming` through the scroll a release starts (deceleration, rubber band): the canvas
-    /// stays held and follows the paper by geometry, and only settles once the page is at rest.
-    @Test func releaseScrollKeepsTheCanvasHeldUntilRest() {
-        let h = Harness()
-        h.scroll(toY: 900)
-        h.engine.canvasViewDidFinishRendering(h.engine.canvas)
-        let page = h.frames[1]
-        let bounds = h.engine.canvas.bounds
-        h.engine.setViewport(h.viewport(offset: CGPoint(x: 0, y: 900 * 1.3), zoom: 1.3, isZooming: true))
-        #expect(h.engine.canvas.zoomScale == 1)
-
-        // Fingers up; the page decelerates for a few frames at the final zoom.
-        for y in stride(from: 1170, through: 1290, by: 40) as StrideThrough<CGFloat> {
-            let viewport = h.viewport(offset: CGPoint(x: 0, y: y), zoom: 1.3, isZooming: true)
-            h.engine.setViewport(viewport)
-            #expect(h.engine.canvas.zoomScale == 1, "held: nothing for PencilKit to re-render mid-scroll")
-            #expect(h.engine.canvas.bounds == bounds)
-            #expect(h.engine.canvas.transform == CGAffineTransform(scaleX: 1.3, y: 1.3))
-            let pageRect = viewport.viewRect(of: page)
-            for p in [CGPoint(x: 50, y: 50), CGPoint(x: 300, y: 500)] {
-                let view = h.engine.canvas.convert(CGPoint(x: p.x, y: p.y), to: h.engine.view)
-                #expect(abs(view.x - (pageRect.minX + p.x * 1.3)) < 1e-6)
-                #expect(abs(view.y - (pageRect.minY + p.y * 1.3)) < 1e-6)
-            }
+        #expect(canvas.view.zoomScale == 0.6)
+        #expect(abs(canvas.view.transform.a - 1 / 0.6) < 1e-9)
+        let placement = try #require(canvas.placement)
+        #expect(placement.region == CGRect(x: 0, y: 34, width: 595, height: 808))
+        // Canvas content lands on the paper: page point → content, through the canvas's own geometry.
+        for p in [CGPoint(x: 50, y: 50), CGPoint(x: 300, y: 500)] {
+            let content = CGPoint(x: p.x * 0.6, y: p.y * 0.6)
+            let inHost = canvas.view.convert(content, to: h.engine.view)
+            // Exact even though the scroll view pixel-aligned the offset (34 · 0.6 = 20.4 → 20.5 at 2×).
+            #expect(abs(inHost.x - (page.frame.minX + p.x)) < 1e-6, "\(p): \(inHost)")
+            #expect(abs(inHost.y - (page.frame.minY + p.y)) < 1e-6, "\(p): \(inHost)")
         }
-
-        // At rest: settle once, untransformed, where the paper is.
-        h.engine.setViewport(h.viewport(offset: CGPoint(x: 0, y: 1290), zoom: 1.3, isZooming: false))
-        #expect(h.engine.canvas.zoomScale == 1.3)
-        #expect(h.engine.canvas.transform == .identity)
-        let visible = h.engine.viewport.viewRect(of: page).intersection(h.engine.view.bounds)
-        let frame = h.engine.canvas.frame
-        #expect([frame.minX - visible.minX, frame.minY - visible.minY, frame.width - visible.width, frame.height - visible.height]
-            .allSatisfy { abs($0) < 1e-9 })
+        // The raster hole is what the canvas had drawn (the same region here; `inkStaysOnThePaperEveryPinchFrame`
+        // covers a region that grew) until PencilKit has drawn the new placement.
+        #expect(view.inkHole == CGRect(x: 0, y: 34, width: 595, height: 808))
+        h.engine.canvasViewDidFinishRendering(canvas.view)
+        #expect(view.inkHole == placement.region)
     }
 
-    /// Lasso-lifted strokes follow the pinch with the paper and stay out of the raster shown around the canvas.
+    /// Lasso-lifted strokes sit in content space too, so they follow the pinch with the paper and stay out of
+    /// the raster shown around the canvas.
     @Test func liftedSelectionFollowsThePinch() throws {
         let h = Harness()
         h.scroll(toY: 900)
-        h.engine.canvasViewDidFinishRendering(h.engine.canvas)
         let page = h.frames[1]
         let move = CGAffineTransform(translationX: 20, y: 10)
         h.engine.setSelectionPreview(SelectionPreview(page: page.id, strokes: [RenderFixtures.strokeID(9)], transform: move))
         let rect = h.engine.selection.rect
         for zoom in [1.2, 0.7] as [CGFloat] {
-            let viewport = h.viewport(offset: CGPoint(x: 0, y: 900 * zoom), zoom: zoom, isZooming: true)
-            h.engine.setViewport(viewport)
+            h.engine.setViewport(h.viewport(offset: CGPoint(x: 0, y: 900 * zoom), zoom: zoom, isZooming: true))
             let expected = CGAffineTransform(translationX: rect.minX, y: rect.minY)
-                .concatenating(move).concatenating(viewport.pageToView(page))
+                .concatenating(move).concatenating(CGAffineTransform(translationX: page.frame.minX, y: page.frame.minY))
             let actual = h.engine.selection.lifted.affineTransform()
             #expect([actual.a - expected.a, actual.d - expected.d, actual.tx - expected.tx, actual.ty - expected.ty]
                 .allSatisfy { abs($0) < 1e-9 })
             let key = try #require(h.engine.pageViews[page.id]?.requestedKey)
-            #expect(key.strokeCount == 0, "lifted stroke not in the active page's raster")
+            #expect(key.strokeCount == 0, "lifted stroke not in the page's raster")
         }
     }
 
@@ -157,22 +112,39 @@ struct ZoomTests {
         h.scroll(toY: 900)
         h.engine.setViewport(h.viewport(offset: CGPoint(x: 0, y: 990), zoom: 1.1, isZooming: true))
         let view = h.engine.pageViews[h.frames[1].id]
-        #expect(view?.showsInk == true)
         #expect(view?.inkHole == nil)
-        #expect(h.engine.canvas.zoomScale == 1)
+        #expect(h.engine.canvas(for: h.frames[1].id)?.view.zoomScale == 1)
     }
 
-    /// Pixels: render the engine view's layer tree (what Core Animation commits for the frame) mid-pinch
-    /// and check the canvas's ink and the raster's ink sit where the paper says.
-    @Test func inkStaysOnThePaperEveryPinchFrame() async throws {
+    /// Pixels: the engine view inside a zoom view like the host's, rendered (what Core Animation commits
+    /// for the frame) on every pinch frame: the canvas's ink and the raster's ink sit where the paper says.
+    /// The host: a bounds-offset "scroll view" holding a zoom view that the engine view fills.
+    @MainActor
+    private struct MiniHost {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 1024, height: 1366))
-        let controller = UIViewController()
-        window.rootViewController = controller
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true }
+        let scroll: UIView
+        let zoomView: UIView
         let engine = PencilKitInkEngine(palette: FixturePalette())
-        controller.view.addSubview(engine.view)
-        engine.view.frame = controller.view.bounds
+
+        init() {
+            let controller = UIViewController()
+            window.rootViewController = controller
+            window.makeKeyAndVisible()
+            scroll = UIView(frame: controller.view.bounds)
+            controller.view.addSubview(scroll)
+            zoomView = UIView(frame: CGRect(origin: .zero, size: RenderFixtures.pageSize))
+            zoomView.layer.anchorPoint = .zero
+            zoomView.layer.position = .zero
+            scroll.addSubview(zoomView)
+            engine.view.frame = zoomView.bounds
+            zoomView.addSubview(engine.view)
+        }
+    }
+
+    @Test func inkStaysOnThePaperEveryPinchFrame() async throws {
+        let host = MiniHost()
+        let (window, scroll, zoomView, engine) = (host.window, host.scroll, host.zoomView, host.engine)
+        defer { window.isHidden = true }
         let id = RenderFixtures.pageID(1)
         // A: on screen when the pinch starts (the canvas draws it). B: far down the page, revealed by
         // zooming out (the raster draws it).
@@ -183,18 +155,15 @@ struct ZoomTests {
         var offset = CGPoint(x: 0, y: 0)
         var zoom: CGFloat = 2
         func send(zooming: Bool) {
-            engine.setViewport(Viewport(
-                contentOffset: offset,
-                zoomScale: zoom,
-                size: engine.view.bounds.size,
-                pages: pages,
-                isZooming: zooming
-            ))
+            zoomView.transform = CGAffineTransform(scaleX: zoom, y: zoom)
+            scroll.bounds.origin = offset
+            engine.setViewport(Viewport(contentOffset: offset, zoomScale: zoom, size: scroll.bounds.size, pages: pages, isZooming: zooming))
             window.layoutIfNeeded()
         }
         send(zooming: false)
+        let canvas = try #require(engine.canvas(for: id))
         // The canvas has drawn A (not just timed out waiting for `canvasViewDidFinishRendering`).
-        try await waitUntil { engine.canvasHasRendered && Self.inkY(Self.render(engine.view), x: 600, near: 400) != nil }
+        try await waitUntil { canvas.hasRendered && Self.inkY(Self.render(scroll), x: 600, near: 400) != nil }
 
         // Pinch out about view point (300, 700), as UIScrollView does: zoom and offset change together.
         let anchor = CGPoint(x: 300, y: 700)
@@ -203,22 +172,23 @@ struct ZoomTests {
             zoom = 2 - CGFloat(step) * 0.15
             offset = CGPoint(x: content.x * zoom - anchor.x, y: content.y * zoom - anchor.y)
             send(zooming: true)
-            #expect(engine.canvas.zoomScale == 2)
-            let pixels = Self.render(engine.view)
+            #expect(canvas.view.zoomScale == 2)
+            let pixels = Self.render(scroll)
             let x = 300 * zoom - offset.x
-            #expect(Self.inkY(pixels, x: x, near: 200 * zoom - offset.y).map { abs($0) < 1.5 } == true, "A, zoom \(zoom)")
+            let measured = Self.inkY(pixels, x: x, near: 200 * zoom - offset.y, within: 200)
+            #expect(measured.map { abs($0) < 1.5 } == true, "A, zoom \(zoom): off by \(String(describing: measured))")
         }
         // B comes from the raster, once it has rendered.
         try await waitUntil { engine.pageViews[id]?.shownKey != nil }
-        let pixels = Self.render(engine.view)
+        let pixels = Self.render(scroll)
         let x = 300 * zoom - offset.x
         #expect(Self.inkY(pixels, x: x, near: 780 * zoom - offset.y).map { abs($0) < 1.5 } == true, "B")
         #expect(Self.inkY(pixels, x: x, near: 200 * zoom - offset.y).map { abs($0) < 1.5 } == true, "A")
 
         // Settle: same places at the final zoom.
         send(zooming: false)
-        #expect(engine.canvas.zoomScale == zoom)
-        let settled = Self.render(engine.view)
+        #expect(canvas.view.zoomScale == zoom)
+        let settled = Self.render(scroll)
         #expect(Self.inkY(settled, x: x, near: 200 * zoom - offset.y).map { abs($0) < 1.5 } == true, "A settled")
         #expect(Self.inkY(settled, x: x, near: 780 * zoom - offset.y).map { abs($0) < 1.5 } == true, "B settled")
     }
@@ -227,6 +197,8 @@ struct ZoomTests {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 2
         let image = UIGraphicsImageRenderer(size: view.bounds.size, format: format).image { context in
+            // `render(in:)` ignores the layer's bounds origin (the scroll offset); apply it like the screen does.
+            context.cgContext.translateBy(x: -view.bounds.minX, y: -view.bounds.minY)
             view.layer.render(in: context.cgContext)
         }
         return (RGBAPixels(image.cgImage!), 2) // swiftlint:disable:this force_unwrapping
@@ -258,6 +230,6 @@ struct ZoomTests {
 
 extension Harness {
     func viewport(offset: CGPoint, zoom: CGFloat, isZooming: Bool) -> Viewport {
-        Viewport(contentOffset: offset, zoomScale: zoom, size: engine.view.bounds.size, pages: frames, isZooming: isZooming)
+        Viewport(contentOffset: offset, zoomScale: zoom, size: viewSize, pages: frames, isZooming: isZooming)
     }
 }

@@ -17,21 +17,22 @@ public struct VisiblePage: Hashable, Sendable, Identifiable {
 
 /// What the engine view shows: scroll offset, zoom and the visible pages (ARCHITECTURE.md §5.1).
 ///
-/// Spaces: **page** (pt, origin at the page's top-left) → **content** (`page + frame.origin`) →
-/// **view** (`content × zoomScale − contentOffset`), matching `UIScrollView` with the engine view
-/// pinned to the scroll view's visible bounds.
+/// Spaces: **page** (pt, origin at the page's top-left) → **content** (`page + frame.origin`, the engine
+/// view's space) → **view** (`content × zoomScale − contentOffset`, the scroll view's visible bounds,
+/// where the host's overlay lives).
 public struct Viewport: Hashable, Sendable {
     /// `UIScrollView.contentOffset`: zoomed content points at the view's top-left.
     public var contentOffset: CGPoint
     /// `UIScrollView.zoomScale`.
     public var zoomScale: CGFloat
-    /// Engine view size (pt).
+    /// Visible size (the scroll view's bounds, pt).
     public var size: CGSize
     /// Visible pages, top to bottom.
     public var pages: [VisiblePage]
     /// A zoom gesture (pinch, or its bounce back into range) is in progress: `zoomScale` changes every
     /// frame until a viewport with this `false` settles it. Engines may defer expensive re-rendering
-    /// (the PencilKit canvas scales its last rendering instead, ARCHITECTURE.md §3).
+    /// (the host's zoom transform scales what they last drew; PencilKit re-tiles once at the settled
+    /// zoom, ARCHITECTURE.md §3).
     public var isZooming: Bool
 
     /// Creates a viewport.

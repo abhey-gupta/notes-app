@@ -4,13 +4,14 @@ import PencilKit
 import UIKit
 
 /// Lasso chrome the engine draws (ARCHITECTURE.md §6): the live lasso path, and the lifted-strokes preview
-/// for lasso drags and resizes.
+/// for lasso drags and resizes. Both live in the engine view (content space), so they zoom with the page
+/// (the lasso's dash is scaled back so it stays 1.5 pt on screen).
 ///
 /// Lifting shows the selected strokes as one image (`selection.lifted`, rendered off main as soon as the
-/// selection is made, ``prepareSelectionPreview(_:on:)``) and leaves them out of the canvas; every drag frame then only sets the layer's
-/// transform, so the cost per frame doesn't depend on
-/// how many strokes are selected (120 Hz with hundreds). When the preview ends the strokes go back on the
-/// canvas (by then at their baked position) and the image stays until the canvas has drawn them.
+/// selection is made, ``prepareSelectionPreview(_:on:)``) and leaves them out of the page's canvas; every
+/// drag frame then only sets the layer's transform, so the cost per frame doesn't depend on how many
+/// strokes are selected (120 Hz with hundreds). When the preview ends the strokes go back on the canvas
+/// (by then at their baked position) and the image stays until the canvas has drawn them.
 extension PencilKitInkEngine {
     /// Color of the live lasso path.
     public var selectionColor: UIColor {
@@ -40,9 +41,6 @@ extension PencilKitInkEngine {
         guard let preview, !preview.strokes.isEmpty, snapshots[preview.page] != nil else {
             endSelectionPreview()
             return
-        }
-        if preview.page != activePage {
-            activate(preview.page)
         }
         if selection.strokes != preview.strokes || selection.preview?.page != preview.page {
             lift(preview)
@@ -80,9 +78,10 @@ extension PencilKitInkEngine {
     }
 
     /// Shows the strokes' image in `selection.lifted` (the prepared one if current, else rendered now)
-    /// and takes them off the canvas.
+    /// and takes them off the page's canvas.
     private func lift(_ preview: SelectionPreview) {
         guard let snapshot = snapshots[preview.page] else { return }
+        let previousPage = selection.preview?.page
         selection.generation += 1
         let lift = liftRender(preview.strokes, of: snapshot)
         let rect = lift.rect
@@ -98,14 +97,22 @@ extension PencilKitInkEngine {
         selection.lifted.bounds = CGRect(origin: .zero, size: rect.isNull ? .zero : rect.size)
         CATransaction.commit()
         selection.strokes = preview.strokes
-        rebuildCanvas()
+        rebuildCanvas(for: preview.page)
+        if let previousPage, previousPage != preview.page {
+            rebuildCanvas(for: previousPage)
+        }
+        layoutPages()
     }
 
     /// Puts the strokes back on the canvas; the image goes once the canvas has drawn them.
     private func endSelectionPreview() {
         guard selection.preview != nil || !selection.strokes.isEmpty else { return }
+        let page = selection.preview?.page
         selection.strokes = []
-        rebuildCanvas()
+        if let page {
+            rebuildCanvas(for: page)
+        }
+        layoutPages()
         selection.generation += 1
         let generation = selection.generation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -131,7 +138,7 @@ extension PencilKitInkEngine {
         CATransaction.commit()
     }
 
-    /// Places the lifted image: page-space preview transform, then page → view.
+    /// Places the lifted image: page-space preview transform, then page → content.
     func layoutSelectionPreview() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -144,7 +151,7 @@ extension PencilKitInkEngine {
         selection.lifted.setAffineTransform(
             CGAffineTransform(translationX: selection.rect.minX, y: selection.rect.minY)
                 .concatenating(preview.transform)
-                .concatenating(viewport.pageToView(page))
+                .concatenating(CGAffineTransform(translationX: page.frame.minX, y: page.frame.minY))
         )
     }
 
@@ -155,9 +162,13 @@ extension PencilKitInkEngine {
         defer { CATransaction.commit() }
         switch event {
         case let .began(stroke), let .updated(stroke):
-            let pageToView = stroke.viewToPage.inverted()
+            let pageToContent = stroke.viewToPage.inverted()
             let path = CGMutablePath()
-            path.addLines(between: stroke.displaySamples.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)).applying(pageToView) })
+            path.addLines(between: stroke.displaySamples.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)).applying(pageToContent) })
+            // The layer zooms with the page; keep the dash 1.5 pt on screen.
+            let onScreen = 1 / max(viewport.zoomScale, 0.01)
+            selection.lasso.lineWidth = 1.5 * onScreen
+            selection.lasso.lineDashPattern = [5 * onScreen, 4 * onScreen] as [NSNumber]
             selection.lasso.path = path
         case .ended, .cancelled:
             selection.lasso.path = nil

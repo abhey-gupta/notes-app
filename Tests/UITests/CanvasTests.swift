@@ -165,6 +165,49 @@ final class CanvasTests: XCTestCase {
         XCTAssertNotNil(waitForIndicator(app) { $0.hasSuffix("of 2") }, "page count persisted")
     }
 
+    /// A pinch zooms the pages without touching their strokes, and never paints one page's ink on another
+    /// (real-iPad report: after pinching, ink "drawn above" appeared on the pages below).
+    @MainActor
+    func testPinchKeepsPagesIntactAndPaintsNoGhostInk() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-resetLibrary", "YES", "-resetToolState", "YES", "-allowFingerDrawing", "YES"]
+        app.launch()
+        let new = app.buttons["newNotebook"]
+        XCTAssertTrue(new.waitForExistence(timeout: 10))
+        new.tap()
+        let title = app.textFields["notebookTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.typeText("Pinch")
+        app.buttons["createNotebook"].tap()
+        XCTAssertTrue(waitForStrokes("0 strokes", in: app))
+        drawStroke(in: app)
+        XCTAssertTrue(waitForStrokes("1 stroke", in: app), "page 1 has one stroke")
+
+        let add = app.buttons["addPage"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        XCTAssertEqual(waitForIndicator(app) { $0 == "2 of 2" }, "2 of 2")
+        XCTAssertTrue(waitForStrokes("0 strokes", in: app), "page 2 is blank")
+
+        // Zoom out (page 1's bottom comes into view above page 2), then back in, with fingers over both pages.
+        for scale in [0.5, 1.6] as [CGFloat] {
+            canvas(app).pinch(withScale: scale, velocity: scale < 1 ? -1 : 1)
+            RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+            XCTAssertTrue(waitForStrokes("0 strokes", in: app), "page 2 still blank after pinch \(scale)")
+            XCTAssertEqual(app.buttons["pageIndicator"].label, "2 of 2")
+        }
+        // Page 2 is blank paper: no dark pixels in its middle (the only ink is on page 1, above).
+        let shot = Gray(app.windows.firstMatch.screenshot().image)
+        let dark = shot.darkPixelCount(in: CGRect(x: 0.3, y: 0.45, width: 0.4, height: 0.4))
+        XCTAssertLessThan(dark, 20, "ghost ink on page 2")
+
+        app.buttons["Library"].tap()
+        let cover = app.buttons["cover-Pinch"]
+        XCTAssertTrue(cover.waitForExistence(timeout: 5))
+        cover.tap()
+        XCTAssertTrue(waitForStrokes("1 stroke", in: app), "page 1 unchanged by the pinch")
+    }
+
     /// A downward drag at the top of the notebook (finger scroll, or ink with finger drawing) must not start
     /// the zoom transition's swipe-to-dismiss.
     @MainActor

@@ -180,4 +180,19 @@ struct PageWindowTests {
         #expect(pin(300) == 300)
         #expect(pin(700) == 616)
     }
+
+    /// The scroll view's bounds (zoomed points, origin = content offset) map to the content rect the engine
+    /// and page window use; the pages it shows are the same at any zoom, and rubber-banding past the top
+    /// (negative offset) just shows less of page 1.
+    @Test func contentRectUnzoomsTheScrollBounds() {
+        let l = PageLayout(pageIDs: (0 ..< 3).map { _ in PageID() }, footer: 0)
+        let bounds = CGRect(x: -20, y: 1800, width: 1024, height: 1366)
+        #expect(PageLayout.contentRect(visible: bounds, zoom: 2) == CGRect(x: -10, y: 900, width: 512, height: 683))
+        #expect(PageLayout.contentRect(visible: bounds, zoom: 1) == bounds)
+        #expect(PageLayout.contentRect(visible: bounds, zoom: 0).isNull)
+        #expect(l.visiblePages(in: PageLayout.contentRect(visible: bounds, zoom: 2)) == 1 ..< 2)
+        #expect(l.visiblePages(in: PageLayout.contentRect(visible: bounds, zoom: 1)) == 2 ..< 3)
+        let overscrolled = CGRect(x: 0, y: -300, width: 1024, height: 1366)
+        #expect(l.visiblePages(in: PageLayout.contentRect(visible: overscrolled, zoom: 1.5)) == 0 ..< 1)
+    }
 }

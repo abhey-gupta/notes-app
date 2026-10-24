@@ -6,8 +6,9 @@
 
     /// The canvas host (ARCHITECTURE.md §5.1): a `UIScrollView` for native physics, rubber-banding and
     /// pinch zoom over a transparent content view the size of the notebook (``PageLayout``), with the
-    /// engine's view **pinned to the visible rect** (a sibling of the content view, re-framed to the
-    /// scroll view's bounds on every scroll), so there is never a layer the size of the notebook.
+    /// engine's view **inside the content view** (content-sized, in unzoomed points), so UIKit's one zoom
+    /// transform moves paper and ink together on every frame of a pinch, bounce or fling. The engine
+    /// draws only the visible pages, so the big views cost nothing.
     ///
     /// Every scroll/zoom callback becomes one ``InkEngine/InkEngine/setViewport(_:)`` with the visible
     /// pages; the engine draws deceleration frames on its display link. When the visible pages change the
@@ -27,7 +28,7 @@
         /// Space below the last page for the add-page button (content pt).
         public static let footerHeight: CGFloat = 96
 
-        /// The ink engine whose view is pinned over the pages.
+        /// The ink engine; its view fills the content view (content space, zoomed by the scroll view).
         public let engine: any InkEngine
         /// Observable viewport facts for SwiftUI.
         public let state = CanvasViewportState()
@@ -112,9 +113,10 @@
             addSubview(scrollView)
 
             contentView.backgroundColor = .clear
-            contentView.isUserInteractionEnabled = false
             scrollView.addSubview(contentView)
-            scrollView.addSubview(engine.view)
+            engine.view.frame = contentView.bounds
+            engine.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            contentView.addSubview(engine.view)
 
             addPageButton.accessibilityIdentifier = "addPage"
             addPageButton.addAction(UIAction { [weak self] _ in self?.requestNewPage() }, for: .primaryActionTriggered)
@@ -300,26 +302,28 @@
         }
 
         private func contentRect(_ bounds: CGRect, zoom z: CGFloat) -> CGRect {
-            CGRect(x: bounds.minX / z, y: bounds.minY / z, width: bounds.width / z, height: bounds.height / z)
+            PageLayout.contentRect(visible: bounds, zoom: z)
         }
 
-        /// One per scroll/zoom frame: pin the engine view, move the add-page button, tell the engine, then
-        /// update the indicator and (if the visible pages changed) the page window.
+        /// One per scroll/zoom frame: move the add-page button, tell the engine, then update the indicator
+        /// and (if the visible pages changed) the page window.
+        ///
+        /// Without animation: `UIScrollView` runs some of its callbacks inside `UIView` animation blocks
+        /// (the offset correction at the end of a zoom), and views placed from here must land where the
+        /// viewport says this frame, not glide there.
         func viewportDidChange() {
             let interval = Signpost.canvasFrame.begin()
             defer { interval.end() }
             let bounds = scrollView.bounds
             let z = scrollView.zoomScale
             guard bounds.width > 0, bounds.height > 0, z > 0 else { return }
-            if engine.view.frame != bounds {
-                engine.view.frame = bounds
-            }
-            placeAddPageButton(zoom: z)
-
             let viewport = makeViewport()
-            engineIsZooming = viewport.isZooming
-            engine.setViewport(viewport)
-            updateOverlay(viewport)
+            UIView.performWithoutAnimation {
+                placeAddPageButton(zoom: z)
+                engineIsZooming = viewport.isZooming
+                engine.setViewport(viewport)
+                updateOverlay(viewport)
+            }
 
             let content = contentRect(bounds, zoom: z)
             if let current = layout.nearestPage(toY: content.midY), current != state.currentPage {
