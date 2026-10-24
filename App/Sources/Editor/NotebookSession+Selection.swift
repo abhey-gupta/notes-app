@@ -138,5 +138,7 @@ extension NotebookSession {
     private func show(_ selection: LassoSelection?) {
         self.selection = selection
         selectionOverlay.selection = selection
+        // Render the drag preview now (off main), not when the drag starts.
+        engine.prepareSelectionPreview(Set(selection?.strokeIDs ?? []), on: selection?.pageID ?? PageID())
     }
 }

@@ -68,4 +68,29 @@ struct SelectionPreviewTests {
         #expect(h.engine.selection.lifted.isHidden)
         #expect(h.engine.selection.preview == nil)
     }
+
+    /// The preview image is rendered off main when the selection is made, so a drag starts without
+    /// rendering; an edit to the page makes it stale (rendered at lift instead).
+    @Test func preparedImageIsUsedAtLift() async throws {
+        let h = Harness()
+        h.scroll(toY: 900)
+        let page = h.frames[1].id
+        let id = RenderFixtures.strokeID(9)
+        h.engine.prepareSelectionPreview([id], on: page)
+        for _ in 0 ..< 500 where h.engine.selection.prepareTask != nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(h.engine.selection.prepared?.image != nil)
+        h.engine.setSelectionPreview(SelectionPreview(page: page, strokes: [id]))
+        #expect(h.engine.selection.syncRenderCount == 0)
+        #expect(h.engine.selection.lifted.contents != nil)
+        h.engine.setSelectionPreview(nil)
+
+        let snapshot = try #require(h.engine.snapshots[page])
+        try h.engine.apply(snapshot.page.recolorEdit([id], to: .semantic(.red)), to: page)
+        h.engine.setSelectionPreview(SelectionPreview(page: page, strokes: [id]))
+        #expect(h.engine.selection.syncRenderCount == 1, "stale after the edit")
+        h.engine.prepareSelectionPreview([], on: page)
+        #expect(h.engine.selection.prepared == nil)
+    }
 }

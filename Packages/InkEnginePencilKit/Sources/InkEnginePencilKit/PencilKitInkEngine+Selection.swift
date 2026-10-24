@@ -6,8 +6,9 @@ import UIKit
 /// Lasso chrome the engine draws (ARCHITECTURE.md §6): the live lasso path, and the lifted-strokes preview
 /// for lasso drags and resizes.
 ///
-/// Lifting renders the selected strokes once into an image (`selection.lifted`) and leaves them out of the
-/// canvas; every drag frame then only sets the layer's transform, so the cost per frame doesn't depend on
+/// Lifting shows the selected strokes as one image (`selection.lifted`, rendered off main as soon as the
+/// selection is made, ``prepareSelectionPreview(_:on:)``) and leaves them out of the canvas; every drag frame then only sets the layer's
+/// transform, so the cost per frame doesn't depend on
 /// how many strokes are selected (120 Hz with hundreds). When the preview ends the strokes go back on the
 /// canvas (by then at their baked position) and the image stays until the canvas has drawn them.
 extension PencilKitInkEngine {
@@ -50,25 +51,47 @@ extension PencilKitInkEngine {
         layoutSelectionPreview()
     }
 
-    /// Renders the strokes into `selection.lifted` and takes them off the canvas.
+    public func prepareSelectionPreview(_ strokes: Set<StrokeID>, on page: PageID) {
+        selection.prepareTask?.cancel()
+        selection.prepareTask = nil
+        selection.prepared = nil
+        guard !strokes.isEmpty, let snapshot = snapshots[page] else { return }
+        let lift = liftRender(strokes, of: snapshot)
+        selection.prepareTask = Task { [weak self] in
+            let image = await Task.detached(priority: .userInitiated) { lift.render() }.value
+            guard let self, !Task.isCancelled else { return }
+            selection.prepared = (lift.key, image)
+            selection.prepareTask = nil
+        }
+    }
+
+    /// What lifting `strokes` of `snapshot` renders, at the current zoom.
+    private func liftRender(_ ids: Set<StrokeID>, of snapshot: PageSnapshot) -> LiftRender {
+        let strokes = snapshot.strokes.filter { ids.contains($0.id) }
+        let rect = strokes.reduce(CGRect.null) { $0.union($1.bounds) }.intersection(CGRect(origin: .zero, size: snapshot.size))
+        let screenScale = host.window?.screen.scale ?? host.traitCollection.displayScale
+        let longest = max(rect.width, rect.height, 1)
+        let scale = min(max(screenScale, 1) * max(viewport.zoomScale, 0.25), maximumRasterDimension / longest)
+        let lifted = PageSnapshot(page: Page(id: snapshot.id, strokes: strokes), size: snapshot.size)
+        return LiftRender(
+            key: LiftRender.Key(page: snapshot.id, strokes: ids, rev: snapshot.rev, theme: theme),
+            job: RenderJob(page: lifted, palette: palette, theme: theme), rect: rect, scale: scale
+        )
+    }
+
+    /// Shows the strokes' image in `selection.lifted` (the prepared one if current, else rendered now)
+    /// and takes them off the canvas.
     private func lift(_ preview: SelectionPreview) {
         guard let snapshot = snapshots[preview.page] else { return }
         selection.generation += 1
-        let strokes = snapshot.strokes.filter { preview.strokes.contains($0.id) }
-        let rect = strokes.reduce(CGRect.null) { $0.union($1.bounds) }.intersection(CGRect(origin: .zero, size: snapshot.size))
+        let lift = liftRender(preview.strokes, of: snapshot)
+        let rect = lift.rect
         selection.rect = rect
-        selection.lifted.contents = nil
-        if !rect.isNull, !rect.isEmpty {
-            let screenScale = host.window?.screen.scale ?? host.traitCollection.displayScale
-            let longest = max(rect.width, rect.height, 1)
-            let scale = min(max(screenScale, 1) * max(viewport.zoomScale, 0.25), maximumRasterDimension / longest)
-            let lifted = PageSnapshot(page: Page(id: snapshot.id, strokes: strokes), size: snapshot.size)
-            let drawing = RenderJob(page: lifted, palette: palette, theme: theme).drawing()
-            var image: CGImage?
-            UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
-                image = drawing.image(from: rect, scale: scale).cgImage
-            }
-            selection.lifted.contents = image
+        if let prepared = selection.prepared, prepared.key == lift.key {
+            selection.lifted.contents = prepared.image
+        } else {
+            selection.syncRenderCount += 1
+            selection.lifted.contents = lift.render()
         }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -157,7 +180,32 @@ final class SelectionLayers {
     /// Page-space rect the `lifted` image covers.
     var rect = CGRect.null
     var generation = 0
+    /// Image rendered off main when the selection was made, and the render in flight.
+    var prepared: (key: LiftRender.Key, image: CGImage?)?
+    var prepareTask: Task<Void, Never>?
+    /// Lifts that had to render on main (no current prepared image).
+    var syncRenderCount = 0
     var color = UIColor.systemBlue {
         didSet { lasso.strokeColor = color.cgColor }
+    }
+}
+
+/// Rendering the lifted strokes: inputs (all `Sendable`) and the key that says whether an image still fits.
+struct LiftRender: Sendable {
+    struct Key: Hashable, Sendable {
+        let page: PageID
+        let strokes: Set<StrokeID>
+        let rev: UInt64
+        let theme: PaperTheme
+    }
+
+    let key: Key
+    let job: RenderJob
+    /// Page-space rect the image covers.
+    let rect: CGRect
+    let scale: CGFloat
+
+    func render() -> CGImage? {
+        rect.isNull || rect.isEmpty ? nil : job.ink(in: rect, scale: scale)
     }
 }
