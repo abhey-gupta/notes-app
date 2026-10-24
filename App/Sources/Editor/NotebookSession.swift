@@ -45,7 +45,9 @@ final class NotebookSession {
     private var residency: PageResidency?
     private var bridge: UndoManagerBridge?
     private var tool = ToolConfiguration.default
-    private var eraser: (page: PageID, sweep: StrokeEraser)?
+    private var eraser = EraserRun()
+    /// Stroke or partial erase (`ToolState.eraser.mode`).
+    var eraserMode: EraserSettings.Mode = .stroke
     private var queue: Task<Void, Never>?
     private var isClosed = false
     private var awaitingFirstPage = true
@@ -197,6 +199,7 @@ final class NotebookSession {
     private func applyHistory(_ entry: EditEntry) {
         enqueue("history") { [weak self] in
             guard let self, let residency else { return }
+            eraser.reset() // the page may change under an eraser gesture in progress
             do {
                 for step in entry.steps {
                     _ = try await residency.ensureLoaded(step.pageID)
@@ -288,19 +291,17 @@ extension NotebookSession: InkEngineDelegate {
         }
     }
 
-    /// Stroke-mode erase: each batch removes the strokes it touched, all batches of one gesture are one undo
-    /// step. Partial mode (#28) will split strokes here instead (`EraserSettings.Mode.partial`).
+    /// Each batch is applied at once (stroke mode removes the strokes it touched, partial mode splits them,
+    /// highlighter included); at gesture end ``EraserRun`` collapses the batches into one undo step.
     func engine(_: any InkEngine, didReceiveEraser samples: [Sample], to page: PageID) {
-        let diameter = tool.width
+        let (diameter, mode) = (tool.width, eraserMode)
         enqueue("erase") { [weak self] in
             guard let self, let residency else { return }
-            if eraser?.page != page {
-                eraser = try await (page, StrokeEraser(page: residency.ensureLoaded(page), diameter: diameter))
-            }
-            guard let hits = eraser?.sweep.erase(samples), !hits.isEmpty else { return }
-            let edit = try await residency.ensureLoaded(page).removeEdit(hits)
+            let current = try await residency.ensureLoaded(page)
+            guard let edit = try eraser.erase(samples, on: page, current: current, diameter: diameter, mode: mode) else { return }
             try await commit(edit, to: page)
             state.edits.record(edit, on: page, actionName: "Erase")
+            eraser.accept()
         }
     }
 
@@ -315,8 +316,8 @@ extension NotebookSession: InkEngineDelegate {
         let isEraser = tool.tool == .eraser
         enqueue("gesture") { [weak self] in
             guard let self else { return }
+            eraser.finish(in: state.edits)
             state.edits.endAllGroups()
-            eraser = nil
             if isEraser {
                 state.edits.beginGroup(actionName: "Erase")
             }
@@ -343,8 +344,8 @@ extension NotebookSession: CanvasHostViewDelegate {
         state.strokeEnded()
         enqueue("gesture end") { [weak self] in
             guard let self else { return }
+            eraser.finish(in: state.edits)
             state.edits.endAllGroups()
-            eraser = nil
         }
     }
 }

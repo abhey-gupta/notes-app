@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import InkGeometry
 import InkModel
 import Testing
@@ -101,6 +102,69 @@ struct EraserSplitTests {
         var page = Page(strokes: [stroke])
         try page.apply(page.replaceEdit([stroke.id: pieces]))
         #expect(page.strokes.map(\.id) == pieces.map(\.id))
+    }
+
+    /// Property: each piece is the original polyline between its span's ends: original samples
+    /// verbatim inside (only `t` rebased), interpolated ends.
+    @Test(arguments: 0 ..< 100)
+    func piecesKeepOriginalSamples(seed: UInt64) {
+        var rng = SplitMix64(seed: seed &+ 1000)
+        let samples = Fixtures.handwriting(&rng, count: Int.random(in: 2 ... 80, using: &rng)).samples
+        let s = samples[Int.random(in: 0 ..< samples.count, using: &rng)]
+        let inflation = samples.map { _ in Float.random(in: 0 ... 6, using: &rng) }
+        guard let cuts = EraserSplit.cut(samples, center: Point2(s.x + 2, s.y - 1), radius: 4, inflation: inflation) else { return }
+        for cut in cuts {
+            let raw = cut.span.values(of: samples, interpolate: EraserSplit.interpolate)
+            #expect(raw.count == cut.samples.count)
+            let interior = cut.span.start.index + 1 ..< cut.span.end.index + (cut.span.end.fraction > 0 ? 1 : 0)
+            let originals = Array(samples[interior])
+            let kept = Array(raw.dropFirst().prefix(originals.count))
+            #expect(kept == originals, "seed \(seed)")
+            let t0 = raw[0].t
+            let rebased = raw.map { r in
+                var r = r
+                r.t -= t0
+                return r
+            }
+            #expect(rebased == cut.samples)
+        }
+        // Spans are ordered and disjoint.
+        for (a, b) in zip(cuts, cuts.dropFirst()) {
+            let end = a.span.end
+            let start = b.span.start
+            #expect(end.index < start.index || (end.index == start.index && end.fraction < start.fraction))
+        }
+    }
+
+    /// Stored PencilKit point sizes: the disk grows by each point's half-size, and the rendering is cut
+    /// alongside the samples (ink, seed and group kept; interior points verbatim; ends interpolated).
+    @Test func cutsRenderingAlongsideSamples() throws {
+        let line = Fixtures.line(from: Point2(0, 0), to: Point2(40, 0), samples: 41, width: 2)
+        let points = (0 ... 40).map { i in PointRendering(width: 10, height: 4, opacity: Float(i) / 40) }
+        let group = UUID()
+        let rendering = StrokeRendering(ink: StrokeRendering.Ink.pen, randomSeed: 7, points: points, renderGroupID: group)
+        let stroke = Stroke(tool: .ballpoint, color: .primary, width: 2, samples: line.samples, rendering: rendering)
+        let pieces = try #require(stroke.pieces(erasedBy: CGPoint(x: 20, y: 0), radius: 2.5))
+        #expect(pieces.count == 2)
+        // Reach 2.5 + 10 / 2 = 7.5 (not 2.5 + width / 2 = 3.5).
+        #expect(pieces[0].samples.last?.x == 12.5 && pieces[1].samples.first?.x == 27.5)
+        for piece in pieces {
+            let r = try #require(piece.rendering)
+            #expect(r.points.count == piece.samples.count)
+            #expect(r.ink == StrokeRendering.Ink.pen && r.randomSeed == 7 && r.renderGroupID == group)
+        }
+        let first = try #require(pieces[0].rendering)
+        #expect(Array(first.points.prefix(13)) == Array(points.prefix(13)))
+        #expect(abs((first.points.last?.opacity ?? 0) - 12.5 / 40) < 1e-6)
+        #expect(Array(pieces[0].samples.prefix(13)) == Array(line.samples.prefix(13)))
+    }
+
+    /// Highlighter (butt-capped chisel) strokes split like any other.
+    @Test func splitsHighlighter() throws {
+        let stroke = Fixtures.line(from: Point2(0, 0), to: Point2(100, 0), samples: 51, tool: .highlighter, width: 16)
+        let pieces = try #require(stroke.pieces(erasedBy: CGPoint(x: 50, y: 0), radius: 4))
+        #expect(pieces.count == 2 && pieces.allSatisfy { $0.tool == .highlighter && $0.width == 16 })
+        #expect(pieces[0].samples.last?.x == 38 && pieces[1].samples.first?.x == 62)
     }
 }
 
