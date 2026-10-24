@@ -204,7 +204,7 @@ final class ToolbarTests: XCTestCase {
     }
 
     @MainActor
-    func testOptionsOpenFromSideDockAndCompactPill() {
+    func testOptionsOpenFromSideDockNotFromPill() {
         let app = launch(["-toolbarDock", "right"])
         let bar = toolbar(app)
         XCTAssertTrue(waitUntil(bar, isAt: .right, in: app))
@@ -219,8 +219,8 @@ final class ToolbarTests: XCTestCase {
         bar.pinch(withScale: 0.4, velocity: -1)
         XCTAssertTrue(waitUntil(pill(app), isAt: .right, in: app))
         app.buttons["Current tool"].tap()
-        XCTAssertTrue(popover(app).waitForExistence(timeout: 3), "the pill's tool opens options without expanding")
-        XCTAssertTrue(pill(app).exists)
+        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app), "any tap on the pill expands")
+        XCTAssertFalse(popover(app).exists, "the pill has no options popover")
     }
 
     @MainActor

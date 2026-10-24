@@ -11,8 +11,9 @@ import Tools
 /// to the compact pill at the same dock; tap (or pinch out on) the pill to expand. Focus mode shows the same
 /// pill. Dock and compact persist in `ToolState`.
 ///
-/// Tapping the active tool (or the pill's tool) opens its options popover (``ToolPopover``, #27), anchored
-/// to that button with the arrow toward the toolbar on every dock.
+/// Tapping the active tool on the expanded toolbar opens its options popover (``ToolPopover``, #27),
+/// anchored to that button with the arrow toward the toolbar on every dock. Any tap on the compact pill
+/// expands; the pill has no popover.
 struct ToolbarHost: View {
     let tools: ToolState
     let state: EditorState
@@ -151,7 +152,7 @@ struct ToolbarHost: View {
             spacing: compact ? 0 : squeeze
         ) {
             if compact {
-                FocusPillContent(axis: axis, tool: tools.tool.symbol, ink: ink, onTool: { toggleOptions(tools.tool) }, onExpand: expand)
+                FocusPillContent(axis: axis, tool: tools.tool.symbol, ink: ink, onTool: expand, onExpand: expand)
                     .transition(contentTransition)
             } else {
                 EditorToolbarContent(
@@ -166,7 +167,11 @@ struct ToolbarHost: View {
             }
         }
         .coordinateSpace(.named(Self.capsuleSpace))
-        .popover(isPresented: optionsPresented, attachmentAnchor: .rect(.rect(optionsAnchor(axis: axis))), arrowEdge: optionsArrowEdge) {
+        .popover(
+            isPresented: optionsPresented,
+            attachmentAnchor: .rect(.rect(toolFrames[tools.tool] ?? .zero)),
+            arrowEdge: optionsArrowEdge
+        ) {
             ToolPopover(tools: tools, tool: options ?? tools.tool, paper: paper)
                 .presentationCompactAdaptation(.popover)
         }
@@ -290,9 +295,10 @@ struct ToolbarHost: View {
 extension ToolbarHost {
     // MARK: Tool options (#27)
 
+    /// Expanded toolbar only: the pill never shows options.
     private var optionsPresented: Binding<Bool> {
         Binding {
-            options != nil && options == tools.tool
+            !isCompact && options != nil && options == tools.tool
         } set: { presented in
             if !presented {
                 options = nil
@@ -304,21 +310,6 @@ extension ToolbarHost {
     private func toggleOptions(_ tool: Tool) {
         guard tool != .lasso else { return }
         options = options == tool ? nil : tool
-    }
-
-    /// The active tool button, in the capsule: measured when expanded; the pill's leading tool button
-    /// (``FocusPillContent`` layout) when compact.
-    private func optionsAnchor(axis: Axis) -> CGRect {
-        if isCompact {
-            let button = Tokens.Size.focusToolButton
-            let size = axis == .horizontal ? button : button.transposed
-            let across = (Tokens.Size.focusPillHeight - (axis == .horizontal ? size.height : size.width)) / 2
-            let origin = axis == .horizontal
-                ? CGPoint(x: FocusPill.endPadding, y: across)
-                : CGPoint(x: across, y: FocusPill.endPadding)
-            return CGRect(origin: origin, size: size)
-        }
-        return toolFrames[tools.tool] ?? .zero
     }
 
     /// `arrowEdge` is the popover's own edge carrying the arrow: the one facing the dock, so it opens away
