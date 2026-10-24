@@ -140,7 +140,7 @@ final class InkFidelityTests: XCTestCase {
             let expected: ClosedRange<CGFloat> = switch line.name {
             case "fountain": 0.4 ... 4
             case "ballpoint": 0.8 ... 4
-            case "brush": 5 ... 30
+            case "brush": 4 ... 30 // default watercolor 20 PK (was 25)
             default: 8 ... 30
             }
             XCTAssertTrue(expected.contains(thickness), "\(line.name) \(thickness) pt, expected \(expected)")

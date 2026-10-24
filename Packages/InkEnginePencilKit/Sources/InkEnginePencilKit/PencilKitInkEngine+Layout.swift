@@ -3,35 +3,131 @@ import InkModel
 import UIKit
 
 extension PencilKitInkEngine {
+    /// Covers the visible part of the active page with the canvas.
+    ///
+    /// Settled, the canvas is the page's visible rect at the viewport zoom. During a zoom gesture
+    /// (``InkEngine/Viewport/isZooming``) it keeps the `zoomScale`, bounds and content offset it had when
+    /// the gesture began, and only its center and scale transform follow the pinch (``CanvasPlacement``).
+    /// Setting `zoomScale` every frame made PencilKit drop its tiles and re-render them at each new scale
+    /// on the GPU, landing frames after the paper (which moves in the same Core Animation transaction as
+    /// the viewport): ink slid against the page and snapped back when the pinch stopped. A transform is
+    /// composited with the paper, so they move together. When the zoom ends the canvas takes the final
+    /// zoom once; PencilKit keeps its old tiles (scaled) until the new ones are drawn.
     func layoutCanvas() {
+        syncZoomFreeze()
         layoutSelectionPreview()
         guard let id = activePage, let page = viewport.page(id), let snapshot = snapshots[id] else {
-            canvas.isHidden = true
+            hideCanvas()
             return
         }
         let pageRect = viewport.viewRect(of: page)
-        let visible = pageRect.intersection(CGRect(origin: .zero, size: viewport.size))
-        guard !visible.isNull, !visible.isEmpty else {
-            canvas.isHidden = true
-            return
+        let placement: CanvasPlacement
+        if let freeze = zoom.freeze, freeze.page == id, !freeze.settling {
+            placement = .scaled(
+                region: freeze.region, renderZoom: freeze.renderZoom, pageOrigin: pageRect.origin,
+                zoom: viewport.zoomScale, pageSize: snapshot.size
+            )
+        } else {
+            let visible = pageRect.intersection(CGRect(origin: .zero, size: viewport.size))
+            guard !visible.isNull, !visible.isEmpty else {
+                hideCanvas()
+                return
+            }
+            placement = .settled(visible: visible, pageRect: pageRect, zoom: viewport.zoomScale, pageSize: snapshot.size)
         }
-        let zoom = viewport.zoomScale
         canvas.isHidden = false
-        if canvas.zoomScale != zoom || canvas.minimumZoomScale != zoom || canvas.maximumZoomScale != zoom {
+        place(placement)
+        zoom.placedPage = id
+    }
+
+    private func hideCanvas() {
+        canvas.isHidden = true
+        zoom.placedPage = nil
+    }
+
+    private func place(_ placement: CanvasPlacement) {
+        let renderZoom = placement.renderZoom
+        if canvas.zoomScale != renderZoom || canvas.minimumZoomScale != renderZoom || canvas.maximumZoomScale != renderZoom {
             // Widen the range just enough to set the zoom, then pin it: min == max leaves the canvas no
             // pinch recognizer, so pinches reach the host scroll view and zoom the whole page.
-            canvas.minimumZoomScale = min(canvas.minimumZoomScale, zoom)
-            canvas.maximumZoomScale = max(canvas.maximumZoomScale, zoom)
-            canvas.zoomScale = zoom
-            canvas.minimumZoomScale = zoom
-            canvas.maximumZoomScale = zoom
+            canvas.minimumZoomScale = min(canvas.minimumZoomScale, renderZoom)
+            canvas.maximumZoomScale = max(canvas.maximumZoomScale, renderZoom)
+            canvas.zoomScale = renderZoom
+            canvas.minimumZoomScale = renderZoom
+            canvas.maximumZoomScale = renderZoom
         }
-        canvas.contentSize = CGSize(width: snapshot.size.width * zoom, height: snapshot.size.height * zoom)
-        canvas.frame = visible
-        canvas.contentOffset = CGPoint(x: visible.minX - pageRect.minX, y: visible.minY - pageRect.minY)
+        let scale = placement.scale
+        let transform = scale == 1 ? CGAffineTransform.identity : CGAffineTransform(scaleX: scale, y: scale)
+        // Only set what changed: mid-zoom that is the center and transform, so PencilKit has nothing to redo.
+        if canvas.transform != transform {
+            canvas.transform = transform
+        }
+        if canvas.contentSize != placement.contentSize {
+            canvas.contentSize = placement.contentSize
+        }
+        if canvas.bounds.size != placement.bounds.size {
+            canvas.bounds.size = placement.bounds.size
+        }
+        if canvas.center != placement.center {
+            canvas.center = placement.center
+        }
+        if canvas.contentOffset != placement.bounds.origin {
+            canvas.contentOffset = placement.bounds.origin
+        }
+    }
+
+    /// Starts, keeps, settles or drops the zoom freeze for the current viewport and active page.
+    func syncZoomFreeze() {
+        guard let id = activePage, viewport.page(id) != nil, snapshots[id] != nil else {
+            zoom.freeze = nil
+            return
+        }
+        if viewport.isZooming {
+            if let freeze = zoom.freeze, freeze.page == id, !freeze.settling {
+                return
+            }
+            // Hold what the canvas shows now, if it is on this page (else it is placed normally this
+            // frame and held from the next).
+            let renderZoom = canvas.zoomScale
+            let bounds = canvas.bounds
+            guard zoom.placedPage == id, !canvas.isHidden, renderZoom > 0, !bounds.isEmpty else {
+                zoom.freeze = nil
+                return
+            }
+            let region = CGRect(
+                x: bounds.minX / renderZoom, y: bounds.minY / renderZoom,
+                width: bounds.width / renderZoom, height: bounds.height / renderZoom
+            )
+            zoom.freeze = ZoomFreeze(page: id, region: region, renderZoom: renderZoom)
+        } else if var freeze = zoom.freeze, freeze.page == id {
+            guard !freeze.settling else { return }
+            freeze.settling = true
+            zoom.freeze = freeze
+            zoom.settleToken += 1
+            // `canvasViewDidFinishRendering` normally comes within a few frames; don't wait on it forever.
+            let token = zoom.settleToken
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self, zoom.settleToken == token else { return }
+                zoomDidSettle()
+            }
+        } else {
+            zoom.freeze = nil
+        }
+    }
+
+    /// The canvas finished rendering (or the settle timed out). After a zoom, the active page's raster
+    /// hides again; mid-zoom, it re-applies the raster around the held canvas (`canvasDidRender` may
+    /// just have hidden it).
+    func zoomDidSettle() {
+        guard let freeze = zoom.freeze else { return }
+        if freeze.settling, !viewport.isZooming {
+            zoom.freeze = nil
+        }
+        layoutPages()
     }
 
     func layoutPages() {
+        syncZoomFreeze()
         let visible = Set(viewport.pages.map(\.id))
         for (id, view) in pageViews where !visible.contains(id) {
             view.removeFromSuperview()
@@ -55,9 +151,23 @@ extension PencilKitInkEngine {
                 colors: colors
             )
             let isCanvasPage = page.id == activePage
+            // During a zoom, and until the canvas has redrawn after it, the canvas covers only what it had
+            // drawn when the zoom began; the page's raster shows around that (zooming out reveals more page).
+            let freeze = isCanvasPage && zoom.freeze?.page == page.id ? zoom.freeze : nil
+            let hole = canvasHasRendered ? freeze?.region : nil
+            view.inkHole = hole
             // The canvas's page keeps its raster until the canvas has drawn it.
-            view.showsInk = !isCanvasPage || !canvasHasRendered
-            guard let snapshot, !isCanvasPage else { continue }
+            view.showsInk = !isCanvasPage || !canvasHasRendered || hole != nil
+            guard var snapshot, !isCanvasPage || freeze != nil else { continue }
+            if isCanvasPage, !selection.strokes.isEmpty {
+                // Lasso-lifted strokes are drawn by the selection layer, not the canvas or its raster.
+                let model = snapshot.page
+                let shown = model.strokes.filter { !selection.strokes.contains($0.id) }
+                snapshot = PageSnapshot(
+                    page: Page(id: model.id, template: model.template, strokes: shown, rev: model.rev),
+                    size: snapshot.size
+                )
+            }
             refreshInk(view, snapshot: snapshot, pixelScale: pixelScale(for: page.frame.size, screenScale: screenScale))
         }
     }

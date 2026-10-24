@@ -91,7 +91,7 @@ struct ToolStateTests {
         #expect(state.tool == .lasso)
         #expect(state.dock == .right, "unknown dock → initial")
         #expect(state.isCompact, "missing → initial")
-        #expect(state.pen.kind == .fountain, "highlighter is not a pen kind")
+        #expect(state.pen.kind == .ballpoint, "highlighter is not a pen kind")
         #expect(state.pen.widthIndex == PenSettings.widths.count - 1)
         #expect(state.pen.color == .semantic(.blue))
         #expect(state.quickColors == initial.quickColors)
@@ -117,9 +117,15 @@ struct ToolStateTests {
         #expect(state.currentColor == .semantic(.red))
     }
 
+    @Test func freshInstallPenIsAFineBallpoint() {
+        let pen = PenSettings()
+        #expect(pen.kind == .ballpoint)
+        #expect(pen.width == 2.5)
+    }
+
     @Test func settingsClampWidths() {
         var pen = PenSettings(kind: .highlighter, widthIndex: -3)
-        #expect(pen.kind == .fountain && pen.widthIndex == 0)
+        #expect(pen.kind == .ballpoint && pen.widthIndex == 0)
         pen.widthIndex = 12
         #expect(pen.width == PenSettings.widths.last)
         var eraser = EraserSettings(widthIndex: 9)

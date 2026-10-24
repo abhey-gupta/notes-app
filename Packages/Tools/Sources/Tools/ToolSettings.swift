@@ -23,16 +23,17 @@ public enum ToolbarDock: String, CaseIterable, Hashable, Sendable, Codable {
 
 /// Pen settings: family, width step, color, pressure.
 public struct PenSettings: Hashable, Sendable, Codable {
-    /// Pen widths in points, by ``widthIndex`` (mock units 3/5/8/11/15).
+    /// Pen widths in points, by ``widthIndex`` (mock units 3/5/8/11/15). Toolbar units: what PencilKit
+    /// draws for each comes from `PencilKitConversion.pencilKitWidth` (the default, index 1, is a fine pen).
     public static let widths: [Float] = [1.5, 2.5, 4, 6, 8]
     /// Families offered for the pen tool (the highlighter is its own tool).
     public static let kinds: [PenKind] = [.fountain, .ballpoint, .brush]
 
-    /// Pen family; never `.highlighter`.
+    /// Pen family; never `.highlighter` (falls back to `.ballpoint`).
     public var kind: PenKind {
         didSet {
             if !Self.kinds.contains(kind) {
-                kind = .fountain
+                kind = .ballpoint
             }
         }
     }
@@ -53,8 +54,9 @@ public struct PenSettings: Hashable, Sendable, Codable {
     }
 
     /// Creates pen settings (out-of-range values are normalized).
-    public init(kind: PenKind = .fountain, widthIndex: Int = 1, color: InkColor = .primary, pressure: Bool = true) {
-        self.kind = Self.kinds.contains(kind) ? kind : .fountain
+    /// Fresh installs get a fine ballpoint (#71 follow-up: the fountain default read as marker-thick).
+    public init(kind: PenKind = .ballpoint, widthIndex: Int = 1, color: InkColor = .primary, pressure: Bool = true) {
+        self.kind = Self.kinds.contains(kind) ? kind : .ballpoint
         self.widthIndex = widthIndex.clamped(to: Self.widths.indices)
         self.color = color
         self.pressure = pressure

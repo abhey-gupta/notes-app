@@ -69,14 +69,28 @@ struct ConversionTests {
     }
 
     @Test(arguments: PenKind.allCases)
-    func middlePresetDrawsAtPencilKitDefaultWidth(kind: PenKind) {
+    func referenceWidthDrawsAtPencilKitDefaultAndPresetsStepUp(kind: PenKind) {
         let type = PencilKitConversion.inkType(for: kind)
-        let middle = PencilKitConversion.referenceWidth(for: kind)
-        #expect(PencilKitConversion.pencilKitWidth(for: kind, width: middle) == type.defaultWidth)
-        // Presets step monotonically finer/bolder within the ink's range.
+        let reference = PencilKitConversion.referenceWidth(for: kind)
+        #expect(PencilKitConversion.pencilKitWidth(for: kind, width: reference) == type.defaultWidth)
+        // Presets step strictly finer → bolder within the ink's range.
         let presets: [Float] = kind == .highlighter ? [10, 16, 24] : [1.5, 2.5, 4, 6, 8]
         let widths = presets.map { PencilKitConversion.pencilKitWidth(for: kind, width: $0) }
         #expect(widths == widths.sorted())
+        #expect(Set(widths).count == widths.count)
         #expect(widths.allSatisfy { type.validWidthRange.contains($0) })
+    }
+
+    /// The default pen (preset 2.5) is a fine pen, not PencilKit's bolder default, and the finest
+    /// preset is at or near the ink's minimum (real-iPad feedback: default fountain read marker-thick).
+    @Test(arguments: [PenKind.ballpoint, .fountain])
+    func defaultPresetIsAFinePen(kind: PenKind) {
+        let range = PencilKitConversion.inkType(for: kind).validWidthRange
+        let fine = PencilKitConversion.pencilKitWidth(for: kind, width: 2.5)
+        #expect((1.5 ... 1.85).contains(fine), "\(kind) default \(fine)")
+        let finest = PencilKitConversion.pencilKitWidth(for: kind, width: 1.5)
+        #expect(finest <= range.lowerBound * 1.1, "\(kind) finest \(finest)")
+        let boldest = PencilKitConversion.pencilKitWidth(for: kind, width: 8)
+        #expect(boldest >= 3 * fine, "\(kind) boldest \(boldest)")
     }
 }
