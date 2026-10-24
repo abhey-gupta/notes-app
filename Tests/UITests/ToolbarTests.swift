@@ -162,4 +162,78 @@ final class ToolbarTests: XCTestCase {
         XCTAssertTrue(app.buttons["Pen"].isSelected, "a quick color picks the pen back up")
         XCTAssertTrue(app.buttons["Red"].isSelected)
     }
+
+    // MARK: Tool options popover (#27)
+
+    @MainActor
+    private func popover(_ app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "toolPopover").firstMatch
+    }
+
+    @MainActor
+    private func dismissPopover(_ app: XCUIApplication) {
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)).tap()
+        XCTAssertTrue(popover(app).waitForNonExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testActiveToolOpensItsOptions() {
+        let app = launch()
+        app.buttons["Pen"].tap()
+        XCTAssertTrue(popover(app).waitForExistence(timeout: 3), "tapping the active tool opens its options")
+        app.buttons["Brush"].tap()
+        app.buttons["Width 5"].tap()
+        XCTAssertTrue(app.buttons["Brush"].isSelected)
+        XCTAssertTrue(app.buttons["Width 5"].isSelected)
+        XCTAssertTrue(app.switches["pressureToggle"].exists)
+        dismissPopover(app)
+
+        app.buttons["Pen"].tap()
+        XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Brush"].isSelected, "settings stick")
+        dismissPopover(app)
+
+        app.buttons["Eraser"].tap()
+        XCTAssertFalse(popover(app).exists, "selecting a tool doesn't open its options")
+        app.buttons["Eraser"].tap()
+        XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
+        app.buttons["Partial"].tap()
+        XCTAssertTrue(app.buttons["Partial"].isSelected)
+        XCTAssertTrue(app.buttons["Size 3"].exists)
+        XCTAssertFalse(app.buttons["Size 4"].exists)
+    }
+
+    @MainActor
+    func testOptionsOpenFromSideDockNotFromPill() {
+        let app = launch(["-toolbarDock", "right"])
+        let bar = toolbar(app)
+        XCTAssertTrue(waitUntil(bar, isAt: .right, in: app))
+        app.buttons["Highlighter"].tap()
+        app.buttons["Highlighter"].tap()
+        XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Width 3"].exists)
+        XCTAssertFalse(app.buttons["Width 4"].exists, "highlighter has 3 widths")
+        XCTAssertLessThan(popover(app).frame.maxX, bar.frame.minX + 1, "opens beside a right-docked toolbar")
+        dismissPopover(app)
+
+        bar.pinch(withScale: 0.4, velocity: -1)
+        XCTAssertTrue(waitUntil(pill(app), isAt: .right, in: app))
+        app.buttons["Current tool"].tap()
+        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app), "any tap on the pill expands")
+        XCTAssertFalse(popover(app).exists, "the pill has no options popover")
+    }
+
+    @MainActor
+    func testLongPressStoresPenColorInQuickSlot() {
+        let app = launch()
+        app.buttons["Pen"].tap()
+        XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
+        app.buttons["Green"].tap()
+        dismissPopover(app)
+        XCTAssertFalse(app.buttons["Red"].isSelected)
+
+        app.buttons["Red"].press(forDuration: 0.8)
+        XCTAssertTrue(app.buttons["Custom color"].waitForExistence(timeout: 2), "slot 3 now holds the green")
+        XCTAssertTrue(app.buttons["Custom color"].isSelected)
+    }
 }

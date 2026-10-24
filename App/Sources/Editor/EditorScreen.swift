@@ -39,8 +39,7 @@ struct EditorScreen: View {
                 paper: paperBinding,
                 pattern: patternBinding,
                 page: (min(viewport.currentPage + 1, max(viewport.pageCount, 1)), viewport.pageCount),
-                onBack: { dismiss() },
-                onReselectTool: { _ in } // tool options popover lands with #27
+                onBack: { dismiss() }
             )
             SelectionBar(tools: tools, state: session.state, paper: notebook.theme.style)
         }
