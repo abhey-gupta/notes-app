@@ -77,7 +77,7 @@
         }
 
         private let scrollView = CanvasScrollView()
-        private let contentView = UIView()
+        let contentView = UIView()
         private let addPageButton: UIButton
         private let touchObserver = TouchObserver()
         private var hasSeenPencil = false
@@ -262,7 +262,7 @@
         }
 
         /// Centers narrow content horizontally; top/bottom clear the chrome.
-        private func updateInsets() {
+        func updateInsets() {
             guard !isUpdatingInsets else { return }
             isUpdatingInsets = true
             defer { isUpdatingInsets = false }
@@ -344,38 +344,6 @@
 
         private func requestNewPage() {
             delegate?.canvasHostDidRequestNewPage(self)
-        }
-    }
-
-    extension CanvasHostView: UIScrollViewDelegate {
-        public func viewForZooming(in _: UIScrollView) -> UIView? {
-            contentView
-        }
-
-        public func scrollViewDidScroll(_: UIScrollView) {
-            if isZooming {
-                pinHorizontalOffset()
-            }
-            viewportDidChange()
-        }
-
-        public func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            updateInsets()
-            pinHorizontalOffset()
-            state.zoomScale = scrollView.zoomScale
-            viewportDidChange()
-        }
-
-        public func scrollViewWillBeginDragging(_: UIScrollView) {
-            delegate?.canvasHostWillBeginNavigating(self)
-        }
-
-        public func scrollViewWillBeginZooming(_: UIScrollView, with _: UIView?) {
-            delegate?.canvasHostWillBeginNavigating(self)
-        }
-
-        public func scrollViewDidEndZooming(_: UIScrollView, with _: UIView?, atScale _: CGFloat) {
-            settleZoom() // after a bounce back into range
         }
     }
 
