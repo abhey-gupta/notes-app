@@ -353,11 +353,15 @@
         }
 
         public func scrollViewDidScroll(_: UIScrollView) {
+            if isZooming {
+                pinHorizontalOffset()
+            }
             viewportDidChange()
         }
 
         public func scrollViewDidZoom(_ scrollView: UIScrollView) {
             updateInsets()
+            pinHorizontalOffset()
             state.zoomScale = scrollView.zoomScale
             viewportDidChange()
         }
