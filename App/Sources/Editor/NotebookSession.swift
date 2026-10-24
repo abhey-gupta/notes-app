@@ -42,7 +42,7 @@ final class NotebookSession {
     private let initialPageCount: Int
     private var initialTheme: PaperTheme
     private var store: DocumentStore?
-    private var residency: PageResidency?
+    private(set) var residency: PageResidency?
     private var bridge: UndoManagerBridge?
     private var tool = ToolConfiguration.default
     private var eraser = EraserRun()
@@ -51,6 +51,11 @@ final class NotebookSession {
     private var queue: Task<Void, Never>?
     private var isClosed = false
     private var awaitingFirstPage = true
+    /// Lasso selection (`+Selection`).
+    var selection: LassoSelection?
+    var isBakingSelection = false
+    var selectionDragCorner: LassoSelection.Corner?
+    let selectionOverlay = SelectionOverlayView()
 
     private static var closing: [NotebookID: Task<Void, Never>] = [:]
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "editor")
@@ -61,6 +66,7 @@ final class NotebookSession {
         initialPageCount = notebook.pageCount
         initialTheme = notebook.theme
         state = EditorState(startsFocused: startsFocused)
+        state.onSelectionAction = { [weak self] in self?.performSelectionAction($0) }
     }
 
     var engine: any InkEngine {
@@ -143,6 +149,9 @@ final class NotebookSession {
     // MARK: Settings
 
     func setTool(_ configuration: ToolConfiguration) {
+        if configuration.tool != .lasso {
+            clearSelection()
+        }
         tool = configuration
         engine.setTool(configuration)
         host.allowsFingerDrawing = configuration.allowsFingerDrawing
@@ -152,6 +161,7 @@ final class NotebookSession {
     /// template of every page and of new pages.
     func setPaper(theme: PaperTheme, style: PaperStyle) {
         engine.setTheme(theme)
+        tintSelection(for: theme)
         initialTheme = theme
         enqueue("paper") { [weak self] in
             guard let self, let store, let residency else { return }
@@ -172,7 +182,7 @@ final class NotebookSession {
     // MARK: Edits
 
     /// Runs `operation` after every earlier one, logging (and recovering from) failures.
-    private func enqueue(_ name: StaticString, _ operation: @escaping @MainActor () async throws -> Void) {
+    func enqueue(_ name: StaticString, _ operation: @escaping @MainActor () async throws -> Void) {
         let previous = queue
         queue = Task { @MainActor in
             await previous?.value
@@ -185,7 +195,7 @@ final class NotebookSession {
     }
 
     /// Applies `edit` to the store, then mirror + engine; reloads the page if the store refused it.
-    private func commit(_ edit: PageEdit, to page: PageID) async throws {
+    func commit(_ edit: PageEdit, to page: PageID) async throws {
         guard let store, let residency else { return }
         do {
             try await store.apply(edit, to: page)
@@ -197,6 +207,7 @@ final class NotebookSession {
     }
 
     private func applyHistory(_ entry: EditEntry) {
+        clearSelection()
         enqueue("history") { [weak self] in
             guard let self, let residency else { return }
             eraser.reset() // the page may change under an eraser gesture in progress
@@ -266,6 +277,7 @@ final class NotebookSession {
         host.accessibilityPageValue = { [weak self] in self?.currentPageDescription() }
         engine.delegate = self
         host.delegate = self
+        installSelection(on: host, engine: engine, theme: initialTheme)
         return host
     }
 
@@ -305,10 +317,13 @@ extension NotebookSession: InkEngineDelegate {
         }
     }
 
-    /// Lasso selection lands with #29 (`Lasso.selection` → selection overlay → transform/recolor edits).
-    func engine(_: any InkEngine, didReceiveLasso _: [CGPoint], to _: PageID) {}
+    /// A finished lasso: strokes with ≥ 50 % of their samples inside become the selection (`+Selection`).
+    func engine(_: any InkEngine, didReceiveLasso path: [CGPoint], to page: PageID) {
+        select(lasso: path, on: page)
+    }
 
     func engineDidBeginStroke(_: any InkEngine) {
+        clearSelection()
         state.strokeBegan()
         if !host.isFirstResponder {
             host.becomeFirstResponder()
@@ -330,6 +345,9 @@ extension NotebookSession: InkEngineDelegate {
 extension NotebookSession: CanvasHostViewDelegate {
     func canvasHost(_: CanvasHostView, didChange window: PageWindow) {
         residency?.update(window)
+        if let selection, !window.visible.contains(where: { host.layout.pageIDs[$0] == selection.pageID }) {
+            clearSelection()
+        }
     }
 
     func canvasHostWillBeginNavigating(_: CanvasHostView) {

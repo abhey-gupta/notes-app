@@ -42,6 +42,7 @@ struct EditorScreen: View {
                 onBack: { dismiss() },
                 onReselectTool: { _ in } // tool options popover lands with #27
             )
+            SelectionBar(tools: tools, state: session.state, paper: notebook.theme.style)
         }
         .toolbar(.hidden, for: .navigationBar)
         .persistentSystemOverlays(session.state.isFocused ? .hidden : .automatic)

@@ -37,6 +37,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     let input = InkInputView()
     /// Ink rasters of recently shown inactive pages.
     let rasters = InkRasterCache()
+    /// Above the canvas: the live lasso path and lifted (lasso-dragged) strokes (`+Selection`).
+    let selection = SelectionLayers()
 
     private(set) var viewport = Viewport.empty
     private(set) var snapshots: [PageID: PageSnapshot] = [:]
@@ -90,6 +92,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         canvas.delegate = self
         canvas.onPencilTouch = { [weak self] in self?.pencilSeen() }
         host.addSubview(canvas)
+        setUpSelectionLayers()
 
         input.frame = host.bounds
         input.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -186,7 +189,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     /// Pen-down hit test: makes the page under a touch active so the canvas is there to receive it.
     func willReceiveTouch(at point: CGPoint) {
-        guard tool.penKind != nil, !isUsingTool, let page = viewport.page(at: point), page.id != activePage else { return }
+        guard tool.penKind != nil || tool.tool == .lasso, !isUsingTool,
+              let page = viewport.page(at: point), page.id != activePage else { return }
         activate(page.id)
     }
 
@@ -232,7 +236,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     private func contentChanged(_ page: PageID, rebuild: Bool) {
         if page == activePage {
-            let desired = (snapshots[page]?.strokes.map(\.id) ?? []) + (pending[page] ?? []).map(\.id)
+            let shown = (snapshots[page]?.strokes.map(\.id) ?? []).filter { !selection.strokes.contains($0) }
+            let desired = shown + (pending[page] ?? []).map(\.id)
             if rebuild || desired != canvasIDs {
                 rebuildCanvas()
             }
@@ -261,7 +266,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     }
 
     /// Replaces the canvas drawing with the active page's snapshot plus pending strokes.
-    private func rebuildCanvas() {
+    func rebuildCanvas() {
         guard !isUsingTool else {
             needsCanvasRebuild = true
             return
@@ -274,7 +279,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         var strokes: [PKStroke] = []
         var ids: [StrokeID] = []
         if let page = activePage, let snapshot = snapshots[page] {
-            for stroke in snapshot.strokes {
+            for stroke in snapshot.strokes where !selection.strokes.contains(stroke.id) {
                 strokes.append(PencilKitConversion.pkStroke(from: stroke, color: uiColor(stroke.color)))
                 ids.append(stroke.id)
             }
@@ -339,6 +344,7 @@ extension PencilKitInkEngine: PKCanvasViewDelegate {
 
     public func canvasViewDidFinishRendering(_: PKCanvasView) {
         canvasDidRender()
+        canvasDidRenderSelection()
     }
 }
 
@@ -351,6 +357,9 @@ extension PencilKitInkEngine: InkInputViewDelegate {
     }
 
     public func inkInputView(_: InkInputView, didProduce event: InkInputTracker.Event) {
+        if tool.tool == .lasso {
+            drawLasso(event)
+        }
         switch event {
         case let .began(stroke):
             if stroke.device == .pencil {

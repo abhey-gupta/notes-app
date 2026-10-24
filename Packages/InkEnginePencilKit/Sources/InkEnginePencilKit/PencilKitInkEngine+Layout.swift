@@ -4,6 +4,7 @@ import UIKit
 
 extension PencilKitInkEngine {
     func layoutCanvas() {
+        layoutSelectionPreview()
         guard let id = activePage, let page = viewport.page(id), let snapshot = snapshots[id] else {
             canvas.isHidden = true
             return

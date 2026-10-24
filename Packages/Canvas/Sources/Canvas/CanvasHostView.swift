@@ -63,6 +63,11 @@
             set { scrollView.valueProvider = newValue }
         }
 
+        /// Kept above the engine view, pinned and updated like it (lasso chrome, see ``CanvasOverlay``).
+        public var overlay: (any CanvasOverlay)? {
+            didSet { overlayDidChange(from: oldValue) }
+        }
+
         /// The current page window (visible ± margins), once laid out.
         public private(set) var pageWindow: PageWindow?
 
@@ -309,6 +314,7 @@
 
             let viewport = makeViewport()
             engine.setViewport(viewport)
+            updateOverlay(viewport)
 
             let content = contentRect(bounds, zoom: z)
             if let current = layout.nearestPage(toY: content.midY), current != state.currentPage {

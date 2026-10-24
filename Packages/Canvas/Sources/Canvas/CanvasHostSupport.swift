@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+    import InkEngine
     import Observation
     import UIKit
 
@@ -13,6 +14,33 @@
         func canvasHostDidRequestNewPage(_ host: CanvasHostView)
         /// The last touch on the canvas lifted (end of a Pencil gesture: eraser undo grouping, focus mode).
         func canvasHostDidLiftAllTouches(_ host: CanvasHostView)
+    }
+
+    /// A view the host keeps above the ink engine (``CanvasHostView/overlay``), in the engine view's
+    /// coordinates (view space of ``InkEngine/Viewport``).
+    @MainActor
+    public protocol CanvasOverlay: UIView {
+        /// Every scroll/zoom frame, after the engine got the same viewport.
+        func canvasHost(_ host: CanvasHostView, didUpdate viewport: Viewport)
+    }
+
+    extension CanvasHostView {
+        func overlayDidChange(from old: (any CanvasOverlay)?) {
+            guard old !== overlay else { return }
+            old?.removeFromSuperview()
+            guard let overlay else { return }
+            engine.view.superview?.insertSubview(overlay, aboveSubview: engine.view)
+            updateOverlay(viewport)
+        }
+
+        /// Pins the overlay to the engine view (the visible rect) and passes on the viewport.
+        func updateOverlay(_ viewport: Viewport) {
+            guard let overlay else { return }
+            if overlay.frame != engine.view.frame {
+                overlay.frame = engine.view.frame
+            }
+            overlay.canvasHost(self, didUpdate: viewport)
+        }
     }
 
     /// What SwiftUI shows about the viewport: the page indicator's page and the zoom.

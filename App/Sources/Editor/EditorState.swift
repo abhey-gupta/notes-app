@@ -1,8 +1,17 @@
+import CoreGraphics
 import DesignSystem
+import InkModel
 import Observation
 import Tools
 
-/// Editor chrome state: focus mode and the undo/redo buttons. The notebook's history (`EditStack`) lives
+/// A lasso context-bar action (§6). Each one is a single undo step.
+enum SelectionAction: Equatable {
+    case recolor(InkColor)
+    case duplicate
+    case delete
+}
+
+/// Editor chrome state: focus mode, the undo/redo buttons and the lasso context bar. The notebook's history (`EditStack`) lives
 /// here so the toolbar observes it; `NotebookSession` records into it and performs undo/redo.
 @MainActor
 @Observable
@@ -12,6 +21,10 @@ final class EditorState {
     let edits: EditStack
     @ObservationIgnored var onUndo: () -> Void = {}
     @ObservationIgnored var onRedo: () -> Void = {}
+    /// Lasso selection box in screen (canvas view) space for the context bar; `nil` when there is no
+    /// selection or it is being dragged.
+    var selectionFrame: CGRect?
+    @ObservationIgnored var onSelectionAction: (SelectionAction) -> Void = { _ in }
 
     var canUndo: Bool {
         edits.canUndo
@@ -32,6 +45,10 @@ final class EditorState {
 
     func redo() {
         onRedo()
+    }
+
+    func perform(_ action: SelectionAction) {
+        onSelectionAction(action)
     }
 
     // MARK: Focus mode (§7)
