@@ -83,6 +83,8 @@ struct PagesCapsule: View {
 
 /// Tools, quick colors, undo/redo, laid out along `axis` so the same content docks on any edge.
 /// ARCHITECTURE §7 calls this `ToolbarContent`; renamed so it doesn't shadow SwiftUI's protocol in App.
+///
+/// Long-press a quick color to store the pen's current color in that slot (#27).
 struct EditorToolbarContent: View {
     let tools: ToolState
     let state: EditorState
@@ -90,6 +92,11 @@ struct EditorToolbarContent: View {
     let axis: Axis
     /// Tap on the already-current tool.
     let onReselect: (Tool) -> Void
+    /// Each tool button's frame in ``ToolbarHost/capsuleSpace`` (popover anchors).
+    let onToolFrame: (Tool, CGRect) -> Void
+
+    /// Bumped per slot when a long-press assigns it: pops the swatch and plays a haptic.
+    @State private var assigned = [Int](repeating: 0, count: ToolSettings.quickColorCount)
 
     var body: some View {
         let ink = tools.currentColor.color(on: paper)
@@ -99,17 +106,32 @@ struct EditorToolbarContent: View {
                     onReselect(tool)
                 }
             }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(ToolbarHost.capsuleSpace)) } action: { onToolFrame(tool, $0) }
         }
         ChromeSeparator(axis: axis)
         ForEach(Array(tools.quickColors.enumerated()), id: \.offset) { index, color in
             ColorSwatch(color.color(on: paper), label: color.label, isSelected: tools.activeQuickColor == index) {
                 tools.selectQuickColor(index)
             }
+            .keyframeAnimator(initialValue: 1.0, trigger: assigned[index]) { swatch, scale in
+                swatch.scaleEffect(scale)
+            } keyframes: { _ in
+                SpringKeyframe(1.25, duration: 0.14, spring: .snappy)
+                SpringKeyframe(1.0, duration: 0.4, spring: .bouncy)
+            }
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in assign(index) })
+            .accessibilityAction(named: "Set to current pen color") { assign(index) }
+            .sensoryFeedback(.success, trigger: assigned[index])
         }
         ChromeSeparator(axis: axis)
         ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
             .disabled(!state.canUndo)
         ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
             .disabled(!state.canRedo)
+    }
+
+    private func assign(_ index: Int) {
+        tools.setQuickColor(tools.pen.color, at: index)
+        assigned[index] += 1
     }
 }

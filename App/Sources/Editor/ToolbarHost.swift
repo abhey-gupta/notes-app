@@ -10,6 +10,9 @@ import Tools
 /// it springs to the nearest dock, re-flowing between horizontal and vertical in place. Pinch in to collapse it
 /// to the compact pill at the same dock; tap (or pinch out on) the pill to expand. Focus mode shows the same
 /// pill. Dock and compact persist in `ToolState`.
+///
+/// Tapping the active tool (or the pill's tool) opens its options popover (``ToolPopover``, #27), anchored
+/// to that button with the arrow toward the toolbar on every dock.
 struct ToolbarHost: View {
     let tools: ToolState
     let state: EditorState
@@ -18,14 +21,16 @@ struct ToolbarHost: View {
     @Binding var pattern: PaperPattern
     let page: (current: Int, total: Int)
     let onBack: () -> Void
-    /// Tap on the already-current tool. The tool options popover (#27) presents from here.
-    let onReselectTool: (Tool) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var glass
     @State private var drag: Drag?
     @State private var pinch: CGFloat = 1
     @State private var metrics = Metrics()
+    /// Tool whose options popover is open.
+    @State private var options: Tool?
+    /// Expanded tool buttons, in the capsule's coordinate space (popover anchors).
+    @State private var toolFrames: [Tool: CGRect] = [:]
 
     enum ChromeID: Hashable {
         case nav, tools, pages
@@ -50,6 +55,8 @@ struct ToolbarHost: View {
     }
 
     private nonisolated static let space = "chrome"
+    /// The tools capsule's own coordinate space.
+    nonisolated static let capsuleSpace = "toolsCapsule"
     /// Fallback toolbar length before it has been measured on an axis.
     private static let estimatedLength: CGFloat = 400
     private static let estimatedPillLength: CGFloat = 140
@@ -144,12 +151,24 @@ struct ToolbarHost: View {
             spacing: compact ? 0 : squeeze
         ) {
             if compact {
-                FocusPillContent(axis: axis, tool: tools.tool.symbol, ink: ink, onTool: expand, onExpand: expand)
+                FocusPillContent(axis: axis, tool: tools.tool.symbol, ink: ink, onTool: { toggleOptions(tools.tool) }, onExpand: expand)
                     .transition(contentTransition)
             } else {
-                EditorToolbarContent(tools: tools, state: state, paper: paper, axis: axis, onReselect: onReselectTool)
-                    .transition(contentTransition)
+                EditorToolbarContent(
+                    tools: tools,
+                    state: state,
+                    paper: paper,
+                    axis: axis,
+                    onReselect: toggleOptions,
+                    onToolFrame: { toolFrames[$0] = $1 }
+                )
+                .transition(contentTransition)
             }
+        }
+        .coordinateSpace(.named(Self.capsuleSpace))
+        .popover(isPresented: optionsPresented, attachmentAnchor: .rect(.rect(optionsAnchor(axis: axis))), arrowEdge: optionsArrowEdge) {
+            ToolPopover(tools: tools, tool: options ?? tools.tool, paper: paper)
+                .presentationCompactAdaptation(.popover)
         }
         .contentShape(Self.hitShape)
         .gesture(TapGesture().onEnded(expand), isEnabled: compact)
@@ -185,6 +204,7 @@ struct ToolbarHost: View {
     }
 
     private func dragBegan() {
+        options = nil
         withAnimation(Tokens.Motion.dragFollow) {
             drag = Drag(target: tools.dock)
         }
@@ -215,6 +235,7 @@ struct ToolbarHost: View {
 
     /// The capsule shrinks with the fingers (damped), then morphs to the pill or springs back.
     private func pinchChanged(_ magnification: CGFloat) {
+        options = nil
         guard !isCompact else { return }
         withAnimation(Tokens.Motion.dragFollow) {
             pinch = DockGeometry.pinchScale(magnification)
@@ -237,6 +258,7 @@ struct ToolbarHost: View {
     }
 
     private func collapse() {
+        options = nil
         withAnimation(morphAnimation) {
             tools.isCompact = true
             pinch = 1
@@ -245,12 +267,73 @@ struct ToolbarHost: View {
 
     /// Pill tap / pinch-out, and the focus pill's tool and chevron buttons.
     private func expand() {
+        options = nil
         withAnimation(morphAnimation) {
             tools.isCompact = false
             state.exitFocus()
         }
     }
 
+    private var pagePill: some View {
+        Button(action: state.exitFocus) {
+            GlassPill.pageIndicator(current: page.current, total: page.total)
+        }
+        .buttonStyle(.plain)
+        .onGeometryChange(for: CGSize.self, of: \.size) { metrics.pill = $0 }
+        .opacity(isCompact ? 0.7 : 1)
+        .accessibilityIdentifier("pageIndicator")
+        .padding(.bottom, Tokens.Spacing.chromeInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+    }
+}
+
+extension ToolbarHost {
+    // MARK: Tool options (#27)
+
+    private var optionsPresented: Binding<Bool> {
+        Binding {
+            options != nil && options == tools.tool
+        } set: { presented in
+            if !presented {
+                options = nil
+            }
+        }
+    }
+
+    /// Tap on the current tool: opens its options, or closes them if open. Lasso has none.
+    private func toggleOptions(_ tool: Tool) {
+        guard tool != .lasso else { return }
+        options = options == tool ? nil : tool
+    }
+
+    /// The active tool button, in the capsule: measured when expanded; the pill's leading tool button
+    /// (``FocusPillContent`` layout) when compact.
+    private func optionsAnchor(axis: Axis) -> CGRect {
+        if isCompact {
+            let button = Tokens.Size.focusToolButton
+            let size = axis == .horizontal ? button : button.transposed
+            let across = (Tokens.Size.focusPillHeight - (axis == .horizontal ? size.height : size.width)) / 2
+            let origin = axis == .horizontal
+                ? CGPoint(x: FocusPill.endPadding, y: across)
+                : CGPoint(x: across, y: FocusPill.endPadding)
+            return CGRect(origin: origin, size: size)
+        }
+        return toolFrames[tools.tool] ?? .zero
+    }
+
+    /// `arrowEdge` is the popover's own edge carrying the arrow: the one facing the dock, so it opens away
+    /// from the toolbar (below a top dock, beside a side dock).
+    private var optionsArrowEdge: Edge {
+        switch tools.dock {
+        case .top: .top
+        case .bottom: .bottom
+        case .left: .leading
+        case .right: .trailing
+        }
+    }
+}
+
+extension ToolbarHost {
     // MARK: Placement
 
     /// Length of the toolbar at rest on `axis` (compact or expanded).
@@ -289,18 +372,6 @@ struct ToolbarHost: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .transition(.opacity)
-    }
-
-    private var pagePill: some View {
-        Button(action: state.exitFocus) {
-            GlassPill.pageIndicator(current: page.current, total: page.total)
-        }
-        .buttonStyle(.plain)
-        .onGeometryChange(for: CGSize.self, of: \.size) { metrics.pill = $0 }
-        .opacity(isCompact ? 0.7 : 1)
-        .accessibilityIdentifier("pageIndicator")
-        .padding(.bottom, Tokens.Spacing.chromeInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 }
 

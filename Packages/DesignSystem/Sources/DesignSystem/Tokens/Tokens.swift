@@ -59,6 +59,11 @@ public enum Tokens {
     /// Highlighter yellow from the mock (`rgba(255,214,51,.55)`), multiplied under ink.
     public static let highlighter = RGBA(0xFFD633, alpha: 0.55)
 
+    /// Highlighter colors: mock yellow + a palette subset, opaque (the marker ink adds translucency).
+    public static let highlighterPalette: [RGBA] = [
+        RGBA(0xFFD633), RGBA(0xE07A1F), RGBA(0xC2457E), RGBA(0x7E4FD8), RGBA(0x0FA3B1), RGBA(0x1E8E6E),
+    ]
+
     // MARK: Spacing
 
     public enum Spacing {
@@ -92,6 +97,10 @@ public enum Tokens {
         public static let chip: CGFloat = 16
         public static let toolButton: CGFloat = 20
         public static let popover: CGFloat = 24
+        /// Tool popover: segmented track, its selected segment, the stroke preview.
+        public static let segmented: CGFloat = 12
+        public static let segment: CGFloat = 9
+        public static let preview: CGFloat = 14
         public static let capsule: CGFloat = 26
         public static let sheet: CGFloat = 30
     }
@@ -119,6 +128,15 @@ public enum Tokens {
         public static let recentCard = CGSize(width: 344, height: 196)
         public static let recentRadius: CGFloat = 12
         public static let popoverWidth: CGFloat = 328
+        public static let popoverPadding: CGFloat = 16
+        /// Tool popover stroke preview height.
+        public static let previewHeight: CGFloat = 72
+        /// Width / size option hit circle.
+        public static let widthOption: CGFloat = 40
+        /// Width option glyphs: pen dots (mock 3/5/8/11/15), highlighter chisel heights, eraser rings.
+        public static let penWidthDots: [CGFloat] = [3, 5, 8, 11, 15]
+        public static let highlighterWidthBars: [CGFloat] = [6, 10, 15]
+        public static let eraserWidthRings: [CGFloat] = [10, 17, 26]
         /// A4 portrait in points.
         public static let pageA4 = CGSize(width: 595, height: 842)
         public static let templateSpacing: CGFloat = 24
@@ -153,6 +171,11 @@ public enum Tokens {
         /// Continuous inking before chrome collapses (§7).
         public static let focusDelay: Duration = .milliseconds(1500)
         public static let thumbnailCrossfade: Animation = .easeOut(duration: 0.12)
+        /// Popover selection highlight (segment, width) sliding to a new option.
+        public static let selection: Animation = .spring(duration: 0.32, bounce: 0.22)
+        /// Stroke preview: new ink writes itself in left to right / crossfades.
+        public static let inkReveal: Animation = .easeInOut(duration: 0.5)
+        public static let inkCrossfade: Animation = .easeOut(duration: 0.18)
     }
 }
 
