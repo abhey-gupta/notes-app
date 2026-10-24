@@ -94,6 +94,42 @@ struct ZoomTests {
         #expect(h.engine.zoom.freeze == nil)
     }
 
+    /// The host keeps `isZooming` through the scroll a release starts (deceleration, rubber band): the canvas
+    /// stays held and follows the paper by geometry, and only settles once the page is at rest.
+    @Test func releaseScrollKeepsTheCanvasHeldUntilRest() {
+        let h = Harness()
+        h.scroll(toY: 900)
+        h.engine.canvasViewDidFinishRendering(h.engine.canvas)
+        let page = h.frames[1]
+        let bounds = h.engine.canvas.bounds
+        h.engine.setViewport(h.viewport(offset: CGPoint(x: 0, y: 900 * 1.3), zoom: 1.3, isZooming: true))
+        #expect(h.engine.canvas.zoomScale == 1)
+
+        // Fingers up; the page decelerates for a few frames at the final zoom.
+        for y in stride(from: 1170, through: 1290, by: 40) as StrideThrough<CGFloat> {
+            let viewport = h.viewport(offset: CGPoint(x: 0, y: y), zoom: 1.3, isZooming: true)
+            h.engine.setViewport(viewport)
+            #expect(h.engine.canvas.zoomScale == 1, "held: nothing for PencilKit to re-render mid-scroll")
+            #expect(h.engine.canvas.bounds == bounds)
+            #expect(h.engine.canvas.transform == CGAffineTransform(scaleX: 1.3, y: 1.3))
+            let pageRect = viewport.viewRect(of: page)
+            for p in [CGPoint(x: 50, y: 50), CGPoint(x: 300, y: 500)] {
+                let view = h.engine.canvas.convert(CGPoint(x: p.x, y: p.y), to: h.engine.view)
+                #expect(abs(view.x - (pageRect.minX + p.x * 1.3)) < 1e-6)
+                #expect(abs(view.y - (pageRect.minY + p.y * 1.3)) < 1e-6)
+            }
+        }
+
+        // At rest: settle once, untransformed, where the paper is.
+        h.engine.setViewport(h.viewport(offset: CGPoint(x: 0, y: 1290), zoom: 1.3, isZooming: false))
+        #expect(h.engine.canvas.zoomScale == 1.3)
+        #expect(h.engine.canvas.transform == .identity)
+        let visible = h.engine.viewport.viewRect(of: page).intersection(h.engine.view.bounds)
+        let frame = h.engine.canvas.frame
+        #expect([frame.minX - visible.minX, frame.minY - visible.minY, frame.width - visible.width, frame.height - visible.height]
+            .allSatisfy { abs($0) < 1e-9 })
+    }
+
     /// Lasso-lifted strokes follow the pinch with the paper and stay out of the raster shown around the canvas.
     @Test func liftedSelectionFollowsThePinch() throws {
         let h = Harness()
