@@ -18,6 +18,7 @@ import Tools
 /// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
 /// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests).
 /// - `-penKind fountain|ballpoint|brush`, `-penWidth <0...4>`: pen family and width step (UI tests).
+/// - `-eraserMode stroke|partial`: eraser mode (no eraser options popover yet).
 /// - `-allowFingerDrawing YES`: fingers ink (one finger draws, two scroll) — the simulator has no Pencil.
 /// - `-fixtureNotebook <pages>`: add a FixtureGen notebook ("Fixture <pages>p · seed 1") to the on-disk
 ///   library after launch (generated once; the package ID is deterministic).
@@ -102,6 +103,9 @@ enum LaunchOptions {
             }
             if arguments["penWidth"] != nil {
                 tools.pen.widthIndex = defaults.integer(forKey: "penWidth")
+            }
+            if let raw = arguments["eraserMode"] as? String, let mode = EraserSettings.Mode(rawValue: raw) {
+                tools.eraser.mode = mode
             }
             return tools
         #else

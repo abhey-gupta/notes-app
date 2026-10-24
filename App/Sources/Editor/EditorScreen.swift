@@ -49,6 +49,9 @@ struct EditorScreen: View {
         .onChange(of: tools.configuration(allowsFingerDrawing: LaunchOptions.allowsFingerDrawing), initial: true) { _, configuration in
             session.setTool(configuration)
         }
+        .onChange(of: tools.eraser.mode, initial: true) { _, mode in
+            session.eraserMode = mode
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 session.flush()

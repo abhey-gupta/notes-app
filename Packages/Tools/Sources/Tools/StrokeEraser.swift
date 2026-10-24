@@ -9,19 +9,24 @@ import InkModel
 /// newly hit, for a `PageEdit.remove`. The path between consecutive samples (across batches too) is
 /// swept in steps of half the radius, so a fast flick doesn't skip a thin stroke. Candidates come from
 /// a `StrokeIndex` (64 pt cells) on stroke bounds, then the exact outline-vs-disk test. Each stroke is
-/// reported once per gesture.
+/// reported once per gesture. Every pen is erasable, highlighter included.
 ///
-/// Partial erase (#28) splits instead of removing; it will sit beside this type behind the same calls.
+/// Partial erase is ``PartialEraser``; ``EraserGesture`` picks one by mode and builds the edits.
 public struct StrokeEraser: Sendable {
     /// Eraser radius (pt, page space).
-    public let radius: CGFloat
+    public var radius: CGFloat {
+        path.radius
+    }
+
+    /// Every stroke hit so far this gesture, in hit order.
+    public private(set) var erased: [StrokeID] = []
     private var strokes: [StrokeID: Stroke]
     private var index: StrokeIndex
-    private var last: CGPoint?
+    private var path: EraserPath
 
     /// Starts a gesture over `page`'s strokes with an eraser of `diameter` points.
     public init(page: Page, diameter: Float) {
-        radius = max(CGFloat(diameter) / 2, 0.5)
+        path = EraserPath(diameter: diameter)
         strokes = Dictionary(page.strokes.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         index = StrokeIndex(strokes: page.strokes)
     }
@@ -40,6 +45,36 @@ public struct StrokeEraser: Sendable {
     /// Same, for page-space points.
     public mutating func erase(_ points: [CGPoint]) -> [StrokeID] {
         var hits: [StrokeID] = []
+        for center in path.advance(through: points) {
+            probe(center, into: &hits)
+        }
+        erased += hits
+        return hits
+    }
+
+    private mutating func probe(_ center: CGPoint, into hits: inout [StrokeID]) {
+        let radius = path.radius
+        for id in index.query(circleCenter: center, radius: radius) {
+            guard let stroke = strokes[id], stroke.intersects(circleCenter: center, radius: radius) else { continue }
+            hits.append(id)
+            strokes[id] = nil
+            index.remove(id)
+        }
+    }
+}
+
+/// The eraser disk's path through one gesture as probe centers, half a radius apart, continuing across
+/// batches. Non-finite points are skipped.
+struct EraserPath: Sendable {
+    let radius: CGFloat
+    private var last: CGPoint?
+
+    init(diameter: Float) {
+        radius = max(CGFloat(diameter.isFinite ? diameter : 0) / 2, 0.5)
+    }
+
+    mutating func advance(through points: [CGPoint]) -> [CGPoint] {
+        var probes: [CGPoint] = []
         let step = radius / 2
         for point in points where point.x.isFinite && point.y.isFinite {
             let from = last ?? point
@@ -47,19 +82,10 @@ public struct StrokeEraser: Sendable {
             let count = min(max(Int((distance / step).rounded(.up)), 1), 4096)
             for i in 1 ... count {
                 let t = CGFloat(i) / CGFloat(count)
-                probe(CGPoint(x: from.x + (point.x - from.x) * t, y: from.y + (point.y - from.y) * t), into: &hits)
+                probes.append(CGPoint(x: from.x + (point.x - from.x) * t, y: from.y + (point.y - from.y) * t))
             }
             last = point
         }
-        return hits
-    }
-
-    private mutating func probe(_ center: CGPoint, into hits: inout [StrokeID]) {
-        for id in index.query(circleCenter: center, radius: radius) {
-            guard let stroke = strokes[id], stroke.intersects(circleCenter: center, radius: radius) else { continue }
-            hits.append(id)
-            strokes[id] = nil
-            _ = index.remove(id)
-        }
+        return probes
     }
 }

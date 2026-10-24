@@ -163,6 +163,18 @@ public final class EditStack {
         closeOpenGroups(notify: true)
     }
 
+    /// Replaces the last `count` steps recorded in the open group with `steps`, which must have the same
+    /// effect applied in order (e.g. an eraser gesture's per-event edits as one edit per page), so undo
+    /// applies a few edits instead of hundreds. No-op unless a group is open with at least `count` steps.
+    /// - Returns: Whether the steps were replaced.
+    @discardableResult
+    public func coalesceLast(_ count: Int, into steps: [EditStep]) -> Bool {
+        guard isGrouping, count > 0, pending.count >= count else { return false }
+        pending.replaceSubrange((pending.count - count)..., with: steps)
+        hasPendingSteps = !pending.isEmpty
+        return true
+    }
+
     /// Runs `body` inside a group: everything it records becomes one entry.
     public func group<T>(actionName: String? = nil, _ body: () throws -> T) rethrows -> T {
         beginGroup(actionName: actionName)
