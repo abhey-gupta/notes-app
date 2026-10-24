@@ -61,6 +61,8 @@ struct ToolStateTests {
         while defaults.data(forKey: "tools") == nil, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }
+        // Keep `state` alive until here: its save task holds it weakly, and ARC may release it after last use.
+        withExtendedLifetime(state) {}
         #expect(makeState(defaults).dock == .bottom)
     }
 
