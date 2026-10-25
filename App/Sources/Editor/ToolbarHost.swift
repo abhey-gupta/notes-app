@@ -80,7 +80,7 @@ struct ToolbarHost: View {
             ZStack {
                 if !state.isFocused {
                     HStack(alignment: .top) {
-                        NavCapsule(title: title, paper: $paper, pattern: $pattern, onBack: onBack)
+                        NavCapsule(title: title, paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, onBack: onBack)
                             .chromeID(.nav, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
                         Spacer(minLength: Tokens.Spacing.m)
@@ -310,6 +310,10 @@ extension ToolbarHost {
                 options = nil
             }
         }
+    }
+
+    private var exactColorsBinding: Binding<Bool> {
+        Binding { state.keepsExactColors } set: { state.onKeepsExactColors($0) }
     }
 
     /// Tap on the current tool: opens its options, or closes them if open. Lasso has none.

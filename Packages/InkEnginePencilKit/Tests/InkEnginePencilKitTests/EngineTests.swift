@@ -310,6 +310,18 @@ struct RenderTests {
         #expect(RGBAPixels(image)[10, 10] == RGBA8(rgba: 0x1B1C_1FFF))
     }
 
+    @Test func setPaletteRecolorsRenders() async throws {
+        struct RedPaper: InkPalette {
+            func paper(_: PaperTheme) -> RGBA8 { RGBA8(rgba: 0xFF00_00FF) }
+            func templateLine(_ theme: PaperTheme) -> RGBA8 { FixturePalette().templateLine(theme) }
+            func ink(_ color: InkColor, on theme: PaperTheme) -> RGBA8 { FixturePalette().ink(color, on: theme) }
+        }
+        let engine = PencilKitInkEngine(palette: FixturePalette())
+        engine.setPalette(RedPaper())
+        let image = try #require(await engine.render(page: RenderFixtures.blank, size: CGSize(width: 40, height: 50), scale: 1))
+        #expect(RGBAPixels(image)[5, 5] == RGBA8(rgba: 0xFF00_00FF))
+    }
+
     @Test func degenerateSizeRendersNothing() async {
         let engine = PencilKitInkEngine(palette: FixturePalette())
         #expect(await engine.render(page: RenderFixtures.blank, size: .zero, scale: 2) == nil)
