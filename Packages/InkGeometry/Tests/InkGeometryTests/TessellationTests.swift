@@ -45,8 +45,9 @@ struct CenterlineTests {
         ])
         let stroke = Stroke(tool: line.tool, color: line.color, width: line.width, samples: line.samples, rendering: rendering)
         let c = Centerline(stroke: stroke)
-        #expect(c.radii.first == 1 && c.radii.last == 5)
-        #expect(c.radii[c.points.count / 2] == 3) // midpoint sample: max(6, 4) / 2
+        // Pen draws 2 × width − 4 (height ignored): 0 (clamped to the minimum width), 8, 16.
+        #expect(c.radii.first == Centerline.minimumWidth / 2 && c.radii.last == 8)
+        #expect(c.radii[c.points.count / 2] == 4)
         #expect(contains(stroke.bounds, c.bounds))
     }
 
@@ -56,7 +57,11 @@ struct CenterlineTests {
         #expect(derived.ink == StrokeRendering.Ink.for(stroke.tool))
         #expect(derived.points.count == 3)
         let scale = PenProfile(stroke.tool).widthScale(force: stroke.samples[0].force, speed: 0, altitude: stroke.samples[0].altitude)
-        #expect(derived.points[0] == PointRendering(width: stroke.width * scale, height: stroke.width * scale))
+        // The point size the ink paints at the profile width (pen: width / 2 + 2).
+        let size = InkNib.pointSize(ink: derived.ink, width: stroke.width * scale)
+        #expect(size == stroke.width * scale / 2 + 2)
+        #expect(derived.points[0] == PointRendering(width: size, height: size))
+        #expect(abs(InkNib(ink: derived.ink, point: derived.points[0]).along - stroke.width * scale) < 1e-5)
         #expect(stroke.derivedRendering == derived)
         #expect(stroke.resolvedRendering == derived)
     }

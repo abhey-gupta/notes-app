@@ -207,20 +207,20 @@ public enum EraserSplit {
 public extension Stroke {
     /// Partial erase: the pieces of this stroke left after erasing a disk, as new strokes (fresh IDs,
     /// same pen, color, width). Samples outside the disk are kept as they are; cut ends are
-    /// interpolated. The disk is inflated by the ink's half-width (per sample from the stored point
-    /// sizes when the stroke has a ``InkModel/Stroke/rendering``, else half the base width), so ink
-    /// visibly under the eraser goes and surviving round caps end at the eraser's edge. A rendering is
-    /// cut alongside the samples (same ink, seed, render group).
+    /// interpolated. The disk is inflated by the ink's visible half-width (per sample from what
+    /// PencilKit draws for the stored point sizes when the stroke has a ``InkModel/Stroke/rendering``,
+    /// ``InkModel/StrokeRendering/drawnWidths(along:)``; else half the base width), so ink visibly
+    /// under the eraser goes and surviving round caps end at the eraser's edge. A rendering is cut
+    /// alongside the samples (same ink, seed, render group).
     /// - Parameter minimumPieceLength: Pieces this short or shorter (pt) are dropped (eraser dust).
     /// - Returns: `nil` if untouched; otherwise the pieces (`[]` if fully erased). Feed into
     ///   `Page.replaceEdit`.
     func pieces(erasedBy center: CGPoint, radius: CGFloat, minimumPieceLength: Float = 0) -> [Stroke]? {
         let halfWidth = width.isFinite ? max(width, 0) / 2 : 0
-        let points = rendering?.points
+        let drawn = rendering?.drawnWidths(along: samples)
         let cuts = EraserSplit.cut(samples, center: Point2(center), radius: Float(radius), minimumPieceLength: minimumPieceLength) { i in
-            guard let points else { return halfWidth }
-            let size = max(points[i].width, points[i].height)
-            return size.isFinite ? max(size, 0) / 2 : halfWidth
+            guard let drawn, drawn[i].isFinite else { return halfWidth }
+            return max(drawn[i], 0) / 2
         }
         return cuts?.map { cut in
             var pieceRendering = rendering

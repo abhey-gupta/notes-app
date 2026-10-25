@@ -50,8 +50,9 @@ public struct Stroke: Hashable, Sendable, Codable, Identifiable {
     }
 
     /// Conservative bounds for `samples` drawn at base `width`: the samples' bounding box outset by
-    /// `√2 × e / 2 + boundsMargin`, where `e` is `width × maxWidthScale` or the largest rendered point
-    /// size, whichever is larger. The `√2` covers square cap quads at any angle.
+    /// `√2 × e / 2 + boundsMargin`, where `e` is `width × maxWidthScale` or the widest rendered mark
+    /// (``StrokeRendering/maximumDrawnWidth``), whichever is larger. The `√2` covers square cap quads
+    /// at any angle.
     public static func bounds(of samples: [Sample], width: Float, rendering: StrokeRendering? = nil) -> CGRect {
         guard var minX = samples.first?.x, var minY = samples.first?.y else { return .null }
         var maxX = minX
@@ -62,7 +63,7 @@ public struct Stroke: Hashable, Sendable, Codable, Identifiable {
             minY = min(minY, s.y)
             maxY = max(maxY, s.y)
         }
-        let extent = max(max(width, 0) * maxWidthScale, rendering?.maximumPointSize ?? 0)
+        let extent = max(max(width, 0) * maxWidthScale, rendering?.maximumDrawnWidth ?? 0)
         let pad = CGFloat(extent / 2 * Float(2).squareRoot() + boundsMargin)
         return CGRect(
             x: CGFloat(minX) - pad,

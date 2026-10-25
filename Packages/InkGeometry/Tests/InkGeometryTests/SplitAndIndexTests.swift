@@ -136,8 +136,9 @@ struct EraserSplitTests {
         }
     }
 
-    /// Stored PencilKit point sizes: the disk grows by each point's half-size, and the rendering is cut
-    /// alongside the samples (ink, seed and group kept; interior points verbatim; ends interpolated).
+    /// Stored PencilKit point sizes: the disk grows by half of what the ink draws for each point (the
+    /// visible width, not the stored size), and the rendering is cut alongside the samples (ink, seed
+    /// and group kept; interior points verbatim; ends interpolated).
     @Test func cutsRenderingAlongsideSamples() throws {
         let line = Fixtures.line(from: Point2(0, 0), to: Point2(40, 0), samples: 41, width: 2)
         let points = (0 ... 40).map { i in PointRendering(width: 10, height: 4, opacity: Float(i) / 40) }
@@ -146,17 +147,31 @@ struct EraserSplitTests {
         let stroke = Stroke(tool: .ballpoint, color: .primary, width: 2, samples: line.samples, rendering: rendering)
         let pieces = try #require(stroke.pieces(erasedBy: CGPoint(x: 20, y: 0), radius: 2.5))
         #expect(pieces.count == 2)
-        // Reach 2.5 + 10 / 2 = 7.5 (not 2.5 + width / 2 = 3.5).
-        #expect(pieces[0].samples.last?.x == 12.5 && pieces[1].samples.first?.x == 27.5)
+        // Pen draws 2 × 10 − 4 = 16 wide: reach 2.5 + 8 = 10.5 (not 2.5 + 10 / 2, nor 2.5 + width / 2).
+        #expect(pieces[0].samples.last?.x == 9.5 && pieces[1].samples.first?.x == 30.5)
         for piece in pieces {
             let r = try #require(piece.rendering)
             #expect(r.points.count == piece.samples.count)
             #expect(r.ink == StrokeRendering.Ink.pen && r.randomSeed == 7 && r.renderGroupID == group)
         }
         let first = try #require(pieces[0].rendering)
-        #expect(Array(first.points.prefix(13)) == Array(points.prefix(13)))
-        #expect(abs((first.points.last?.opacity ?? 0) - 12.5 / 40) < 1e-6)
-        #expect(Array(pieces[0].samples.prefix(13)) == Array(line.samples.prefix(13)))
+        #expect(Array(first.points.prefix(10)) == Array(points.prefix(10)))
+        #expect(abs((first.points.last?.opacity ?? 0) - 9.5 / 40) < 1e-6)
+        #expect(Array(pieces[0].samples.prefix(10)) == Array(line.samples.prefix(10)))
+    }
+
+    /// A chisel ink's reach follows the stroke's heading: a fountain-pen line drawn along its azimuth
+    /// is the nib's thin side; across it, the thick side.
+    @Test func chiselReachFollowsHeading() {
+        let points = (0 ... 40).map { _ in PointRendering(width: 10, height: 10) }
+        let rendering = StrokeRendering(ink: StrokeRendering.Ink.fountainPen, randomSeed: 1, points: points)
+        func cut(azimuth: Float) -> Float? {
+            let samples = (0 ... 40).map { i in Sample(x: Float(i), y: 0, azimuth: azimuth, t: Float(i) / 240) }
+            let stroke = Stroke(tool: .fountain, color: .primary, width: 2, samples: samples, rendering: rendering)
+            return stroke.pieces(erasedBy: CGPoint(x: 20, y: 0), radius: 2)?.first?.samples.last?.x
+        }
+        #expect(abs((cut(azimuth: 0) ?? 0) - (20 - 2 - 2)) < 1e-3) // across: (10 − 2) / 2 = 4 wide
+        #expect(abs((cut(azimuth: .pi / 2) ?? 0) - (20 - 2 - 8)) < 1e-3) // along: 2 × 10 − 4 = 16 wide
     }
 
     /// Highlighter (butt-capped chisel) strokes split like any other.
