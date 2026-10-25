@@ -49,3 +49,13 @@ _Avoid_: Cache, residency (for the concept)
 **Echo**:
 A saved change coming back to the screen, so what is drawn always matches what is saved.
 _Avoid_: Callback, refresh
+
+## Selection
+
+**Selection**:
+The strokes the lasso picked on one page, outlined with handles and the context bar. At most one at a time; any new gesture, tool change, undo/redo or tap outside ends it.
+_Avoid_: Lasso (for the result), marquee
+
+**Lifted ink**:
+Selected strokes drawn off the page while they are dragged, put back once the move or resize is saved.
+_Avoid_: Drag preview (for the concept), ghost

@@ -54,10 +54,8 @@ final class NotebookSession {
     private(set) var isClosed = false
     private var awaitingFirstPage = true
     var awaitingFirstSharp = true
-    /// Lasso selection (`+Selection`).
-    var selection: LassoSelection?
-    var isBakingSelection = false
-    var selectionDragCorner: LassoSelection.Corner?
+    /// Lasso selection (`+Selection`); set by ``open()``.
+    private(set) var selection: SelectionMachine?
     let selectionOverlay = SelectionOverlayView()
 
     private static var closing: [NotebookID: Task<Void, Never>] = [:]
@@ -126,6 +124,7 @@ final class NotebookSession {
             edits.onHistoryWillApply = { [weak self] in self?.clearSelection() }
             edits.onHistoryApplied = { [weak self] pages in self?.reveal(pages) }
             self.edits = edits
+            selection = SelectionMachine(edits: edits, display: self)
             state.onUndo = { [weak self] in self?.edits?.undo() }
             state.onRedo = { [weak self] in self?.edits?.redo() }
         } catch {
@@ -277,7 +276,7 @@ extension NotebookSession: InkEngineDelegate {
 
     /// A finished lasso: strokes with ≥ 50 % of their samples inside become the selection (`+Selection`).
     func engine(_: any InkEngine, didReceiveLasso path: [CGPoint], to page: PageID) {
-        select(lasso: path, on: page)
+        selection?.lassoClosed(path, on: page)
     }
 
     func engineDidBeginStroke(_: any InkEngine) {
@@ -295,7 +294,7 @@ extension NotebookSession: InkEngineDelegate {
 extension NotebookSession: CanvasHostViewDelegate {
     func canvasHost(_: CanvasHostView, didChange window: PageWindow) {
         residency?.update(window)
-        if let selection, residency?.isVisible(selection.pageID) != true {
+        if let selected = selection?.selection, residency?.isVisible(selected.pageID) != true {
             clearSelection()
         }
     }

@@ -8,8 +8,9 @@ import UIKit
 ///
 /// Claims only touches on the selection (hull box or a handle), Pencil or finger, so everything else
 /// reaches the engine and the scroll view; while it tracks one, the scroll view's pan stays out. Drags
-/// report a page-space transform each frame (``onDrag``); the session forwards it to the engine preview
-/// and bakes it on release. Geometry follows the viewport on every scroll/zoom frame.
+/// report a page-space transform each frame (``onDrag``); `SelectionMachine` lifts the ink with it and
+/// bakes it on release. The overlay only draws the selection it is given; geometry follows the viewport on
+/// every scroll/zoom frame.
 @MainActor
 final class SelectionOverlayView: UIView, CanvasOverlay {
     enum DragPhase {
@@ -172,13 +173,9 @@ final class SelectionOverlayView: UIView, CanvasOverlay {
     private func finishDrag(_ phase: DragPhase) {
         guard let current = drag else { return }
         drag = nil
+        // A drop comes back as the selection shown at the drop point.
         onDrag(phase, phase == .ended ? current.transform : .identity)
-        // The session swaps in the baked selection; until then keep drawing where it was dropped.
-        if phase == .ended, let selection {
-            self.selection = selection.applying(current.transform)
-        } else {
-            update()
-        }
+        update()
     }
 
     private func cancelDrag() {
