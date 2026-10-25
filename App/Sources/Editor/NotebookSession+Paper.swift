@@ -1,5 +1,4 @@
 import Editing
-import InkEnginePencilKit
 
 extension NotebookSession {
     /// "Keep exact colors" from the title menu: the engine redraws at once, the manifest follows.
@@ -14,6 +13,6 @@ extension NotebookSession {
     }
 
     func applyPalette(keepsExactColors: Bool) {
-        (engine as? PencilKitInkEngine)?.setPalette(DesignSystemInkPalette(keepsExactColors: keepsExactColors))
+        engine.setPalette(DesignSystemInkPalette(keepsExactColors: keepsExactColors))
     }
 }

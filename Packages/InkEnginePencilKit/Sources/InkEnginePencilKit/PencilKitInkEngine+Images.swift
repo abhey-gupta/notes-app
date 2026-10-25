@@ -8,7 +8,7 @@ import UIKit
 ///
 /// Fallback chain, best first: the raster for the current key (cache hit) → the same content at the
 /// nearest zoom bucket, scaled → the page's newest raster of any content → the page thumbnail
-/// (`thumbs/<id>.heic` via ``PencilKitInkEngine/thumbnailURL``) → flat paper and template marks.
+/// (`thumbs/<id>.heic` via ``InkEngine/InkEngine/thumbnailURL``) → flat paper and template marks.
 /// Whatever is on screen stays until the raster replaces it. Renders run on ``RasterRenderQueue``, a few
 /// at a time, nearest the viewport first; an edit changes the key, so the page re-renders and its
 /// previous rasters are dropped from the cache when the new one lands.
@@ -28,13 +28,13 @@ extension PencilKitInkEngine {
         guard !job.isEmpty else {
             renderQueue.cancel(id)
             view.setInk(nil, key: key)
-            onPageSharp?(id)
+            delegate?.engine(self, didShowSharpInkOn: id)
             return
         }
         if let cached = rasters.image(for: id, key: key) {
             renderQueue.cancel(id)
             view.setInk(cached, key: key)
-            onPageSharp?(id)
+            delegate?.engine(self, didShowSharpInkOn: id)
             return
         }
         if !view.hasImage {
@@ -53,7 +53,7 @@ extension PencilKitInkEngine {
             // A failed render (nil) never clears what is on screen.
             guard image != nil || !view.hasImage else { return }
             view.setInk(image, key: key)
-            onPageSharp?(id)
+            delegate?.engine(self, didShowSharpInkOn: id)
         }
     }
 

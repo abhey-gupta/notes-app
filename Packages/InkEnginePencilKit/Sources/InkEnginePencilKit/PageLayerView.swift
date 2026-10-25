@@ -169,12 +169,6 @@ final class PageLayerView: UIView {
         CATransaction.commit()
     }
 
-    /// Forgets which raster is shown so the next refresh renders again (the content stays on screen).
-    func invalidateInk() {
-        requestedKey = nil
-        shownKey = nil
-    }
-
     private func layoutThumbnail() {
         guard let cg = thumbnailLayer.image, bounds.width > 0 else { return }
         let height = cg.width > 0 ? bounds.width * CGFloat(cg.height) / CGFloat(cg.width) : bounds.height

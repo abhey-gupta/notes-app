@@ -2,7 +2,6 @@ import Canvas
 import DesignSystem
 import Editing
 import InkEngine
-import InkEnginePencilKit
 import InkModel
 import Tools
 import UIKit
@@ -19,7 +18,7 @@ import UIKit
 /// `EditStack` entry), then the selection is rebuilt from the page. A new gesture, a tool change,
 /// undo/redo, a tap outside or the page scrolling away clears it.
 extension NotebookSession {
-    func installSelection(on host: CanvasHostView, engine: PencilKitInkEngine, theme: InkModel.PaperTheme) {
+    func installSelection(on host: CanvasHostView, engine: any InkEngine, theme: InkModel.PaperTheme) {
         let overlay = selectionOverlay
         overlay.onDragBegan = { [weak self] corner in self?.selectionDragBegan(corner) ?? false }
         overlay.onDrag = { [weak self] phase, transform in self?.selectionDragged(phase, transform) }
@@ -30,11 +29,11 @@ extension NotebookSession {
     }
 
     /// Selection outline in the selection token for the paper (its dark value on Night).
-    func tintSelection(for theme: InkModel.PaperTheme, engine: PencilKitInkEngine? = nil) {
+    func tintSelection(for theme: InkModel.PaperTheme, engine: (any InkEngine)? = nil) {
         let token = Tokens.Colors.selection
         let color = (theme == .night ? token.dark : token.light).uiColor
         selectionOverlay.tint = color
-        (engine ?? (self.engine as? PencilKitInkEngine))?.selectionColor = color
+        (engine ?? self.engine).selectionColor = color
     }
 
     func select(lasso path: [CGPoint], on page: PageID) {

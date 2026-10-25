@@ -106,16 +106,19 @@ Cost: the Metal engine is the single biggest engineering risk (§14). Mitigation
 ```swift
 // Packages/InkEngine
 @MainActor public protocol InkEngine: AnyObject {
-    var view: UIView { get }                          // sized to the viewport, not the content
+    var view: UIView { get }                          // content-sized, inside the host's zoom view; draws only the viewport
     var delegate: InkEngineDelegate? { get set }
 
     func setViewport(_ v: Viewport)                   // content offset + zoom + visible page frames
     func setPages(_ pages: [PageSnapshot])            // immutable stroke snapshots for visible pages
     func setTool(_ tool: ToolConfiguration)
     func setTheme(_ theme: PaperTheme)
+    func setPalette(_ palette: InkPalette)            // "Keep exact colors" toggled
+    var selectionColor: UIColor { get set }           // live lasso path
+    var thumbnailURL: ((PageID) -> URL?)? { get set } // shown while a page's ink loads/renders
     func apply(_ edit: PageEdit, to page: PageID)     // undo/redo/lasso go through here
-    func invalidate(_ rect: CGRect, in page: PageID)
     func setSelectionPreview(_ p: SelectionPreview?)  // lasso drag: lift strokes, draw them transformed
+    func prepareSelectionPreview(_ s: Set<StrokeID>, on page: PageID)  // ready the lift off main
     func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage?  // thumbnails, export raster fallback; nil only for degenerate size
 }
 
@@ -124,10 +127,13 @@ Cost: the Metal engine is the single biggest engineering risk (§14). Mitigation
     func engine(_ e: InkEngine, didReceiveEraser samples: [Sample], to page: PageID)  // Tools package resolves what gets erased
     func engine(_ e: InkEngine, didReceiveLasso path: [CGPoint], to page: PageID)
     func engineDidBeginStroke(_ e: InkEngine)         // focus-mode chrome collapse
+    func engine(_ e: InkEngine, didShowSharpInkOn page: PageID)  // `canvas.firstSharpTile` signpost
 }
 ```
 
-Rules: the engine never mutates the document. It emits committed strokes/eraser/lasso input; `Tools` turns them into `PageEdit`s; `DocumentStore` applies them and calls back `apply`/`invalidate`. One direction, one source of truth.
+Rules: the engine never mutates the document. It emits committed strokes/eraser/lasso input; `Tools` turns them into `PageEdit`s; `DocumentStore` applies them and calls back `apply`. One direction, one source of truth.
+
+The app talks to the engine only through this protocol: it constructs `PencilKitInkEngine` (and sets its crossfade duration) in one place, never downcasts. `InkEngineTestSupport.RecordingInkEngine` is the second adapter: canvas host and page residency tests run against it.
 
 Colors: engines take an `InkPalette` (paper, template line, `ink(_:on:)`) at init; the app adapts `DesignSystem` tokens, so hex values stay out of engines (§10).
 

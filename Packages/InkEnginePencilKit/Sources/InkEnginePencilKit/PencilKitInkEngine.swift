@@ -39,9 +39,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// `thumbs/<page>.heic` for a page, shown scaled up while its strokes load or its first raster
     /// renders (#43, #70). `nil`: the page shows flat paper meanwhile.
     public var thumbnailURL: ((PageID) -> URL?)?
-    /// A page shows sharp ink (its raster landed, or its canvas drew it); fires on every such event. The
-    /// app's `canvas.firstSharpTile` signpost ends on the first one after an open.
-    public var onPageSharp: ((PageID) -> Void)?
     /// Thumbnail → raster crossfade, seconds (the app sets `Tokens.Motion.thumbnailCrossfadeDuration`).
     public var crossfadeDuration: TimeInterval = 0.12 {
         didSet {
@@ -149,7 +146,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         applyTool()
     }
 
-    /// Replaces the color source (e.g. the notebook's "Keep exact colors" changed) and redraws.
     public func setPalette(_ palette: any InkPalette) {
         self.palette = palette
         applyTool()
@@ -186,14 +182,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             pending[page] = waiting.filter { !ids.contains($0.id) }
         }
         contentChanged(page, rebuild: !echoedOnly)
-    }
-
-    public func invalidate(_: CGRect, in page: PageID) {
-        // A canvas holds vectors; a page without one re-rasterizes (keeping the old raster meanwhile).
-        if canvas(for: page) == nil {
-            pageViews[page]?.invalidateInk()
-            layoutPages()
-        }
     }
 
     /// Thumbnails and export fallback: paper + template + ink, drawn by PencilKit from the stored strokes.
@@ -270,7 +258,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         canvas.renderedRegion = region
         layoutPages()
         if let page = canvas.page, snapshots[page]?.isLoaded == true {
-            onPageSharp?(page)
+            delegate?.engine(self, didShowSharpInkOn: page)
         }
     }
 

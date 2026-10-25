@@ -45,8 +45,6 @@ struct PageImageTests {
         let id = h.frames[0].id
         let url = try Self.writeThumbnail(for: id)
         h.engine.thumbnailURL = { $0 == id ? url : nil }
-        var sharp: [PageID] = []
-        h.engine.onPageSharp = { sharp.append($0) }
         var pages = h.snapshots
         pages[0] = PageSnapshot(page: Page(id: id, template: .blank), size: RenderFixtures.pageSize, isLoaded: false)
         h.engine.setPages(pages)
@@ -57,7 +55,7 @@ struct PageImageTests {
         #expect(abs(view.thumbnailLayer.frame.height - 595 * 57 / 44) < 1, "top-aligned, page width, thumbnail shape")
         try h.engine.canvasViewDidFinishRendering(#require(h.canvas(0)).view)
         #expect(view.inkHole == nil, "an empty canvas doesn't cut the thumbnail")
-        #expect(!sharp.contains(id), "not sharp yet (loaded pages 2–3 may be)")
+        #expect(!h.recorder.sharp.contains(id), "not sharp yet (loaded pages 2–3 may be)")
         #expect(h.engine.residentImageBytes > 0, "the decoded thumbnail is cached")
 
         pages[0] = h.snapshots[0].appending([RenderFixtures.line(1, from: CGPoint(x: 50, y: 50), to: CGPoint(x: 300, y: 50))])
@@ -65,7 +63,7 @@ struct PageImageTests {
         #expect(view.showsThumbnail, "the thumbnail stays until the raster is ready")
         try await waitUntil { view.shownKey != nil }
         #expect(!view.showsThumbnail)
-        #expect(sharp.contains(id))
+        #expect(h.recorder.sharp.contains(id))
         #expect(h.engine.renderQueueDepth == 0)
     }
 
