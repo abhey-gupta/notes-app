@@ -33,6 +33,7 @@ final class Recorder: InkEngineDelegate {
 
 /// Three stacked A4 pages (content y 0, 866, 1732) shown through a 1024 × 1366 viewport, page 2 holding
 /// one stroke. The engine view is content-sized, as in the host.
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct Harness {
     let engine = PencilKitInkEngine(palette: FixturePalette())
@@ -76,6 +77,7 @@ extension PageSnapshot {
     }
 }
 
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct EngineTests {
     @Test func visiblePagesGetCanvasesOverTheirVisiblePart() throws {
@@ -286,6 +288,7 @@ struct EngineTests {
     }
 }
 
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct RenderTests {
     @Test func rendersPaperTemplateAndInk() async throws {
@@ -312,9 +315,17 @@ struct RenderTests {
 
     @Test func setPaletteRecolorsRenders() async throws {
         struct RedPaper: InkPalette {
-            func paper(_: PaperTheme) -> RGBA8 { RGBA8(rgba: 0xFF00_00FF) }
-            func templateLine(_ theme: PaperTheme) -> RGBA8 { FixturePalette().templateLine(theme) }
-            func ink(_ color: InkColor, on theme: PaperTheme) -> RGBA8 { FixturePalette().ink(color, on: theme) }
+            func paper(_: PaperTheme) -> RGBA8 {
+                RGBA8(rgba: 0xFF00_00FF)
+            }
+
+            func templateLine(_ theme: PaperTheme) -> RGBA8 {
+                FixturePalette().templateLine(theme)
+            }
+
+            func ink(_ color: InkColor, on theme: PaperTheme) -> RGBA8 {
+                FixturePalette().ink(color, on: theme)
+            }
         }
         let engine = PencilKitInkEngine(palette: FixturePalette())
         engine.setPalette(RedPaper())
@@ -329,6 +340,7 @@ struct RenderTests {
 }
 
 /// Redraws a `CGImage` into 8-bit sRGB RGBA for pixel checks.
+@Suite(.timeLimit(.minutes(2)))
 struct RGBAPixels {
     let width: Int
     let bytes: [UInt8]

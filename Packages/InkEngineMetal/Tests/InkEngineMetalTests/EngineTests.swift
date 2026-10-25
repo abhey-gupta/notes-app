@@ -9,6 +9,7 @@ import Testing
 import UIKit
 
 /// Three stacked A4 pages in a 1024 × 1366 viewport; page 2 holds three strokes.
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct Harness {
     let engine: MetalInkEngine
@@ -63,6 +64,7 @@ struct Harness {
     }
 }
 
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct BufferCacheTests {
     @Test func buildsEveryPageOnceAndTessellatesEachStrokeOnce() async throws {
@@ -188,6 +190,7 @@ struct BufferCacheTests {
     }
 }
 
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct InputTests {
     @Test func penStrokeCommitsOnceAndStaysPendingUntilEchoed() async throws {
@@ -240,6 +243,7 @@ struct InputTests {
     }
 }
 
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct FrameTests {
     @Test func liveFramesReuseTheCompositeUntilContentChanges() async throws {
@@ -282,6 +286,7 @@ struct FrameTests {
     }
 }
 
+@Suite(.timeLimit(.minutes(2)))
 struct LayoutTests {
     @Test func shaderStructLayoutsMatchMetal() {
         #expect(MemoryLayout<StrokeVertex>.stride == 24)

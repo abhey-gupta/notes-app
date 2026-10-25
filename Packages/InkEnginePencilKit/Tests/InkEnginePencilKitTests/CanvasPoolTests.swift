@@ -8,6 +8,7 @@ import Testing
 
 /// The canvas pool (ARCHITECTURE.md §3): visible pages share a few `PKCanvasView`s; a page without one shows
 /// its raster; a canvas never carries ink or an in-progress stroke from one page to another.
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct CanvasPoolTests {
     @Test func pageKeepsItsWholeRasterUntilTheCanvasHasDrawnIt() throws {

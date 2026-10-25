@@ -7,6 +7,7 @@ import Testing
 
 /// `render(page:size:scale:)` against golden PNGs (ARCHITECTURE.md §13). See ``Golden`` for the
 /// tolerance and how to re-record.
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct SnapshotTests {
     let engine: MetalInkEngine
