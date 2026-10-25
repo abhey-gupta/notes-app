@@ -53,14 +53,15 @@ struct ToolStateTests {
         let defaults = try makeDefaults()
         let state = makeState(defaults, delay: .milliseconds(50))
         state.dock = .right
+        let superseded = try #require(state.saveTask)
         state.dock = .bottom
+        let pending = try #require(state.saveTask)
         #expect(defaults.data(forKey: "tools") == nil, "write waits for the debounce")
+        #expect(superseded.isCancelled, "a newer change supersedes the pending save")
 
-        // Poll instead of a fixed sleep: CI shares the machine and the debounced write can be late.
-        let deadline = ContinuousClock.now + .seconds(5)
-        while defaults.data(forKey: "tools") == nil, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(20))
-        }
+        // Await the save task rather than polling a wall-clock deadline: sibling @MainActor tests can hold the
+        // main actor for seconds, so a deadline could lapse before the queued save ever ran.
+        await pending.value
         // Keep `state` alive until here: its save task holds it weakly, and ARC may release it after last use.
         withExtendedLifetime(state) {}
         #expect(makeState(defaults).dock == .bottom)
