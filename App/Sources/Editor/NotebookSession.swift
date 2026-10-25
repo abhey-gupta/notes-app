@@ -75,6 +75,7 @@ final class NotebookSession {
             guard let self else { throw CancellationError() }
             return try await exportPDF(selection, asShown: asShown, progress: progress)
         }
+        installPages()
     }
 
     var engine: any InkEngine {
@@ -105,6 +106,7 @@ final class NotebookSession {
             residency.onPageEvicted = { [weak self] id in self?.flushThumbnail(id) }
             self.residency = residency
             thumbnails = makeThumbnailService(package: url)
+            syncPagesModel(pages)
             engine.setTheme(manifest.notebook.theme)
             if manifest.notebook.keepsExactColors {
                 state.keepsExactColors = true
@@ -234,6 +236,7 @@ final class NotebookSession {
             guard let self, let residency else { return }
             eraser.reset() // the page may change under an eraser gesture in progress
             do {
+                try await applyStructure(entry.structure)
                 for step in entry.steps {
                     _ = try await residency.ensureLoaded(step.pageID)
                     try await commit(step.edit, to: step.pageID)
@@ -264,22 +267,6 @@ final class NotebookSession {
         awaitingFirstPage = false
         // The engine draws the snapshot on its next vsync: end `notebook.open` one display frame later.
         FrameAfter.next { OpenTrace.end() }
-    }
-
-    private func addPage() {
-        enqueue("add page") { [weak self] in
-            guard let self, let store, let residency else { return }
-            try await store.insertPage(at: nil, template: nil)
-            let manifest = await store.manifest
-            let pages = manifest.pages.map { (id: $0.id, template: $0.template) }
-            residency.setPages(pages)
-            host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
-            if let window = host.pageWindow {
-                residency.update(window)
-            }
-            host.scrollToPage(pages.count - 1, animated: true)
-            library.documentDidSave(manifest)
-        }
     }
 
     private func didCheckpoint() async {
@@ -378,7 +365,7 @@ extension NotebookSession: CanvasHostViewDelegate {
     }
 
     func canvasHostDidRequestNewPage(_: CanvasHostView) {
-        addPage()
+        insertPage(after: nil, template: nil)
     }
 
     func canvasHostDidLiftAllTouches(_: CanvasHostView) {

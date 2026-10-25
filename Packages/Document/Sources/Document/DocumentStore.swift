@@ -253,10 +253,10 @@ public actor DocumentStore {
 
     // MARK: Page structure
 
-    /// Inserts an empty page; see ``NotebookPackage/insertPage(at:template:)``.
+    /// Inserts an empty page; see ``NotebookPackage/insertPage(id:at:template:)``.
     @discardableResult
-    public func insertPage(at index: Int? = nil, template: PageTemplate? = nil) throws(DocumentError) -> PageID {
-        try package.insertPage(at: index, template: template)
+    public func insertPage(id: PageID = PageID(), at index: Int? = nil, template: PageTemplate? = nil) throws(DocumentError) -> PageID {
+        try package.insertPage(id: id, at: index, template: template)
     }
 
     /// Deletes a page, its stroke file, journal and thumbnail; any unflushed edits to it are dropped.

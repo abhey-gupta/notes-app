@@ -63,7 +63,7 @@ struct PagesCapsule: View {
 
     var body: some View {
         GlassCapsule {
-            ToolButton(.pages, "Pages") {}
+            ToolButton(.pages, "Pages") { state.pages.present() }
             ToolButton(.share, "Share") { showsShare.toggle() }
                 .background(ActivityAnchor(presenter: presenter))
                 .popover(isPresented: $showsShare) {

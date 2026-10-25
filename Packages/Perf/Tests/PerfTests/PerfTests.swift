@@ -57,7 +57,7 @@ struct SignpostTests {
     @Test func namesAreFixed() {
         #expect(Signpost.allCases.map(\.rawValue) == [
             "launch.firstFrame", "notebook.open", "canvas.firstSharpTile", "canvas.frame", "tile.render",
-            "stroke.commit", "doc.checkpoint", "thumb.render", "export.pdf",
+            "stroke.commit", "doc.checkpoint", "thumb.render", "export.pdf", "pages.overview",
         ])
         #expect(Signpost.subsystem == "com.abhey.notespace")
     }

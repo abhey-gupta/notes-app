@@ -24,6 +24,8 @@ final class EditorState {
     @ObservationIgnored var onKeepsExactColors: (Bool) -> Void = { _ in }
     /// The notebook's undo history (§6).
     let edits: EditStack
+    /// Pages overview (§5.2, #32).
+    let pages = PagesModel()
     @ObservationIgnored var onUndo: () -> Void = {}
     @ObservationIgnored var onRedo: () -> Void = {}
     /// Lasso selection box in screen (canvas view) space for the context bar; `nil` when there is no
