@@ -10,6 +10,8 @@ import Testing
 final class RecordingSink: PageSink {
     private(set) var pushes: [[PageSnapshot]] = []
     private(set) var applied: [(PageEdit, PageID)] = []
+    /// Pages handed to ``prepare(_:)``, each with whether the sink already held its strokes then.
+    private(set) var prepared: [(id: PageID, wasShown: Bool)] = []
 
     var shown: [PageSnapshot] {
         pushes.last ?? []
@@ -21,6 +23,10 @@ final class RecordingSink: PageSink {
 
     func apply(_ edit: PageEdit, to page: PageID) {
         applied.append((edit, page))
+    }
+
+    func prepare(_ page: PageSnapshot) async {
+        prepared.append((page.id, shown.contains { $0.id == page.id && $0.isLoaded }))
     }
 }
 
@@ -95,6 +101,16 @@ struct PageResidencyTests {
         #expect(h.loaded.first == h.ids[0])
         #expect(Set(h.loaded) == Set(h.ids[0 ... 3]))
         #expect(h.sink.shown.allSatisfy { $0.isLoaded && $0.strokes.count == 1 })
+    }
+
+    /// Loaded pages bound for the engine are prepared (off main) before the engine gets their strokes;
+    /// pages only kept resident aren't.
+    @Test func preparesEnginePagesBeforeHandingThemOver() async throws {
+        let h = try ResidencyHarness()
+        h.show(0 ..< 1)
+        try await h.settle()
+        #expect(Set(h.sink.prepared.map(\.id)) == [h.ids[0], h.ids[1]])
+        #expect(h.sink.prepared.allSatisfy { !$0.wasShown })
     }
 
     @Test func scrollingAwayReleasesPages() async throws {

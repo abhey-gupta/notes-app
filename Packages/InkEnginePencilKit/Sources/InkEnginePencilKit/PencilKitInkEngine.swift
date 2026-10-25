@@ -68,6 +68,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     private(set) var snapshots: [PageID: PageSnapshot] = [:]
     private(set) var tool = ToolConfiguration.default
     private(set) var theme = PaperTheme.white
+    /// The canvases' strokes as PencilKit strokes, converted off main by ``prepare(_:)`` or on first use.
+    let strokeCache = PKStrokeCache()
     /// Strokes reported via `didCommit` but not yet in the page snapshot, per page, in draw order.
     private(set) var pending: [PageID: [(id: StrokeID, pk: PKStroke)]] = [:]
     var hasSeenPencil = false
@@ -117,6 +119,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     public func setPages(_ pages: [PageSnapshot]) {
         let old = snapshots
         snapshots = Dictionary(pages.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        strokeCache.retain(snapshots.keys)
         for (id, snapshot) in snapshots where old[id] != snapshot {
             let ids = Set(snapshot.strokes.map(\.id))
             pending[id]?.removeAll { ids.contains($0.id) }
@@ -148,6 +151,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     public func setPalette(_ palette: any InkPalette) {
         self.palette = palette
+        strokeCache.removeAll()
         applyTool()
         for canvas in canvases where canvas.page != nil {
             rebuildCanvas(canvas)
@@ -159,6 +163,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         guard theme != self.theme else { return }
         self.theme = theme
         rasters.removeThumbnails() // they show the paper; the service regenerates them
+        strokeCache.removeAll()
         thumbnailMisses = []
         applyTool()
         for canvas in canvases where canvas.page != nil {
@@ -182,6 +187,16 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             pending[page] = waiting.filter { !ids.contains($0.id) }
         }
         contentChanged(page, rebuild: !echoedOnly)
+    }
+
+    /// Converts the page's strokes off main, so handing it over in ``setPages(_:)`` doesn't stall a frame.
+    public func prepare(_ page: PageSnapshot) async {
+        guard !page.strokes.isEmpty else { return }
+        let (strokes, palette, theme, generation) = (page.strokes, palette, theme, strokeCache.generation)
+        let pks = await Task.detached(priority: .userInitiated) {
+            strokes.map { PencilKitConversion.pkStroke(from: $0, color: UIColor(palette.ink($0.color, on: theme))) }
+        }.value
+        strokeCache.insert(strokes, pks, on: page.id, generation: generation)
     }
 
     /// Thumbnails and export fallback: paper + template + ink, drawn by PencilKit from the stored strokes.
@@ -306,10 +321,9 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         var strokes: [PKStroke] = []
         var ids: [StrokeID] = []
         if let page = canvas.page, let snapshot = snapshots[page] {
-            for stroke in snapshot.strokes where !selection.strokes.contains(stroke.id) {
-                strokes.append(PencilKitConversion.pkStroke(from: stroke, color: uiColor(stroke.color)))
-                ids.append(stroke.id)
-            }
+            let shown = snapshot.strokes.filter { !selection.strokes.contains($0.id) }
+            strokes = strokeCache.pkStrokes(shown, on: page) { PencilKitConversion.pkStroke(from: $0, color: uiColor($0.color)) }
+            ids = shown.map(\.id)
             for entry in pending[page] ?? [] {
                 strokes.append(entry.pk)
                 ids.append(entry.id)

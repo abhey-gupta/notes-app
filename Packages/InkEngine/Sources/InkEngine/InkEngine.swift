@@ -22,6 +22,9 @@ public protocol InkEngine: AnyObject {
     func setViewport(_ viewport: Viewport)
     /// Immutable stroke snapshots for the visible pages (others may be dropped).
     func setPages(_ pages: [PageSnapshot])
+    /// A loaded page is about to be handed over in ``setPages(_:)``: do what that would cost on main (e.g.
+    /// converting strokes) off main now, so it doesn't stall a frame. Engines with nothing to do return.
+    func prepare(_ page: PageSnapshot) async
     /// Current tool, color, width and finger-drawing setting.
     func setTool(_ tool: ToolConfiguration)
     /// Paper theme; ink colors resolve against it at render time.
