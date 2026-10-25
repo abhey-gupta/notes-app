@@ -1,6 +1,6 @@
 import XCTest
 
-/// Launch, open and memory over fixture libraries (ARCHITECTURE.md §11–§12), gated by `scripts/perf-gate.sh`
+/// Launch, open, scroll and memory over fixture libraries (ARCHITECTURE.md §11–§12), gated by `scripts/perf-gate.sh`
 /// against `baselines.json`. Relative regression signal only; absolute budgets are verified on device.
 ///
 /// Every test does one unmeasured warm-up run first (library build, dyld/disk caches), then
@@ -67,6 +67,18 @@ final class LaunchPerfTests: XCTestCase {
             XCTAssertTrue(app.buttons[PerfLibrary.largeFixtureCover].waitForExistence(timeout: Self.timeout))
             app.swipeUp(velocity: .fast)
             app.swipeUp(velocity: .fast)
+        }
+    }
+
+    /// Library scroll hitches (#35: 200 notebooks at 120 Hz): fling the covers grid down and back.
+    @MainActor
+    func testLibraryScroll() throws {
+        let app = try makeApp(notebooks: 200)
+        warmUp(app)
+        let grid = app.scrollViews.firstMatch
+        measure(metrics: [XCTOSSignpostMetric.scrollDecelerationMetric], options: Self.options) {
+            grid.swipeUp(velocity: .fast)
+            grid.swipeDown(velocity: .fast)
         }
     }
 
