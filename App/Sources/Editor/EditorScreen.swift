@@ -15,6 +15,7 @@ struct EditorScreen: View {
     let tools: ToolState
     @State private var notebook: NotebookSummary
     @State private var session: NotebookSession
+    @State private var pencil: PencilGestures
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -23,7 +24,9 @@ struct EditorScreen: View {
         self.library = library
         self.tools = tools
         _notebook = State(initialValue: notebook)
-        _session = State(initialValue: NotebookSession(notebook: notebook, library: library, startsFocused: startsFocused))
+        let session = NotebookSession(notebook: notebook, library: library, startsFocused: startsFocused)
+        _session = State(initialValue: session)
+        _pencil = State(initialValue: PencilGestures(tools: tools, state: session.state))
     }
 
     var body: some View {
@@ -46,6 +49,7 @@ struct EditorScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .persistentSystemOverlays(session.state.isFocused ? .hidden : .automatic)
         .task { await session.open() }
+        .onAppear { pencil.install(on: session.host) }
         .onChange(of: tools.configuration(allowsFingerDrawing: LaunchOptions.allowsFingerDrawing), initial: true) { _, configuration in
             session.setTool(configuration)
         }

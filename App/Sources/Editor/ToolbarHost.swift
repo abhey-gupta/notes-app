@@ -175,6 +175,12 @@ struct ToolbarHost: View {
             ToolPopover(tools: tools, tool: options ?? tools.tool, paper: paper)
                 .presentationCompactAdaptation(.popover)
         }
+        .onChange(of: state.toolOptionsRequests) {
+            // Pencil "show palette/ink attributes" (#24): the expanded toolbar's popover; the pill has none.
+            if !isCompact, tools.tool != .lasso {
+                options = options == tools.tool ? nil : tools.tool
+            }
+        }
         .contentShape(Self.hitShape)
         .gesture(TapGesture().onEnded(expand), isEnabled: compact)
         .chromeID(.tools, in: glass, transition: glassTransition)

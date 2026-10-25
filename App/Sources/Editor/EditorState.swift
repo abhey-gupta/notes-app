@@ -57,6 +57,14 @@ final class EditorState {
         onSelectionAction(action)
     }
 
+    /// Bumped when the Pencil asks for tool options (#24); the toolbar opens the current tool's popover.
+    private(set) var toolOptionsRequests = 0
+
+    func requestToolOptions() {
+        exitFocus()
+        toolOptionsRequests += 1
+    }
+
     func exportPDF(
         _ selection: PageSelection,
         _ asShown: Bool,
