@@ -123,6 +123,10 @@ public enum Tokens {
         public static let focusToolButton = CGSize(width: 38, height: 34)
         public static let focusSwatch: CGFloat = 18
         public static let pageThumb = CGSize(width: 176, height: 228)
+        /// Pages overview: ring on the current / selected page, gap between thumbs, template capsule.
+        public static let pageThumbRing: CGFloat = 3
+        public static let pageThumbGap: CGFloat = 32
+        public static let templateCapsuleHeight: CGFloat = 56
         public static let cover = CGSize(width: 150, height: 196)
         /// Library "Continue" card: 344 wide, 196 tall preview, r12.
         public static let recentCard = CGSize(width: 344, height: 196)

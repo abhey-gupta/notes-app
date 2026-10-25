@@ -24,27 +24,40 @@ public struct EditStep: Hashable, Sendable {
 /// the order they were applied. Usually one step; a coalesced gesture may hold several, possibly on
 /// several pages.
 public struct EditEntry: Hashable, Sendable {
-    /// Steps in application order. Apply them in this order.
+    /// Ink steps in application order. Apply them in this order. Empty for a structure entry.
     public var steps: [EditStep]
+    /// Page-structure edits (insert, delete, move) in application order; an entry is either ink
+    /// `steps` or `structure`, never both.
+    public var structure: [PageStructureEdit]
     /// Short user-facing name (`"Stroke"`, `"Erase"`), shown by the system undo UI. `nil` = generic.
     public var actionName: String?
 
-    /// Creates an entry.
+    /// Creates an ink entry.
     public init(steps: [EditStep], actionName: String? = nil) {
         self.steps = steps
+        structure = []
+        self.actionName = actionName
+    }
+
+    /// Creates a page-structure entry.
+    public init(structure: [PageStructureEdit], actionName: String? = nil) {
+        steps = []
+        self.structure = structure
         self.actionName = actionName
     }
 
     /// The entry that undoes this one: each step inverted, in reverse order.
     /// `entry.inverse().inverse() == entry`.
     public func inverse() -> EditEntry {
-        EditEntry(steps: steps.reversed().map { $0.inverse() }, actionName: actionName)
+        var entry = EditEntry(steps: steps.reversed().map { $0.inverse() }, actionName: actionName)
+        entry.structure = structure.reversed().map { $0.inverse() }
+        return entry
     }
 
     /// Pages the entry touches, in first-touch order (for invalidation and scrolling to the change).
     public var pageIDs: [PageID] {
         var seen = Set<PageID>()
-        return steps.map(\.pageID).filter { seen.insert($0).inserted }
+        return (steps.map(\.pageID) + structure.compactMap(\.pageID)).filter { seen.insert($0).inserted }
     }
 }
 
@@ -135,6 +148,14 @@ public final class EditStack {
         } else {
             commit(EditEntry(steps: [EditStep(pageID: pageID, edit: edit)], actionName: actionName))
         }
+    }
+
+    /// Records page-structure edits that have just been applied, in application order, as one entry.
+    /// Closes any open gesture group first (a page change ends the gesture). Discards the redo history.
+    public func record(structure: [PageStructureEdit], actionName: String? = nil) {
+        guard !structure.isEmpty else { return }
+        closeOpenGroups()
+        commit(EditEntry(structure: structure, actionName: actionName))
     }
 
     /// Opens a coalescing group: edits recorded until the matching ``endGroup()`` form one entry.

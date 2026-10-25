@@ -13,6 +13,7 @@ import Tools
 /// - `-seedNotebooks <n>`: if the on-disk library is empty, fill it with n mock-shaped notebooks.
 /// - `-openNotebook <title>`: start in the editor for that notebook (`first` = most recent).
 /// - `-focusMode YES`: with `-openNotebook`, start with the chrome collapsed.
+/// - `-pagesOverview YES`: with `-openNotebook`, open the pages overview a few seconds after the notebook.
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
 /// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
@@ -27,6 +28,11 @@ import Tools
 enum LaunchOptions {
     static var showsNewNotebook: Bool {
         flag("newNotebook")
+    }
+
+    /// With `-openNotebook`: open the pages overview once the notebook is up (screenshots, timing).
+    static var showsPagesOverview: Bool {
+        flag("pagesOverview")
     }
 
     /// "Draw with finger" (no user setting yet; ARCHITECTURE.md §15.4 default off).

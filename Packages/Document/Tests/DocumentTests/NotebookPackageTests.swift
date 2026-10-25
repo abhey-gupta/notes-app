@@ -182,6 +182,11 @@ struct NotebookPackageTests {
             #expect(try contents(of: package.pagesDirectory).isEmpty)
             #expect(try contents(of: package.thumbnailsDirectory) == ["cover.heic"])
             #expect(throws: DocumentError.unknownPage(inserted)) { try package.deletePage(inserted) }
+            // Undo of a delete restores the same ID at its old position; the ink is the caller's to re-add.
+            #expect(try package.insertPage(id: inserted, at: 2, template: .cornell) == inserted)
+            #expect(package.manifest.notebook.pages == [appended, original[0], inserted, original[1]])
+            #expect(try package.loadPage(inserted).strokes.isEmpty)
+            #expect(throws: DocumentError.duplicatePage(inserted)) { try package.insertPage(id: inserted) }
             #expect(try NotebookPackage.open(at: package.url).manifest == package.manifest)
         }
     }

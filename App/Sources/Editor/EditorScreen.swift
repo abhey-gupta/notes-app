@@ -35,20 +35,37 @@ struct EditorScreen: View {
             Rectangle().fill(Tokens.Colors.desk).ignoresSafeArea()
             CanvasView(host: session.host)
                 .ignoresSafeArea()
-            ToolbarHost(
-                tools: tools,
-                state: session.state,
-                title: notebook.title,
-                paper: paperBinding,
-                pattern: patternBinding,
-                page: (min(viewport.currentPage + 1, max(viewport.pageCount, 1)), viewport.pageCount),
-                onBack: { dismiss() }
-            )
-            SelectionBar(tools: tools, state: session.state, paper: notebook.theme.style)
+            if session.state.pages.isPresented {
+                PagesOverview(
+                    model: session.state.pages, state: session.state, viewport: viewport, title: notebook.title, paper: notebook.theme.style
+                )
+                .transition(.opacity)
+                .zIndex(1)
+            } else {
+                ToolbarHost(
+                    tools: tools,
+                    state: session.state,
+                    title: notebook.title,
+                    paper: paperBinding,
+                    pattern: patternBinding,
+                    page: (min(viewport.currentPage + 1, max(viewport.pageCount, 1)), viewport.pageCount),
+                    onBack: { dismiss() }
+                )
+                SelectionBar(tools: tools, state: session.state, paper: notebook.theme.style)
+            }
         }
+        .animation(Tokens.Motion.reducedMorph, value: session.state.pages.isPresented)
         .toolbar(.hidden, for: .navigationBar)
         .persistentSystemOverlays(session.state.isFocused ? .hidden : .automatic)
-        .task { await session.open() }
+        .task {
+            await session.open()
+            #if DEBUG
+                if LaunchOptions.showsPagesOverview {
+                    try? await Task.sleep(for: .seconds(4))
+                    session.state.pages.present()
+                }
+            #endif
+        }
         .onAppear { pencil.install(on: session.host) }
         .onChange(of: tools.configuration(allowsFingerDrawing: LaunchOptions.allowsFingerDrawing), initial: true) { _, configuration in
             session.setTool(configuration)

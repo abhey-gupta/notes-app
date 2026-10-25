@@ -34,15 +34,19 @@
             public var quality: Double
             /// Called (off main) after `cover.heic` was written.
             public var onCoverWritten: (@Sendable () -> Void)?
+            /// Called (off main) after a page's `thumbs/<id>.heic` was written (the pages overview reloads it).
+            public var onPageWritten: (@Sendable (PageID) -> Void)?
 
             /// Creates options.
             public init(
-                debounce: Duration = .seconds(1), scale: CGFloat = 2, quality: Double = 0.8, onCoverWritten: (@Sendable () -> Void)? = nil
+                debounce: Duration = .seconds(1), scale: CGFloat = 2, quality: Double = 0.8,
+                onCoverWritten: (@Sendable () -> Void)? = nil, onPageWritten: (@Sendable (PageID) -> Void)? = nil
             ) {
                 self.debounce = debounce
                 self.scale = scale
                 self.quality = quality
                 self.onCoverWritten = onCoverWritten
+                self.onPageWritten = onPageWritten
             }
         }
 
@@ -239,6 +243,7 @@
             }.value
             guard written else { return }
             renderCount += 1
+            options.onPageWritten?(page.id)
             if job.isCover {
                 options.onCoverWritten?()
             }

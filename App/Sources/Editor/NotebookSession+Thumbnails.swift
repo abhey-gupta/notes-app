@@ -17,9 +17,14 @@ extension NotebookSession {
         return ThumbnailService(
             package: url,
             renderer: ThumbnailService.renderer(engine),
-            options: ThumbnailService.Options(onCoverWritten: { [weak self] in
-                Task { @MainActor in self?.library.coverDidChange(for: id) }
-            })
+            options: ThumbnailService.Options(
+                onCoverWritten: { [weak self] in
+                    Task { @MainActor in self?.library.coverDidChange(for: id) }
+                },
+                onPageWritten: { [weak self] page in
+                    Task { @MainActor in self?.state.pages.thumbnailWritten(page) }
+                }
+            )
         )
     }
 

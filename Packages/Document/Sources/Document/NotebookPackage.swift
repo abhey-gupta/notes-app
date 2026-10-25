@@ -269,13 +269,15 @@ public struct NotebookPackage: Sendable {
 
     /// Inserts an empty page (no stroke file is written until it has ink).
     /// - Parameters:
+    ///   - id: The page's ID; pass a deleted page's ID to restore it (undo). Default: a fresh one.
     ///   - index: Position in `0...pageCount`; `nil` appends.
     ///   - template: Background; `nil` uses the notebook paper's default.
     /// - Returns: The new page's ID.
     @discardableResult
-    public mutating func insertPage(at index: Int? = nil, template: PageTemplate? = nil) throws(DocumentError) -> PageID {
+    public mutating func insertPage(
+        id: PageID = PageID(), at index: Int? = nil, template: PageTemplate? = nil
+    ) throws(DocumentError) -> PageID {
         var next = manifest
-        let id = PageID()
         let entry = PageEntry(id: id, template: template ?? next.notebook.paper.defaultTemplate)
         try next.insertPage(entry, at: index ?? next.notebook.pages.count)
         try commit(next)
