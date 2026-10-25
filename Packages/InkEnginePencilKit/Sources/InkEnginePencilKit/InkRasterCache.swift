@@ -66,7 +66,11 @@ final class InkRasterCache {
     /// The same content at the bucket nearest `pixelScale` (a zoom's stand-in: scaled, slightly soft).
     func nearest(for page: PageID, content: PageLayerView.ContentKey, pixelScale: CGFloat) -> CGImage? {
         let candidates = entries.keys.filter { $0.page == page && $0.content == content }
-        guard let k = candidates.min(by: { abs(log2($0.pixelScale / pixelScale)) < abs(log2($1.pixelScale / pixelScale)) }) else {
+        // Ties go to the lower bucket (cheaper, and deterministic: `entries` has no order).
+        func distance(_ k: Key) -> (CGFloat, CGFloat) {
+            (abs(log2(k.pixelScale / pixelScale)), k.pixelScale)
+        }
+        guard let k = candidates.min(by: { distance($0) < distance($1) }) else {
             return nil
         }
         touch(k)
