@@ -1,8 +1,8 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-/// `PageLayout` and `PageWindow` are pure Swift and test headlessly on macOS (`swift test`); the UIKit host
-/// (`CanvasHostView`, `PageResidency`) is iOS-only and compiles out elsewhere (`#if canImport(UIKit)`).
+/// `PageLayout`, `PageWindow` and `PageResidency` are pure Swift and test headlessly on macOS (`swift test`);
+/// the UIKit host (`CanvasHostView`, `ThumbnailService`) is iOS-only and compiles out elsewhere (`#if canImport(UIKit)`).
 let iOS = TargetDependencyCondition.when(platforms: [.iOS])
 
 let package = Package(
@@ -32,6 +32,8 @@ let package = Package(
             name: "CanvasTests",
             dependencies: [
                 "Canvas",
+                "Document",
+                "InkModel",
                 .product(name: "InkEnginePencilKit", package: "InkEnginePencilKit", condition: iOS),
                 .product(name: "InkEngineTestSupport", package: "InkEngine", condition: iOS),
                 .product(name: "FixtureGen", package: "Fixtures", condition: iOS),

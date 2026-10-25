@@ -46,19 +46,9 @@ extension NotebookSession {
 
     /// Whether any of `ids` has strokes; pages not in memory are read and released again.
     func pagesHaveInk(_ ids: [PageID]) async -> Bool {
-        guard let store, let residency else { return false }
+        guard let residency else { return false }
         for id in ids {
-            if let page = residency.page(id) {
-                if !page.strokes.isEmpty {
-                    return true
-                }
-                continue
-            }
-            guard let page = try? await store.page(id) else { continue }
-            if residency.page(id) == nil {
-                try? await store.evict(page: id)
-            }
-            if !page.strokes.isEmpty {
+            if let page = try? await residency.peek(id), !page.strokes.isEmpty {
                 return true
             }
         }

@@ -18,6 +18,7 @@ import Tools
 ///                                                       └─▶ EditStack.record ─▶ UndoManagerBridge (⌘Z, 3-finger)
 /// undo/redo ─▶ EditPipeline ─inverse─▶ same path (store first, then mirror + engine)
 /// scroll ─▶ CanvasHostView ─PageWindow─▶ PageResidency ─▶ store.page / store.evict, engine.setPages
+/// thumbnails, "has ink?" ─▶ PageResidency.peek (mirror, or read and released)
 /// ```
 ///
 /// Every change goes through ``edits`` (`EditPipeline`), one at a time in arrival order, so the next
@@ -210,9 +211,8 @@ final class NotebookSession {
 
     /// Undo/redo changed `ids`: scrolls to the first page `ids` touched if none of them is on screen.
     func reveal(_ ids: [PageID]) {
-        guard let window = host.pageWindow else { return }
-        let indices = ids.compactMap(host.layout.index(of:))
-        guard let first = indices.first, !indices.contains(where: { window.visible.contains($0) }) else { return }
+        guard let residency, residency.window != nil, !ids.contains(where: residency.isVisible),
+              let first = ids.lazy.compactMap(residency.pageIDs.firstIndex(of:)).first else { return }
         host.scrollToPage(first, animated: true)
     }
 
@@ -220,8 +220,7 @@ final class NotebookSession {
 
     private func pageLoaded(_ id: PageID) {
         ensureThumbnails(id)
-        guard awaitingFirstPage, let window = host.pageWindow,
-              window.visible.contains(where: { host.layout.pageIDs[$0] == id }) else { return }
+        guard awaitingFirstPage, residency?.isVisible(id) == true else { return }
         awaitingFirstPage = false
         // The engine draws the snapshot on its next vsync: end `notebook.open` one display frame later.
         FrameAfter.next { OpenTrace.end() }
@@ -254,7 +253,7 @@ final class NotebookSession {
     /// "12 strokes" for the page under the indicator (VoiceOver, UI tests).
     private func currentPageDescription() -> String? {
         let index = host.state.currentPage
-        guard let residency, host.layout.pageIDs.indices.contains(index), let page = residency.page(host.layout.pageIDs[index]) else {
+        guard let residency, residency.pageIDs.indices.contains(index), let page = residency.page(residency.pageIDs[index]) else {
             return nil
         }
         return page.strokes.count == 1 ? "1 stroke" : "\(page.strokes.count) strokes"
@@ -294,7 +293,7 @@ extension NotebookSession: InkEngineDelegate {
 extension NotebookSession: CanvasHostViewDelegate {
     func canvasHost(_: CanvasHostView, didChange window: PageWindow) {
         residency?.update(window)
-        if let selection, !window.visible.contains(where: { host.layout.pageIDs[$0] == selection.pageID }) {
+        if let selection, residency?.isVisible(selection.pageID) != true {
             clearSelection()
         }
     }
