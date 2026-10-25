@@ -64,14 +64,7 @@ extension NotebookSession {
 
     /// The page as its thumbnail should show it: the mirror if resident, else loaded and released again.
     private func loadThumbnailSnapshot(_ id: PageID) async throws -> PageSnapshot? {
-        guard let store, let residency, !isClosed else { return nil }
-        if let page = residency.page(id) {
-            return PageSnapshot(page: page, size: residency.pageSize)
-        }
-        let page = try await store.page(id)
-        if residency.page(id) == nil {
-            try await store.evict(page: id)
-        }
-        return PageSnapshot(page: page, size: residency.pageSize)
+        guard let residency, !isClosed else { return nil }
+        return try await PageSnapshot(page: residency.peek(id), size: residency.pageSize)
     }
 }

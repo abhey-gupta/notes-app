@@ -22,7 +22,7 @@ notes-app/
   project.yml                 xcodegen; app target + test targets only
   App/                        Notespace (SwiftUI) – thin shell, wiring, screens
   Packages/
-    InkModel/                 Stroke, Sample, Page, Notebook, PageEdit, InkColor (pure Swift, Sendable)
+    InkModel/                 Stroke, Sample, Page, Notebook, PageEdit, PageSnapshot, InkColor (pure Swift, Sendable)
     InkGeometry/              smoothing, outline tessellation, hit-testing, spatial index (pure Swift)
     InkEngine/                InkEngine protocol + shared input pipeline types (UIKit, no Metal)
     InkEngineMetal/           Metal renderer, tile cache, shaders (.metal)
@@ -57,7 +57,7 @@ App
  └─ Perf
 ```
 
-Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Document`, `Library`, `Tools`, `Editing`, `Export` (CoreGraphics is available on macOS). Simulator-only: `InkEngine*`, `Canvas`, `DesignSystem`, App.
+Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Document`, `Library`, `Tools`, `Editing`, `Export` (CoreGraphics is available on macOS), and `Canvas`'s `PageLayout`, `PageWindow` and `PageResidency` (its UIKit host compiles out). Simulator-only: `InkEngine*`, the rest of `Canvas`, `DesignSystem`, App.
 
 Concurrency: value types everywhere in `InkModel` (`Sendable` structs). UIKit/Metal view classes are `@MainActor`. Background work lives in actors (`DocumentStore`, `LibraryStore`, `ThumbnailService`, `TileRenderer`). No `@unchecked Sendable` without a comment explaining why.
 
@@ -245,6 +245,7 @@ Whole body after header compressed with `Compression` framework lz4 (`COMPRESSIO
 
 - `TileRenderer` (non-main, own `MTLCommandQueue`, serial queue): renders 512 px tiles per page per zoom bucket (0.5, 1, 2, 4) into an `MTLHeap`-backed texture pool. LRU by bytes, budget 256 MB on 8 GB iPads (scaled by `ProcessInfo.physicalMemory`), evict on `didReceiveMemoryWarning`.
 - Residency: tiles for visible pages ± 1 page. Others evicted lazily. Stroke data for pages outside ± 3 pages is dropped from memory (reloaded from disk on demand, < 10 ms per page).
+- `PageResidency` (`Canvas`, pure Swift) owns this for strokes: page order, the current `PageWindow` (`isVisible(id)`), the loaded pages (the page mirror, §6), background loads (2 at a time) and store evictions. It feeds the engine through a two-call `PageSink` port (`setPages`, `apply`); tests use a recording sink against a real `DocumentStore`. Code that only reads a page (thumbnails, "has ink?") uses `peek(id)`: the mirror's copy, or read and released, and never releases a page the window is loading or keeps.
 - Zoom gesture: scale existing bucket tiles on the GPU (cheap, slightly soft), then re-render at the new bucket on gesture end. No blank tiles: a missing tile falls back to the nearest bucket, then to the page thumbnail, then to flat paper.
 - Invalidation is rect-based per page; a committed stroke only redraws intersecting tiles.
 

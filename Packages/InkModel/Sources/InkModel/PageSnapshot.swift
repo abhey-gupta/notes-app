@@ -1,7 +1,6 @@
 import CoreGraphics
-import InkModel
 
-/// Immutable view of one page for the engine: template, strokes in z-order, revision and size.
+/// Immutable view of one page for an ink engine: template, strokes in z-order, revision and size.
 public struct PageSnapshot: Hashable, Sendable, Identifiable {
     /// The page value (strokes, template, rev).
     public let page: Page
@@ -33,7 +32,7 @@ public struct PageSnapshot: Hashable, Sendable, Identifiable {
         page.rev
     }
 
-    /// Snapshot with `edit` applied (what an engine does on ``InkEngine/apply(_:to:)``).
+    /// Snapshot with `edit` applied (what an ink engine does when it applies an edit).
     public func applying(_ edit: PageEdit) throws(PageEditError) -> PageSnapshot {
         try PageSnapshot(page: page.applying(edit), size: size, isLoaded: isLoaded)
     }
