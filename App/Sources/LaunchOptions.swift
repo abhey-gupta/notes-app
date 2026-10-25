@@ -3,7 +3,8 @@ import Library
 import Tools
 
 /// DEBUG launch arguments for screenshots and UI tests. Release builds always get the defaults, except
-/// `-libraryRoot`, which simulator Release builds also honor (perf tests run Release).
+/// `-libraryRoot`, which simulator Release builds also honor (perf tests run Release), and flags,
+/// `-fixtureNotebook` and `-openNotebook` in `PERF_FIXTURES` Release builds (device stress runs, #44).
 ///
 /// - `-sampleLibrary YES`: in-memory mock notebooks (`SampleLibrary`) instead of the on-disk library.
 /// - `-emptyLibrary YES`: in-memory library with no notebooks.
@@ -42,7 +43,7 @@ enum LaunchOptions {
 
     /// Pages of the FixtureGen notebook to add, or 0.
     static var fixtureNotebookPages: Int {
-        #if DEBUG
+        #if DEBUG || PERF_FIXTURES
             max(UserDefaults.standard.integer(forKey: "fixtureNotebook"), 0)
         #else
             0
@@ -76,7 +77,7 @@ enum LaunchOptions {
     }
 
     static func initialPath(in library: any LibraryModel) -> [EditorRoute] {
-        #if DEBUG
+        #if DEBUG || PERF_FIXTURES
             guard let title = UserDefaults.standard.string(forKey: "openNotebook") else { return [] }
             let notebook = title == "first"
                 ? library.notebooks.first
@@ -120,7 +121,7 @@ enum LaunchOptions {
     }
 
     private static func flag(_ key: String) -> Bool {
-        #if DEBUG
+        #if DEBUG || PERF_FIXTURES
             UserDefaults.standard.bool(forKey: key)
         #else
             false

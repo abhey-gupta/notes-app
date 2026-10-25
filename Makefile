@@ -3,7 +3,7 @@ DEST := platform=iOS Simulator,name=$(SIM)
 HEADLESS := InkModel InkGeometry Document Library Tools Export Fixtures Canvas
 XCB := $(shell command -v xcbeautify >/dev/null && echo "| xcbeautify" )
 
-.PHONY: gen lint format test-packages build test perf perf-gate perf-baseline fixtures open clean
+.PHONY: gen lint format test-packages build test perf perf-device perf-gate perf-baseline fixtures open clean
 
 gen:
 	xcodegen generate --quiet
@@ -33,6 +33,12 @@ test: gen
 
 perf: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme NotespacePerf -destination '$(DEST)' $(XCB)
+
+# #44 stress pass on a connected device (DEVICE=<udid>): Release + PERF_FIXTURES, 300-page fixture.
+perf-device: gen
+	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme NotespacePerf -destination 'id=$(DEVICE)' \
+		-allowProvisioningUpdates -only-testing:NotespacePerfTests/CanvasStressPerfTests \
+		SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) PERF_FIXTURES' -resultBundlePath build/perf-device.xcresult $(XCB)
 
 # Perf regression gate vs Tests/PerfTests/baselines.json (median of PERF_ITERATIONS, > 10 % fails).
 # perf-baseline rewrites this simulator model's baselines: run on a quiet machine (README).

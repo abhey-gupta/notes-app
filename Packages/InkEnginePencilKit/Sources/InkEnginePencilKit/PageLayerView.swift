@@ -4,7 +4,7 @@ import PencilKit
 import UIKit
 
 /// One visible page in content space: paper color, vector template marks, and an image of its ink
-/// (outside ``inkHole``, the part a `PKCanvasView` has drawn).
+/// (outside ``inkHole``, the part a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask).
 ///
 /// The image is one of (#70's fallback chain, best first): the raster for ``requestedKey``; a stale
 /// raster of the page (an older bucket or content, scaled by the layer) while that renders; the page's
@@ -19,11 +19,11 @@ import UIKit
 final class PageLayerView: UIView {
     private let linesLayer = CAShapeLayer()
     private let dotsLayer = CAShapeLayer()
-    /// Holds the thumbnail and ink layers; masked by ``inkHole``.
+    /// Holds the thumbnail and ink layers.
     private let imageLayer = CALayer()
     /// The scaled-up thumbnail (opaque: paper, template and ink at thumbnail resolution).
-    let thumbnailLayer = CALayer()
-    let inkLayer = CALayer()
+    let thumbnailLayer = HoledImageLayer()
+    let inkLayer = HoledImageLayer()
 
     /// Thumbnail → raster crossfade length, seconds (the app sets it from its motion tokens).
     var crossfadeDuration: TimeInterval = 0.12
@@ -73,7 +73,7 @@ final class PageLayerView: UIView {
 
     /// Something (raster, stale raster or thumbnail) is on screen.
     var hasImage: Bool {
-        inkLayer.contents != nil || showsThumbnail
+        inkLayer.image != nil || showsThumbnail
     }
 
     /// A page-space rect the image leaves out (the canvas has drawn it).
@@ -85,17 +85,12 @@ final class PageLayerView: UIView {
         }
     }
 
-    private var holeMask: CAShapeLayer?
-
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = false
         linesLayer.fillColor = nil
         linesLayer.lineWidth = TemplateGeometry.lineWidth
         dotsLayer.strokeColor = nil
-        inkLayer.contentsGravity = .resize
-        thumbnailLayer.contentsGravity = .resize
-        thumbnailLayer.magnificationFilter = .linear
         thumbnailLayer.isHidden = true
         imageLayer.addSublayer(thumbnailLayer)
         imageLayer.addSublayer(inkLayer)
@@ -142,7 +137,7 @@ final class PageLayerView: UIView {
     func setInk(_ image: CGImage?, key: InkKey?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        inkLayer.contents = image
+        inkLayer.image = image
         shownKey = key
         CATransaction.commit()
         hideThumbnail(animated: true)
@@ -153,7 +148,7 @@ final class PageLayerView: UIView {
     func setStaleInk(_ image: CGImage) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        inkLayer.contents = image
+        inkLayer.image = image
         shownKey = nil
         CATransaction.commit()
         hideThumbnail(animated: false)
@@ -162,11 +157,11 @@ final class PageLayerView: UIView {
     /// Shows the page's thumbnail scaled to the page width, top-aligned (it is cut at 176×228 pt, so a
     /// taller page's bottom shows the paper and template layers), until a raster lands.
     func setThumbnail(_ image: CGImage) {
-        guard inkLayer.contents == nil else { return }
+        guard inkLayer.image == nil else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         thumbnailLayer.removeAllAnimations()
-        thumbnailLayer.contents = image
+        thumbnailLayer.image = image
         thumbnailLayer.opacity = 1
         thumbnailLayer.isHidden = false
         showsThumbnail = true
@@ -181,9 +176,7 @@ final class PageLayerView: UIView {
     }
 
     private func layoutThumbnail() {
-        guard let image = thumbnailLayer.contents, bounds.width > 0 else { return }
-        // swiftlint:disable:next force_cast
-        let cg = image as! CGImage
+        guard let cg = thumbnailLayer.image, bounds.width > 0 else { return }
         let height = cg.width > 0 ? bounds.width * CGFloat(cg.height) / CGFloat(cg.width) : bounds.height
         thumbnailLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: min(height, bounds.height))
     }
@@ -196,7 +189,7 @@ final class PageLayerView: UIView {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             thumbnail.isHidden = true
-            thumbnail.contents = nil
+            thumbnail.image = nil
             CATransaction.commit()
             return
         }
@@ -207,7 +200,7 @@ final class PageLayerView: UIView {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             thumbnail.isHidden = true
-            thumbnail.contents = nil
+            thumbnail.image = nil
             CATransaction.commit()
         }
         let fade = CABasicAnimation(keyPath: "opacity")
@@ -220,25 +213,12 @@ final class PageLayerView: UIView {
         CATransaction.commit()
     }
 
+    /// Both image layers sit at the page's origin, so the hole is the same rect in each.
     private func updateInkHole() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-        guard let inkHole else {
-            imageLayer.mask = nil
-            holeMask = nil
-            return
-        }
-        let mask = holeMask ?? CAShapeLayer()
-        mask.fillRule = .evenOdd
-        mask.frame = imageLayer.bounds
-        let path = CGMutablePath()
-        path.addRect(imageLayer.bounds)
-        path.addRect(inkHole)
-        mask.path = path
-        if holeMask == nil {
-            holeMask = mask
-            imageLayer.mask = mask
-        }
+        thumbnailLayer.hole = inkHole
+        inkLayer.hole = inkHole
+        CATransaction.commit()
     }
 }

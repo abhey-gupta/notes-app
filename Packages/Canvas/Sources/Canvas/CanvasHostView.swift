@@ -85,6 +85,9 @@
         private var lastBoundsSize: CGSize = .zero
         private var fitZoom: CGFloat = 1
         private var isUpdatingInsets = false
+        /// `addPageButton`'s size: `intrinsicContentSize` re-resolves its configuration (≈30 % of a scroll
+        /// frame, #44), so measure once per text size.
+        private var addPageButtonSize: CGSize?
         /// Zoom gesture tracking (`CanvasHostView+Zoom.swift`).
         var isPinching = false, engineIsZooming = false
         private let dismissGestures = DismissGestureClaim()
@@ -122,6 +125,10 @@
             addPageButton.addAction(UIAction { [weak self] _ in self?.requestNewPage() }, for: .primaryActionTriggered)
             addPageButton.sizeToFit()
             scrollView.addSubview(addPageButton)
+            registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
+                self.addPageButtonSize = nil
+                self.viewportDidChange()
+            }
 
             scrollView.pageLabel = { [weak self] in
                 guard let self, layout.pageCount > 0 else { return nil }
@@ -337,17 +344,29 @@
             }
         }
 
-        private func placeAddPageButton(zoom z: CGFloat) {
-            let footer = layout.footerFrame
-            let size = addPageButton.intrinsicContentSize
-            let center = CGPoint(x: footer.midX * z, y: footer.minY * z + 28 + size.height / 2)
-            addPageButton.bounds = CGRect(origin: .zero, size: size)
-            addPageButton.center = center
-            addPageButton.isHidden = !showsAddPage || layout.pageCount == 0
-        }
-
         private func requestNewPage() {
             delegate?.canvasHostDidRequestNewPage(self)
+        }
+    }
+
+    // MARK: Add page
+
+    extension CanvasHostView {
+        private func placeAddPageButton(zoom z: CGFloat) {
+            let footer = layout.footerFrame
+            let size = addPageButtonSize ?? addPageButton.intrinsicContentSize
+            addPageButtonSize = size
+            let center = CGPoint(x: footer.midX * z, y: footer.minY * z + 28 + size.height / 2)
+            if addPageButton.bounds.size != size {
+                addPageButton.bounds = CGRect(origin: .zero, size: size)
+            }
+            if addPageButton.center != center {
+                addPageButton.center = center
+            }
+            let hidden = !showsAddPage || layout.pageCount == 0
+            if addPageButton.isHidden != hidden {
+                addPageButton.isHidden = hidden
+            }
         }
     }
 
