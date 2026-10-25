@@ -279,9 +279,9 @@ fragment float4 background_fragment(BackgroundOut in [[stage_in]],
         c = max(ruleCoverage(p.x, s, s, b.pageSize.x, w, ppp), ruleCoverage(p.y, s, s, b.pageSize.y, w, ppp));
         break;
     case 4: {
-        // Cue column (29 % width) and summary band (bottom 18 %) over 24 pt rules.
-        float summary = round(b.pageSize.y * 0.82);
-        float cue = round(b.pageSize.x * 0.29);
+        // Cue column (2.5 in) and summary band (bottom 2 in) over 24 pt rules (InkGeometry.TemplateGeometry).
+        float summary = max(b.pageSize.y - 144.0, b.top);
+        float cue = min(180.0, b.pageSize.x * 0.5);
         float rules = ruleCoverage(p.y, b.top, 24.0, summary, w, ppp);
         float span = saturate((p.y - (b.top - 24.0)) * ppp + 0.5) * saturate((summary - p.y) * ppp + 0.5);
         float column = lineCoverage(abs(p.x - cue), w, ppp) * span;

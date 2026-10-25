@@ -53,9 +53,10 @@ public struct DotGrid: View {
     public var body: some View {
         Canvas { context, size in
             var dots = Path()
-            var y = spacing / 2
+            // On multiples of the spacing, like the page (`InkGeometry.TemplateGeometry`).
+            var y = spacing
             while y < size.height {
-                var x = spacing / 2
+                var x = spacing
                 while x < size.width {
                     dots.addEllipse(in: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
                     x += spacing

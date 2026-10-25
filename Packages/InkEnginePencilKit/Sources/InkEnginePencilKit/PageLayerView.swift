@@ -1,3 +1,4 @@
+import InkGeometry
 import InkModel
 import PencilKit
 import UIKit
@@ -57,7 +58,7 @@ final class PageLayerView: UIView {
         super.init(frame: frame)
         isUserInteractionEnabled = false
         linesLayer.fillColor = nil
-        linesLayer.lineWidth = TemplatePaths.lineWidth
+        linesLayer.lineWidth = TemplateGeometry.lineWidth
         dotsLayer.strokeColor = nil
         inkLayer.contentsGravity = .resize
         layer.addSublayer(linesLayer)
@@ -85,7 +86,7 @@ final class PageLayerView: UIView {
         let key = TemplateKey(template: template, size: frame.size)
         if templateKey != key {
             templateKey = key
-            let paths = TemplatePaths(template, size: frame.size)
+            let paths = TemplateGeometry(template, size: frame.size)
             linesLayer.path = paths.lines
             dotsLayer.path = paths.dots
         }

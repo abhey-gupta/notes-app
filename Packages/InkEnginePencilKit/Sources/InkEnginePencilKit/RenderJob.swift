@@ -1,4 +1,5 @@
 import InkEngine
+import InkGeometry
 import InkModel
 import PencilKit
 import UIKit
@@ -52,7 +53,7 @@ struct RenderJob: Sendable {
         let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
             let cg = context.cgContext
             cg.scaleBy(x: sx, y: sy)
-            TemplatePaths.drawBackground(
+            TemplateGeometry.drawBackground(
                 page.page.template,
                 size: page.size,
                 paper: palette.paper(theme).cgColor,

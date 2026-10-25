@@ -119,21 +119,23 @@ struct PDFExporterTests {
         #expect(pdf.pageCount == templates.count)
         let blank = try pdf.bitmap(0)
         #expect(blank.minLuma(x: 0 ... 594, y: 40 ... 60) == 255)
-        // Lined: first rule at 2 × spacing.
+        // Lined: first rule 72 pt down (same as the screen: InkGeometry.TemplateGeometry).
         let lined = try pdf.bitmap(1)
-        #expect(lined.minLuma(x: 200 ... 210, y: 47 ... 48) < 140)
-        #expect(lined.minLuma(x: 200 ... 210, y: 55 ... 65) == 255)
-        // Dotted: dots centred in 20 pt cells.
+        #expect(lined.minLuma(x: 200 ... 210, y: 71 ... 72) < 200)
+        #expect(lined.minLuma(x: 200 ... 210, y: 50 ... 65) == 255)
+        // Dotted: dots on multiples of 20 pt.
         let dotted = try pdf.bitmap(2)
-        #expect(dotted.minLuma(x: 9 ... 10, y: 9 ... 10) < 200)
-        #expect(dotted.minLuma(x: 15 ... 25, y: 15 ... 25) == 255)
+        #expect(dotted.minLuma(x: 19 ... 20, y: 19 ... 20) < 200)
+        #expect(dotted.minLuma(x: 25 ... 35, y: 25 ... 35) == 255)
         // Grid: vertical and horizontal rules every 20 pt.
         let grid = try pdf.bitmap(3)
         #expect(grid.minLuma(x: 19 ... 20, y: 100 ... 105) < 140)
         #expect(grid.minLuma(x: 100 ... 105, y: 19 ... 20) < 140)
-        // Cornell: cue column at 30 % width.
+        // Cornell: cue column 2.5 in from the left, summary band 2 in tall.
         let cornell = try pdf.bitmap(4)
-        #expect(cornell.minLuma(x: 178 ... 179, y: 300 ... 302) < 140)
+        #expect(cornell.minLuma(x: 179 ... 180, y: 300 ... 302) < 200)
+        #expect(cornell.minLuma(x: 400 ... 410, y: 697 ... 698) < 200)
+        #expect(cornell.minLuma(x: 400 ... 410, y: 710 ... 830) == 255)
         for i in 1 ..< templates.count {
             #expect(try pdf.operatorCounts(i).text == 0)
         }
