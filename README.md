@@ -21,6 +21,7 @@ Ultra-fast, minimal, beautiful handwritten notes for iPad.
 make gen            # generate Notespace.xcodeproj from project.yml (not committed)
 make open           # gen + open in Xcode
 make build          # build app for the iPad simulator
+make ipa            # unsigned Release build/Notespace.ipa for sideloading
 make test           # app UI tests + every package's tests on the simulator
 make test-packages  # headless packages via `swift test` (no simulator)
 make perf           # perf tests (Release), no gate
@@ -31,6 +32,8 @@ make lint / format
 ```
 
 CI: GitHub Actions on a self-hosted runner on the dev Mac (`runs-on: [self-hosted, macOS, xcode27]`), service in `~/actions-runner/notespace` (`./svc.sh status/start/stop`). Jobs: lint, packages, ios. Perf gate runs nightly and on PRs labeled `run-perf`; it comments the summary on the PR.
+
+Release: push a `v*` tag → `release.yml` builds the unsigned `.ipa` and attaches it to a GitHub release (manual run: artifact only). Install with AltStore/SideStore, which re-sign it with a free Apple ID (7-day expiry, refreshed over Wi-Fi by AltServer/SideStore).
 
 ## Perf gate
 

@@ -3,7 +3,7 @@ DEST := platform=iOS Simulator,name=$(SIM)
 HEADLESS := InkModel InkGeometry Document Library Tools Editing Export Fixtures Canvas
 XCB := $(shell command -v xcbeautify >/dev/null && echo "| xcbeautify" )
 
-.PHONY: gen lint format test-packages build test perf perf-device perf-gate perf-baseline fixtures open clean
+.PHONY: gen lint format test-packages build ipa test perf perf-device perf-gate perf-baseline fixtures open clean
 
 gen:
 	xcodegen generate --quiet
@@ -21,6 +21,19 @@ test-packages:
 
 build: gen
 	set -o pipefail; xcodebuild build -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(XCB)
+
+# Unsigned Release .ipa for sideloading (AltStore/SideStore re-sign it with your Apple ID).
+IPA_DD := build/ipa
+
+ipa: gen
+	set -o pipefail; xcodebuild build -project Notespace.xcodeproj -scheme Notespace -configuration Release \
+		-destination 'generic/platform=iOS' -derivedDataPath $(IPA_DD) \
+		CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= $(XCB)
+	rm -rf $(IPA_DD)/Payload build/Notespace.ipa
+	mkdir -p $(IPA_DD)/Payload
+	cp -R $(IPA_DD)/Build/Products/Release-iphoneos/Notespace.app $(IPA_DD)/Payload/
+	cd $(IPA_DD) && zip -qry ../Notespace.ipa Payload
+	@echo "▸ build/Notespace.ipa"
 
 # No post-failure diagnostics (can hang 10 min); retry flaky UI gestures once.
 TESTFLAGS := -collect-test-diagnostics never -retry-tests-on-failure -test-iterations 2
