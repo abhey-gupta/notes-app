@@ -15,6 +15,7 @@ struct SelectionBar: View {
 
     @State private var size = CGSize(width: 300, height: Tokens.Size.capsuleHeight)
     @State private var showsPalette = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// Gap between selection and bar, and the space the top chrome needs.
     private static let gap: CGFloat = 14
@@ -65,9 +66,12 @@ struct SelectionBar: View {
     }
 
     private var palette: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(Tokens.Size.paletteSwatch + 8), spacing: 6), count: 6), spacing: 8) {
-            ForEach(Array(Tokens.palette.enumerated()), id: \.offset) { index, rgba in
-                ColorSwatch(rgba.color, label: "Color \(index + 1)", diameter: Tokens.Size.paletteSwatch) {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.fixed((Tokens.Size.paletteSwatch + 8) * typeSize.chromeScale), spacing: 6), count: 6),
+            spacing: 8
+        ) {
+            ForEach(Array(Tokens.palette.enumerated()), id: \.offset) { _, rgba in
+                ColorSwatch(rgba.color, label: InkColor(palette: rgba).accessibilityName, diameter: Tokens.Size.paletteSwatch) {
                     showsPalette = false
                     state.perform(.recolor(InkColor(palette: rgba)))
                 }

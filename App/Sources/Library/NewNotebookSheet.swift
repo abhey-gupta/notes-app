@@ -100,7 +100,7 @@ struct NewNotebookSheet: View {
                 }
                 Spacer(minLength: 0)
                 Text("A4 · Portrait")
-                    .font(.system(size: 13, weight: .medium))
+                    .scaledFont(size: 13, weight: .medium)
                     .foregroundStyle(Tokens.Colors.textSecondary)
             }
             .padding(.top, 20)
@@ -113,7 +113,7 @@ struct NewNotebookSheet: View {
 
     private func label(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11.5, weight: .semibold))
+            .scaledFont(size: 11.5, weight: .semibold)
             .textCase(.uppercase)
             .tracking(0.7)
             .foregroundStyle(Tokens.Colors.textSecondary)
@@ -147,7 +147,7 @@ struct NewNotebookSheet: View {
                     }
                     .frame(width: 72, height: 92)
                 Text(style.displayName)
-                    .font(.system(size: 12, weight: selected ? .semibold : .medium))
+                    .scaledFont(size: 12, weight: selected ? .semibold : .medium)
                     .foregroundStyle(selected ? Tokens.Colors.textPrimary : Tokens.Colors.textSecondary)
             }
         }
@@ -167,7 +167,7 @@ struct NewNotebookSheet: View {
                     .overlay(Circle().strokeBorder(Tokens.Colors.swatchHairline, lineWidth: 0.8))
                     .frame(width: 16, height: 16)
                 Text(theme.style.displayName)
-                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                    .scaledFont(size: 13, weight: selected ? .semibold : .medium)
                     .foregroundStyle(Tokens.Colors.textPrimary)
             }
             .padding(.leading, 8)

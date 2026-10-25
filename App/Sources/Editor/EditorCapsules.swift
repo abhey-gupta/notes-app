@@ -11,7 +11,10 @@ struct NavCapsule: View {
     @Binding var keepsExactColors: Bool
     let onBack: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
+        let scale = typeSize.chromeScale
         GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
             ToolButton(.back, "Library", action: onBack)
             Menu {
@@ -34,18 +37,19 @@ struct NavCapsule: View {
                         .font(.chromeTitle)
                         .foregroundStyle(Tokens.Colors.textPrimary)
                         .lineLimit(1)
-                        .frame(maxWidth: 220, alignment: .leading)
+                        .frame(maxWidth: 220 * scale, alignment: .leading)
                         .fixedSize(horizontal: true, vertical: false)
                     Image(systemName: Symbol.disclosure.name)
-                        .font(.system(size: 11, weight: .semibold))
+                        .scaledFont(size: 11, weight: .semibold)
                         .foregroundStyle(Tokens.Colors.textTertiary)
                 }
-                .frame(height: Tokens.Size.toolButton.height)
+                .frame(height: Tokens.Size.toolButton.height * scale)
                 .contentShape(.rect)
             }
             .menuIndicator(.hidden)
             .buttonStyle(.plain)
             .accessibilityLabel("\(title), notebook options")
+            .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
         }
     }
 }
@@ -60,10 +64,13 @@ struct PagesCapsule: View {
 
     @State private var showsShare = false
     @State private var presenter = ActivityPresenter()
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        let scale = typeSize.chromeScale
         GlassCapsule {
             ToolButton(.pages, "Pages") { state.pages.present() }
+                .accessibilityHint("Shows all pages")
             ToolButton(.share, "Share") { showsShare.toggle() }
                 .background(ActivityAnchor(presenter: presenter))
                 .popover(isPresented: $showsShare) {
@@ -85,9 +92,9 @@ struct PagesCapsule: View {
                 #endif
             } label: {
                 Image(systemName: Symbol.more.name)
-                    .font(.system(size: Tokens.Size.toolIcon))
+                    .font(.system(size: Tokens.Size.toolIcon * scale))
                     .foregroundStyle(Tokens.Colors.icon)
-                    .frame(width: Tokens.Size.toolButton.width, height: Tokens.Size.toolButton.height)
+                    .frame(width: Tokens.Size.toolButton.width * scale, height: Tokens.Size.toolButton.height * scale)
                     .contentShape(.capsule)
             }
             .menuIndicator(.hidden)
@@ -119,6 +126,7 @@ struct EditorToolbarContent: View {
 
     /// Bumped per slot when a long-press assigns it: pops the swatch and plays a haptic.
     @State private var assigned = [Int](repeating: 0, count: ToolSettings.quickColorCount)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let ink = tools.currentColor.color(on: paper)
@@ -129,19 +137,22 @@ struct EditorToolbarContent: View {
                 }
             }
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(ToolbarHost.capsuleSpace)) } action: { onToolFrame(tool, $0) }
+            .accessibilityValue(tools.accessibilityValue(of: tool))
+            .accessibilityHint(tools.tool == tool && tool != .lasso ? "Shows \(tool.label.lowercased()) options" : "")
         }
         ChromeSeparator(axis: axis)
         ForEach(Array(tools.quickColors.enumerated()), id: \.offset) { index, color in
             ColorSwatch(color.color(on: paper), label: color.label, isSelected: tools.activeQuickColor == index) {
                 tools.selectQuickColor(index)
             }
-            .keyframeAnimator(initialValue: 1.0, trigger: assigned[index]) { swatch, scale in
+            .keyframeAnimator(initialValue: 1.0, trigger: reduceMotion ? 0 : assigned[index]) { swatch, scale in
                 swatch.scaleEffect(scale)
             } keyframes: { _ in
                 SpringKeyframe(1.25, duration: 0.14, spring: .snappy)
                 SpringKeyframe(1.0, duration: 0.4, spring: .bouncy)
             }
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in assign(index) })
+            .accessibilityHint("Quick color. Touch and hold to store the current pen color here.")
             .accessibilityAction(named: "Set to current pen color") { assign(index) }
             .sensoryFeedback(.success, trigger: assigned[index])
         }

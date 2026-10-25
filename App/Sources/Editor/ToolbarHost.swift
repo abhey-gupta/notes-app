@@ -24,6 +24,7 @@ struct ToolbarHost: View {
     let onBack: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Namespace private var glass
     @State private var drag: Drag?
     @State private var pinch: CGFloat = 1
@@ -83,10 +84,12 @@ struct ToolbarHost: View {
                         NavCapsule(title: title, paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, onBack: onBack)
                             .chromeID(.nav, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
+                            .accessibilitySortPriority(ChromeOrder.nav)
                         Spacer(minLength: Tokens.Spacing.m)
                         PagesCapsule(tools: tools, state: state, page: page, isNight: paper == .night)
                             .chromeID(.pages, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
+                            .accessibilitySortPriority(ChromeOrder.pages)
                     }
                     .padding(.top, Tokens.Spacing.s)
                     .frame(maxHeight: .infinity, alignment: .top)
@@ -95,8 +98,12 @@ struct ToolbarHost: View {
                     dockHint(drag.target)
                 }
                 toolbar
+                    .accessibilitySortPriority(ChromeOrder.tools)
                 pagePill
+                    .accessibilitySortPriority(ChromeOrder.pagePill)
             }
+            // VoiceOver order, whatever the dock: nav, tools, pages, page pill (#45).
+            .accessibilityElement(children: .contain)
             .coordinateSpace(.named(Self.space))
             .onGeometryChange(for: CGSize.self, of: \.size) { metrics.container = $0 }
             .padding(.horizontal, Tokens.Spacing.chromeInset)
@@ -113,8 +120,9 @@ struct ToolbarHost: View {
         reduceMotion ? .materialize : .matchedGeometry
     }
 
-    private var morphAnimation: Animation {
-        reduceMotion ? Tokens.Motion.reducedMorph : Tokens.Motion.morph
+    /// Reduce Motion: focus mode and compact ⇄ expanded swap at once, no morph or fade (#45).
+    private var morphAnimation: Animation? {
+        reduceMotion ? nil : Tokens.Motion.morph
     }
 
     private var dockAnimation: Animation {
@@ -152,7 +160,7 @@ struct ToolbarHost: View {
             spacing: compact ? 0 : squeeze
         ) {
             if compact {
-                FocusPillContent(axis: axis, tool: tools.tool.symbol, ink: ink, onTool: expand, onExpand: expand)
+                pillContent(axis: axis)
                     .transition(contentTransition)
             } else {
                 EditorToolbarContent(
@@ -174,6 +182,7 @@ struct ToolbarHost: View {
         ) {
             ToolPopover(tools: tools, tool: options ?? tools.tool, paper: paper)
                 .presentationCompactAdaptation(.popover)
+                .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         }
         .onChange(of: state.toolOptionsRequests) {
             // Pencil "show palette/ink attributes" (#24): the expanded toolbar's popover; the pill has none.
@@ -293,6 +302,7 @@ struct ToolbarHost: View {
         .onGeometryChange(for: CGSize.self, of: \.size) { metrics.pill = $0 }
         .opacity(isCompact ? 0.7 : 1)
         .accessibilityIdentifier("pageIndicator")
+        .accessibilityHint(state.isFocused ? "Shows the toolbar" : "Current page")
         .padding(.bottom, Tokens.Spacing.chromeInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
@@ -314,6 +324,15 @@ extension ToolbarHost {
 
     private var exactColorsBinding: Binding<Bool> {
         Binding { state.keepsExactColors } set: { state.onKeepsExactColors($0) }
+    }
+
+    /// The compact pill: current tool and color (named for VoiceOver), expand.
+    private func pillContent(axis: Axis) -> some View {
+        FocusPillContent(
+            axis: axis, tool: tools.tool.symbol, ink: ink,
+            toolName: tools.tool.label, colorName: tools.currentColor.accessibilityName,
+            onTool: expand, onExpand: expand
+        )
     }
 
     /// Tap on the current tool: opens its options, or closes them if open. Lasso has none.
@@ -353,14 +372,15 @@ extension ToolbarHost {
             pages: state.isFocused ? 0 : metrics.pages,
             pagePill: metrics.pill,
             isCompact: isCompact,
-            isFocused: state.isFocused
+            isFocused: state.isFocused,
+            scale: typeSize.chromeScale
         )
     }
 
     /// Drop slot at the drag target: the toolbar's footprint once docked there.
     private func dockHint(_ dock: ToolbarDock) -> some View {
         let length = restingLength(dock.axis)
-        let thickness = isCompact ? Tokens.Size.focusPillHeight : Tokens.Size.capsuleHeight
+        let thickness = (isCompact ? Tokens.Size.focusPillHeight : Tokens.Size.capsuleHeight) * typeSize.chromeScale
         let size = dock.isVertical ? CGSize(width: thickness, height: length) : CGSize(width: length, height: thickness)
         let placement = layout.placement(for: dock, length: length)
         return Capsule()
@@ -373,12 +393,5 @@ extension ToolbarHost {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .transition(.opacity)
-    }
-}
-
-private extension View {
-    func chromeID(_ id: ToolbarHost.ChromeID, in namespace: Namespace.ID, transition: GlassEffectTransition) -> some View {
-        glassEffectID(id, in: namespace)
-            .glassEffectTransition(transition)
     }
 }

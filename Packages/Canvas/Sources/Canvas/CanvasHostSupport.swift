@@ -127,11 +127,18 @@
         }
     }
 
-    /// The canvas scroll view: an accessibility element whose label and value are computed when asked.
+    /// The canvas scroll view: label and value computed when asked (UI tests). VoiceOver sees its
+    /// ``DrawingAccessibilityElement`` instead of the pages, then its visible buttons (add page; #45).
     @MainActor
     final class CanvasScrollView: UIScrollView {
         var pageLabel: (() -> String?)?
         var valueProvider: (() -> String?)?
+        private(set) lazy var drawingElement = DrawingAccessibilityElement(scrollView: self)
+
+        override var accessibilityElements: [Any]? {
+            get { [drawingElement] + subviews.filter { $0 is UIButton && !$0.isHidden && $0.alpha > 0 } }
+            set { _ = newValue }
+        }
 
         override var accessibilityLabel: String? {
             get { pageLabel?() ?? super.accessibilityLabel }

@@ -13,6 +13,8 @@ struct ToolPopover: View {
     let tool: Tool
     let paper: DesignSystem.PaperTheme
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             switch tool {
@@ -23,15 +25,14 @@ struct ToolPopover: View {
             }
         }
         .padding(Tokens.Size.popoverPadding)
-        .frame(width: Tokens.Size.popoverWidth)
+        .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("toolPopover")
     }
 
-    private static let previewSize = CGSize(
-        width: Tokens.Size.popoverWidth - 2 * Tokens.Size.popoverPadding,
-        height: Tokens.Size.previewHeight
-    )
+    private var previewSize: CGSize {
+        CGSize(width: Tokens.Size.popoverWidth * typeSize.chromeScale - 2 * Tokens.Size.popoverPadding, height: Tokens.Size.previewHeight)
+    }
 
     // MARK: Pen
 
@@ -40,7 +41,7 @@ struct ToolPopover: View {
             .accessibilityIdentifier("penKind")
         preview(InkPreview.Spec(kind: tools.pen.kind, width: tools.pen.width, color: ink(tools.pen.color), pressure: tools.pen.pressure))
         SectionLabel("Thickness")
-        OptionRow(count: PenSettings.widths.count, selection: $tools.pen.widthIndex, label: "Width") { index, _ in
+        OptionRow(values: PenSettings.widths, selection: $tools.pen.widthIndex, label: "Width") { index, _ in
             Circle()
                 .fill(tools.pen.color.color(on: paper))
                 .frame(width: Tokens.Size.penWidthDots[index], height: Tokens.Size.penWidthDots[index])
@@ -48,7 +49,7 @@ struct ToolPopover: View {
         SectionLabel("Color")
         PaletteGrid(colors: PaletteEntry.pen, selection: $tools.pen.color, paper: paper)
         Toggle("Pressure sensitivity", isOn: $tools.pen.pressure)
-            .font(.system(size: 14, weight: .medium))
+            .scaledFont(size: 14, weight: .medium)
             .foregroundStyle(Tokens.Colors.textPrimary)
             .padding(.top, 12)
             .padding(.horizontal, Tokens.Spacing.xs)
@@ -69,7 +70,7 @@ struct ToolPopover: View {
             .padding(.top, -6)
         SectionLabel("Thickness")
         OptionRow(
-            count: HighlighterSettings.widths.count,
+            values: HighlighterSettings.widths,
             selection: $tools.highlighter.widthIndex,
             label: "Width"
         ) { index, _ in
@@ -89,14 +90,14 @@ struct ToolPopover: View {
         SegmentedChoice(EraserSettings.Mode.allCases, selection: $tools.eraser.mode, title: \.displayName)
             .accessibilityIdentifier("eraserMode")
         Text(mode.caption)
-            .font(.system(size: 13))
+            .scaledFont(size: 13)
             .foregroundStyle(Tokens.Colors.textSecondary)
             .contentTransition(.opacity)
             .animation(Tokens.Motion.inkCrossfade, value: mode)
             .padding(.top, Tokens.Spacing.m)
             .padding(.horizontal, Tokens.Spacing.xs)
         SectionLabel("Size")
-        OptionRow(count: EraserSettings.widths.count, selection: $tools.eraser.widthIndex, label: "Size") { index, selected in
+        OptionRow(values: EraserSettings.widths, selection: $tools.eraser.widthIndex, label: "Size") { index, selected in
             Circle()
                 .strokeBorder(selected ? Tokens.Colors.iconActive : Tokens.Colors.icon, lineWidth: 1.5)
                 .frame(width: Tokens.Size.eraserWidthRings[index], height: Tokens.Size.eraserWidthRings[index])
@@ -106,7 +107,7 @@ struct ToolPopover: View {
     // MARK: Pieces
 
     private func preview(_ spec: InkPreview.Spec) -> some View {
-        StrokePreview(spec: spec, size: Self.previewSize, paper: paper.paper.color)
+        StrokePreview(spec: spec, size: previewSize, paper: paper.paper.color)
             .padding(.top, 12)
             .padding(.bottom, Tokens.Spacing.s)
     }

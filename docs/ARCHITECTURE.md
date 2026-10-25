@@ -320,12 +320,14 @@ Glass: native Liquid Glass, verified in the iOS 27.1 SDK (all `@available(iOS 26
 | `ink.blue / red` | `#2C4FD6` / `#D2402F` | `#5FD3C4` (teal) / `#FF8FB1` (pink) |
 | `ink.accent (amber)` | `#E0A400` | `#FFC764` |
 | `glass.fill / border` | `rgba(255,255,255,.72)` / `rgba(0,0,0,.07)` | `rgba(40,41,46,.72)` / `rgba(255,255,255,.10)` |
-| `text.secondary` | `#8A8C92` | `#A9ABB2` |
+| `text.secondary` | `#666970` (mock `#8A8C92`, darkened to 4.5:1 for #45) | `#A9ABB2` |
 | `template.line` | `rgba(30,33,41,.16)` | `rgba(255,255,255,.09)` |
 | Palette (11) | `#1E2129 #5D6470 #2C4FD6 #1E8E6E #D2402F #E07A1F #7E4FD8 #C2457E #0FA3B1 #8D6E4C #E8B800` | adapted (below) |
 | Covers (8) | `#8E9F87 #C07F5E #2F3B57 #D9C9AC #6B4A5E #3B3C40 #9DB4C9 #E3A5A0` | same |
 
 Geometry: capsule height 52, radius 26, blur 24 + saturate 180 %; tool button 44×40 r20, active = 8 % ink tint + 4 pt dot in the current color; quick-color swatch 22 pt, selected ring 2 pt paper + 3.5 pt color; page radius 4, shadow `0 12 40 -12 rgba(40,30,10,.18)`; pages-overview thumb 176×228 r6, selected ring 3 pt blue; cover 150×196, radius 5/12 (spine); popover 328 w r24. Type: SF Pro for UI, **Instrument Serif** (OFL, bundled) for notebook titles and the pages-overview heading. Caveat in the mocks is stand-in handwriting; not shipped.
+
+**Accessibility (#45).** Chrome geometry scales with Dynamic Type by `DynamicTypeSize.chromeScale` (1 up to the default size, 1.5 at AX1) and the app caps text at AX1 (`DynamicTypeSize.chromeLimit`); chrome fonts are text styles or `scaledFont(size:)`. Secondary text meets 4.5:1. The canvas is one VoiceOver element, "Drawing area" (page + stroke count as value, three-finger swipe turns pages, undo/redo/show pages as custom actions). Chrome reads nav → tools → pages → page pill on every dock; focus mode never auto-collapses under VoiceOver or Switch Control; Reduce Motion swaps focus mode without a morph or fade. `AccessibilityTests` runs Xcode's accessibility audit on the library and editor.
 
 **Ink color model.** `InkColor` is `semantic(.primary | .blue | .red | .accent)` or `custom(rgba)`. Semantic colors resolve per paper theme at render time (so the same stroke is near-black on cream and off-white on Night). Custom colors on Night paper get their OKLCH lightness remapped (`L' = clamp(max(L, 1.2 − L), 0.65, 0.95)`, hue/chroma kept: dark colors mirror light, light colors stay, never darker) unless the notebook setting "Keep exact colors" is on. Export resolves against the export paper theme (§9).
 

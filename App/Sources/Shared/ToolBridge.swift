@@ -51,8 +51,17 @@ extension InkColor {
         case .semantic(.blue): "Blue"
         case .semantic(.red): "Red"
         case .semantic(.accent): "Amber"
-        case .custom: "Custom color"
+        case .custom: accessibilityName
         }
+    }
+
+    /// Spoken color name: the palette's name when it is a palette color, else "Custom color".
+    var accessibilityName: String {
+        if case .semantic = self {
+            return label
+        }
+        let entry = PaletteEntry.pen.first { $0.color == self } ?? PaletteEntry.highlighter.first { $0.color == self }
+        return entry?.name ?? "Custom color"
     }
 }
 
@@ -99,6 +108,22 @@ extension Tool {
 
     var label: String {
         rawValue.capitalized
+    }
+}
+
+extension ToolState {
+    /// VoiceOver value of `tool`'s button (#45): "Fountain pen, Black, width 2.5", "Stroke eraser, size 16".
+    func accessibilityValue(of tool: Tool) -> String {
+        switch tool {
+        case .pen:
+            "\(pen.kind.displayName) pen, \(pen.color.accessibilityName), width \(pen.width.formatted())"
+        case .highlighter:
+            "\(highlighter.color.accessibilityName), width \(highlighter.width.formatted())"
+        case .eraser:
+            "\(eraser.mode.displayName) eraser, size \(eraser.width.formatted())"
+        case .lasso:
+            ""
+        }
     }
 }
 

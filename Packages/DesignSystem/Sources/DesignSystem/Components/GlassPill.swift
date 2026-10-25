@@ -73,23 +73,33 @@ public struct FocusPillContent: View {
     private let ink: Color
     private let onTool: () -> Void
     private let onExpand: () -> Void
+    /// VoiceOver values: "Pen", "Blue".
+    private let toolName: String?
+    private let colorName: String?
 
     public init(
         axis: Axis = .horizontal,
         tool: Symbol,
         ink: Color,
+        toolName: String? = nil,
+        colorName: String? = nil,
         onTool: @escaping () -> Void = {},
         onExpand: @escaping () -> Void
     ) {
         self.axis = axis
         self.tool = tool
         self.ink = ink
+        self.toolName = toolName
+        self.colorName = colorName
         self.onTool = onTool
         self.onExpand = onExpand
     }
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     public var body: some View {
         let horizontal = axis == .horizontal
+        let scale = typeSize.chromeScale
         let button = Tokens.Size.focusToolButton
         let along: Edge.Set = horizontal ? .horizontal : .vertical
         Group {
@@ -103,16 +113,20 @@ public struct FocusPillContent: View {
                 showsDot: false,
                 action: onTool
             )
+            .accessibilityValue(toolName ?? "")
+            .accessibilityHint("Shows the toolbar")
             ColorSwatch(ink, label: "Current color", isSelected: true, diameter: Tokens.Size.focusSwatch)
                 .allowsHitTesting(false)
+                .accessibilityValue(colorName ?? "")
+                .accessibilityRemoveTraits([.isButton, .isSelected])
                 .padding(along, Tokens.Spacing.xs)
             ChromeSeparator(axis: axis, height: 18)
                 .padding(along, -Tokens.Spacing.xs)
             Button(action: onExpand) {
                 Image(systemName: Symbol.disclosure.name)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 14 * scale, weight: .semibold))
                     .foregroundStyle(Tokens.Colors.textSecondary)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 34 * scale, height: 34 * scale)
                     .contentShape(.circle)
             }
             .buttonStyle(.plain)

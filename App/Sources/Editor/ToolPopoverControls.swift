@@ -26,7 +26,7 @@ struct SegmentedChoice<Value: Hashable>: View {
                     withAnimation(Tokens.Motion.selection) { selection = option }
                 } label: {
                     Text(title(option))
-                        .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                        .scaledFont(size: 13, weight: selected ? .semibold : .medium)
                         .foregroundStyle(selected ? Tokens.Colors.textPrimary : Tokens.Colors.chipText)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
@@ -52,16 +52,17 @@ struct SegmentedChoice<Value: Hashable>: View {
 
 /// Evenly spaced width / size options; the selection highlight slides between them.
 struct OptionRow<Glyph: View>: View {
-    let count: Int
+    /// Option values, spoken after `label` ("Width 2.5").
+    let values: [Float]
     @Binding var selection: Int
-    /// VoiceOver label prefix ("Width" → "Width 1"…).
+    /// VoiceOver label prefix ("Width" → "Width 1.5"…).
     let label: String
     @ViewBuilder let glyph: (Int, Bool) -> Glyph
     @Namespace private var namespace
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(0 ..< count, id: \.self) { index in
+            ForEach(values.indices, id: \.self) { index in
                 let selected = index == selection
                 if index > 0 {
                     Spacer(minLength: 0)
@@ -82,7 +83,7 @@ struct OptionRow<Glyph: View>: View {
                         .contentShape(.circle)
                 }
                 .buttonStyle(PressScaleStyle())
-                .accessibilityLabel("\(label) \(index + 1)")
+                .accessibilityLabel("\(label) \(values[index].formatted())")
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
@@ -171,7 +172,7 @@ struct SectionLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11.5, weight: .semibold))
+            .scaledFont(size: 11.5, weight: .semibold)
             .textCase(.uppercase)
             .tracking(11.5 * 0.06)
             .foregroundStyle(Tokens.Colors.textSecondary)

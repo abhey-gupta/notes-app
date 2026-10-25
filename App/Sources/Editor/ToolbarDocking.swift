@@ -170,6 +170,14 @@ extension CGSize {
     }
 }
 
+/// VoiceOver order of the editor chrome (higher first), whatever the dock (#45).
+enum ChromeOrder {
+    static let nav: Double = 4
+    static let tools: Double = 3
+    static let pages: Double = 2
+    static let pagePill: Double = 1
+}
+
 /// Where the toolbar rests at each dock (§7), from the chrome's measured geometry.
 struct DockLayout {
     var containerWidth: CGFloat
@@ -179,6 +187,8 @@ struct DockLayout {
     var pagePill: CGSize
     var isCompact: Bool
     var isFocused: Bool
+    /// Dynamic Type chrome scale (``DynamicTypeSize/chromeScale``): capsules are thicker at large sizes.
+    var scale: CGFloat = 1
 
     struct Placement {
         var insets = EdgeInsets()
@@ -194,8 +204,9 @@ struct DockLayout {
     /// The compact pill is inset so its centre line matches the expanded capsule's.
     func placement(for dock: ToolbarDock, length: CGFloat) -> Placement {
         let spacing = Tokens.Spacing.self
-        let pillInset = isCompact ? (Tokens.Size.capsuleHeight - Tokens.Size.focusPillHeight) / 2 : 0
-        let belowTopRow = spacing.s + Tokens.Size.capsuleHeight + spacing.m
+        let capsule = Tokens.Size.capsuleHeight * scale
+        let pillInset = isCompact ? (capsule - Tokens.Size.focusPillHeight * scale) / 2 : 0
+        let belowTopRow = spacing.s + capsule + spacing.m
         let abovePagePill = spacing.chromeInset + pagePill.height + spacing.m
         switch dock {
         case .top:
@@ -217,5 +228,13 @@ struct DockLayout {
                 trailing: dock == .right ? pillInset : 0
             ))
         }
+    }
+}
+
+extension View {
+    /// Glass morph identity of an editor chrome piece.
+    func chromeID(_ id: ToolbarHost.ChromeID, in namespace: Namespace.ID, transition: GlassEffectTransition) -> some View {
+        glassEffectID(id, in: namespace)
+            .glassEffectTransition(transition)
     }
 }

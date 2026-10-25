@@ -182,9 +182,9 @@ final class ToolbarTests: XCTestCase {
         app.buttons["Pen"].tap()
         XCTAssertTrue(popover(app).waitForExistence(timeout: 3), "tapping the active tool opens its options")
         app.buttons["Brush"].tap()
-        app.buttons["Width 5"].tap()
+        app.buttons["Width 8"].tap()
         XCTAssertTrue(app.buttons["Brush"].isSelected)
-        XCTAssertTrue(app.buttons["Width 5"].isSelected)
+        XCTAssertTrue(app.buttons["Width 8"].isSelected)
         XCTAssertTrue(app.switches["pressureToggle"].exists)
         dismissPopover(app)
 
@@ -199,8 +199,8 @@ final class ToolbarTests: XCTestCase {
         XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
         app.buttons["Partial"].tap()
         XCTAssertTrue(app.buttons["Partial"].isSelected)
-        XCTAssertTrue(app.buttons["Size 3"].exists)
-        XCTAssertFalse(app.buttons["Size 4"].exists)
+        XCTAssertTrue(app.buttons["Size 32"].exists)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Size ")).count, 3)
     }
 
     @MainActor
@@ -211,8 +211,8 @@ final class ToolbarTests: XCTestCase {
         app.buttons["Highlighter"].tap()
         app.buttons["Highlighter"].tap()
         XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Width 3"].exists)
-        XCTAssertFalse(app.buttons["Width 4"].exists, "highlighter has 3 widths")
+        XCTAssertTrue(app.buttons["Width 24"].exists)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Width ")).count, 3, "highlighter has 3 widths")
         XCTAssertLessThan(popover(app).frame.maxX, bar.frame.minX + 1, "opens beside a right-docked toolbar")
         dismissPopover(app)
 
@@ -233,7 +233,7 @@ final class ToolbarTests: XCTestCase {
         XCTAssertFalse(app.buttons["Red"].isSelected)
 
         app.buttons["Red"].press(forDuration: 0.8)
-        XCTAssertTrue(app.buttons["Custom color"].waitForExistence(timeout: 2), "slot 3 now holds the green")
-        XCTAssertTrue(app.buttons["Custom color"].isSelected)
+        XCTAssertTrue(app.buttons["Green"].waitForExistence(timeout: 2), "slot 3 now holds the green")
+        XCTAssertTrue(app.buttons["Green"].isSelected)
     }
 }

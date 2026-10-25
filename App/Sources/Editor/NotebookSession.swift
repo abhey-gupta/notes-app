@@ -287,6 +287,7 @@ final class NotebookSession {
         // Paper for every page from the first frame; real page IDs replace these when the manifest is read.
         host.layout = PageLayout(pageIDs: (0 ..< initialPageCount).map { _ in PageID() }, footer: CanvasHostView.footerHeight)
         host.accessibilityPageValue = { [weak self] in self?.currentPageDescription() }
+        installAccessibilityActions(on: host)
         engine.delegate = self
         host.delegate = self
         installSelection(on: host, engine: engine, theme: initialTheme)

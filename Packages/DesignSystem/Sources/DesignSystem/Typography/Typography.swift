@@ -75,24 +75,26 @@ public extension Font {
         notebookTitle(size: 15)
     }
 
+    // Chrome fonts are text styles (15 / 12 / 13 / 12 pt at the default size) so they follow Dynamic Type.
+
     /// Toolbar title, chips, buttons.
     static var chromeTitle: Font {
-        .system(size: 15, weight: .semibold)
+        .subheadline.weight(.semibold)
     }
 
     /// "3 of 11".
     static var pill: Font {
-        .system(size: 12, weight: .semibold).monospacedDigit()
+        .caption.weight(.semibold).monospacedDigit()
     }
 
     /// Uppercase section labels ("CONTINUE", "THICKNESS"). Pair with `.sectionLabelStyle()`.
     static var sectionLabel: Font {
-        .system(size: 13, weight: .semibold)
+        .footnote.weight(.semibold)
     }
 
     /// Card meta lines ("Edited 2 min ago · 11 pages").
     static var meta: Font {
-        .system(size: 12.5)
+        .caption
     }
 }
 

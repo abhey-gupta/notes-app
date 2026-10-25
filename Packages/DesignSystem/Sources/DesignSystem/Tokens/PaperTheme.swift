@@ -82,5 +82,5 @@ public enum CoverColor: String, CaseIterable, Codable, Sendable, Identifiable {
     /// Paper label stuck on the cover.
     public static let label = RGBA(0xFCFBF7, alpha: 0.92)
     public static let labelText = RGBA(0x2A2A2A)
-    public static let labelCaption = RGBA(0x888888)
+    public static let labelCaption = RGBA(0x707070)
 }

@@ -6,8 +6,10 @@ public struct ColorSwatch: View {
     private let color: Color
     private let label: String
     private let isSelected: Bool
-    private let diameter: CGFloat
+    private let baseDiameter: CGFloat
     private let action: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     public init(
         _ color: Color,
@@ -19,7 +21,7 @@ public struct ColorSwatch: View {
         self.color = color
         self.label = label
         self.isSelected = isSelected
-        self.diameter = diameter
+        baseDiameter = diameter
         self.action = action
     }
 
@@ -43,6 +45,11 @@ public struct ColorSwatch: View {
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .animation(.snappy(duration: 0.2), value: isSelected)
+    }
+
+    /// Grows with Dynamic Type (``DynamicTypeSize/chromeScale``).
+    private var diameter: CGFloat {
+        baseDiameter * typeSize.chromeScale
     }
 
     private var scale: CGFloat {
