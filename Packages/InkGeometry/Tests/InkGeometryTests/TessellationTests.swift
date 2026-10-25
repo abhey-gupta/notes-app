@@ -219,3 +219,35 @@ struct TessellationTests {
         #expect(buffer.count == total)
     }
 }
+
+/// The fragment coverage formulas documented on ``StrokeVertex`` (#65), evaluated on the CPU.
+struct CoverageFormulaTests {
+    private static let ppp: Float = 2
+
+    private static func coverage(edge: Point2, radius: Float, butt: Bool) -> Float {
+        let d = if butt {
+            edge.x > 0 ? max(abs(edge.y), radius + edge.x) : abs(edge.y)
+        } else {
+            (max(edge.x, 0) * max(edge.x, 0) + edge.y * edge.y).squareRoot()
+        }
+        return min(max((radius - d) * ppp + 0.5, 0), 1)
+    }
+
+    @Test(arguments: [false, true])
+    func bodyIsSolidAndEdgesAntialias(butt: Bool) {
+        let r: Float = 3
+        #expect(Self.coverage(edge: Point2(x: 0, y: 0), radius: r, butt: butt) == 1)
+        #expect(Self.coverage(edge: Point2(x: 0, y: 2), radius: r, butt: butt) == 1)
+        #expect(Self.coverage(edge: Point2(x: 0, y: r), radius: r, butt: butt) == 0.5)
+        #expect(Self.coverage(edge: Point2(x: 0, y: r + 1), radius: r, butt: butt) == 0)
+    }
+
+    @Test func buttCapsEndAtTheEndPlaneRoundCapsReachRadius() {
+        let r: Float = 3
+        // Just past the end: round caps still solid, butt caps half-covered at the plane, gone beyond it.
+        #expect(Self.coverage(edge: Point2(x: 1, y: 0), radius: r, butt: false) == 1)
+        #expect(Self.coverage(edge: Point2(x: 0.0001, y: 0), radius: r, butt: true) > 0.49)
+        #expect(Self.coverage(edge: Point2(x: 1, y: 0), radius: r, butt: true) == 0)
+        #expect(Self.coverage(edge: Point2(x: r, y: 0), radius: r, butt: false) == 0.5)
+    }
+}
