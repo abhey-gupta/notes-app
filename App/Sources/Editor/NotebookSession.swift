@@ -41,7 +41,7 @@ final class NotebookSession {
     private let library: any LibraryModel
     private let initialPageCount: Int
     private var initialTheme: PaperTheme
-    private var store: DocumentStore?
+    private(set) var store: DocumentStore?
     private(set) var residency: PageResidency?
     private var bridge: UndoManagerBridge?
     private var tool = ToolConfiguration.default
@@ -67,6 +67,10 @@ final class NotebookSession {
         initialTheme = notebook.theme
         state = EditorState(startsFocused: startsFocused)
         state.onSelectionAction = { [weak self] in self?.performSelectionAction($0) }
+        state.onExportPDF = { [weak self] selection, asShown, progress in
+            guard let self else { throw CancellationError() }
+            return try await exportPDF(selection, asShown: asShown, progress: progress)
+        }
     }
 
     var engine: any InkEngine {

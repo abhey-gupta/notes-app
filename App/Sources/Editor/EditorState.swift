@@ -1,5 +1,7 @@
 import CoreGraphics
 import DesignSystem
+import Export
+import Foundation
 import InkModel
 import Observation
 import Tools
@@ -25,6 +27,10 @@ final class EditorState {
     /// selection or it is being dragged.
     var selectionFrame: CGRect?
     @ObservationIgnored var onSelectionAction: (SelectionAction) -> Void = { _ in }
+    /// Exports the selected pages to a temp PDF (§9); `asShown` keeps Night paper. Progress in 0...1.
+    @ObservationIgnored var onExportPDF: (PageSelection, Bool, @escaping @Sendable (Double) -> Void) async throws -> URL = { _, _, _ in
+        throw PDFExportError.noPages
+    }
 
     var canUndo: Bool {
         edits.canUndo
@@ -49,6 +55,14 @@ final class EditorState {
 
     func perform(_ action: SelectionAction) {
         onSelectionAction(action)
+    }
+
+    func exportPDF(
+        _ selection: PageSelection,
+        _ asShown: Bool,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL {
+        try await onExportPDF(selection, asShown, progress)
     }
 
     // MARK: Focus mode (§7)

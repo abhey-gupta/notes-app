@@ -84,7 +84,7 @@ struct ToolbarHost: View {
                             .chromeID(.nav, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
                         Spacer(minLength: Tokens.Spacing.m)
-                        PagesCapsule(tools: tools, state: state)
+                        PagesCapsule(tools: tools, state: state, page: page, isNight: paper == .night)
                             .chromeID(.pages, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
                     }
