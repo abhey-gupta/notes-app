@@ -147,7 +147,11 @@ extension LibraryStore {
 
     /// "Physics copy", then "Physics copy 2", "Physics copy 3"…
     static func copyTitle(_ title: String, taken: Set<String>) -> String {
-        let base = "\(title) copy"
+        numbered("\(title) copy", taken: taken)
+    }
+
+    /// `base`, or `base 2`, `base 3`… : the first not in `taken`.
+    static func numbered(_ base: String, taken: Set<String>) -> String {
         guard taken.contains(base) else { return base }
         var n = 2
         while taken.contains("\(base) \(n)") {

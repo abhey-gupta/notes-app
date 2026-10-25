@@ -104,8 +104,8 @@ struct NotebookDraft {
         return trimmed.isEmpty ? "Untitled" : trimmed
     }
 
-    /// The notebook to write: A4 portrait, created now.
+    /// The notebook to write: A4 portrait, created now. A blank title is numbered by the store ("Untitled N").
     func makeNotebook(now: Date = Date()) -> Notebook {
-        Notebook(title: resolvedTitle, cover: cover, paper: paper, theme: theme, createdAt: now)
+        Notebook(title: title.trimmingCharacters(in: .whitespacesAndNewlines), cover: cover, paper: paper, theme: theme, createdAt: now)
     }
 }

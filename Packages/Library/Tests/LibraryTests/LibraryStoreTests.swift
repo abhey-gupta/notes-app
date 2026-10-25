@@ -27,6 +27,15 @@ struct LibraryStoreTests {
         #expect(LibraryStore.readIndex(at: lib.locations)?.notebooks == [entry])
     }
 
+    @Test func blankTitlesAreNumbered() async throws {
+        let store = try TempLibrary().store()
+        var titles: [String] = []
+        for title in [" ", "", "Untitled 2", ""] {
+            try await titles.append(store.create(notebook(title)).title)
+        }
+        #expect(titles == ["Untitled", "Untitled 2", "Untitled 2", "Untitled 3"])
+    }
+
     @Test func notebooksAreMostRecentFirst() async throws {
         let lib = try TempLibrary()
         let store = lib.store()

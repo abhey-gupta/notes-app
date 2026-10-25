@@ -86,8 +86,20 @@ struct EditorRoute: Hashable {
 @MainActor
 enum OpenTrace {
     private static var interval: SignpostInterval?
+    /// Started by Create: the push that follows keeps the running interval.
+    private static var creating = false
+
+    /// Create tapped: one interval through package write to page one's first frame (#36, < 150 ms).
+    static func beginCreate() {
+        begin()
+        creating = true
+    }
 
     static func begin() {
+        guard !creating else {
+            creating = false
+            return
+        }
         interval?.end()
         interval = Signpost.notebookOpen.begin()
     }
@@ -95,6 +107,13 @@ enum OpenTrace {
     static func end() {
         interval?.end()
         interval = nil
+        creating = false
+    }
+
+    /// Create failed: drop the interval unreported.
+    static func cancel() {
+        interval = nil
+        creating = false
     }
 }
 
