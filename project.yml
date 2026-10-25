@@ -26,6 +26,7 @@ packages:
   InkEngineMetal: { path: Packages/InkEngineMetal }
   InkEnginePencilKit: { path: Packages/InkEnginePencilKit }
   Tools: { path: Packages/Tools }
+  Editing: { path: Packages/Editing }
   Canvas: { path: Packages/Canvas }
   Document: { path: Packages/Document }
   Library: { path: Packages/Library }
@@ -48,6 +49,7 @@ targets:
       # InkEngineMetal is shelved (spike #16, ARCHITECTURE.md §3): kept building and tested, not linked.
       - package: InkEnginePencilKit
       - package: Tools
+      - package: Editing
       - package: Canvas
       - package: Document
       - package: Library

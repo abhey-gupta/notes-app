@@ -8,6 +8,10 @@ import Foundation
 /// `apply`, which forwards it to the document store. Route toolbar buttons through the bridge, not the
 /// stack, so both histories move together; enable them from ``EditStack/canUndo`` / ``EditStack/canRedo``.
 ///
+/// Moving the stack can be deferred with `schedule` (the editor's edit queue), so an undo always lands
+/// after edits still on their way to the history: the undo manager's bookkeeping happens at once (it
+/// must, inside `UndoManager.undo()`), the stack moves and `apply` runs when `schedule` runs the work.
+///
 /// Keep one bridge per editor window and ``detach()`` it when the editor goes away.
 @MainActor
 public final class UndoManagerBridge {
@@ -16,14 +20,24 @@ public final class UndoManagerBridge {
     /// The bridged undo manager (`nil` after ``detach()``).
     public private(set) weak var undoManager: UndoManager?
     private let apply: @MainActor (EditEntry) -> Void
+    private let schedule: @MainActor (@escaping @MainActor () -> Void) -> Void
+    /// Inside work `schedule` is running: nested undo/redo run inline, not behind later work.
+    private var isRunningScheduled = false
 
     /// Connects `stack` to `undoManager`. Only entries committed after this call are registered.
     /// - Parameters:
-    ///   - apply: Applies an entry returned by the stack (undo inverse or redo) to the model.
-    ///     Called synchronously from inside the undo manager's undo/redo.
-    public init(stack: EditStack, undoManager: UndoManager, apply: @escaping @MainActor (EditEntry) -> Void) {
+    ///   - schedule: Runs stack work (move + `apply`), now or later in order with other edits. Default: now.
+    ///   - apply: Applies an entry returned by the stack (undo inverse or redo) to the model. Called from
+    ///     the scheduled work.
+    public init(
+        stack: EditStack,
+        undoManager: UndoManager,
+        schedule: @escaping @MainActor (@escaping @MainActor () -> Void) -> Void = { $0() },
+        apply: @escaping @MainActor (EditEntry) -> Void
+    ) {
         self.stack = stack
         self.undoManager = undoManager
+        self.schedule = schedule
         self.apply = apply
         undoManager.levelsOfUndo = stack.capacity
         stack.onCommit = { [weak self] entry in self?.registerUndo(named: entry.actionName) }
@@ -33,20 +47,24 @@ public final class UndoManagerBridge {
     /// Undoes through the undo manager (toolbar button). Falls back to the stack alone if the manager has
     /// nothing registered (e.g. after ``detach()``).
     public func undo() {
-        stack.endAllGroups()
-        if let undoManager, undoManager.canUndo {
-            undoManager.undo()
-        } else if let entry = stack.undo() {
-            apply(entry)
+        scheduled { [self] in
+            stack.endAllGroups()
+            if let undoManager, undoManager.canUndo {
+                undoManager.undo()
+            } else if let entry = stack.undo() {
+                apply(entry)
+            }
         }
     }
 
     /// Redoes through the undo manager (toolbar button). Falls back to the stack alone like ``undo()``.
     public func redo() {
-        if let undoManager, undoManager.canRedo {
-            undoManager.redo()
-        } else if let entry = stack.redo() {
-            apply(entry)
+        scheduled { [self] in
+            if let undoManager, undoManager.canRedo {
+                undoManager.redo()
+            } else if let entry = stack.redo() {
+                apply(entry)
+            }
         }
     }
 
@@ -76,29 +94,48 @@ public final class UndoManagerBridge {
         }
     }
 
-    /// Runs inside `UndoManager.undo()`: registering here records the redo action.
+    /// Runs inside `UndoManager.undo()`: registering here records the redo action. From the system (⌘Z,
+    /// three-finger swipe) the stack moves when `schedule` gets to it; from ``undo()`` it already has.
     private func performUndo() {
-        // Mid-gesture system undo: take back the open gesture. Its entry was never registered, so the
-        // manager ends up one level short; the toolbar's ``undo()`` fallback still reaches it.
-        stack.closeOpenGroups(notify: false)
-        let name = stack.undoActionName
-        guard let entry = stack.undo() else { return }
         undoManager?.registerUndo(withTarget: self) { $0.performRedo() }
-        if let name {
+        if let name = stack.undoActionName {
             undoManager?.setActionName(name)
         }
-        apply(entry)
+        scheduled { [self] in
+            // Mid-gesture system undo: take back the open gesture. Its entry was never registered, so the
+            // manager ends up one level short; the toolbar's ``undo()`` fallback still reaches it.
+            stack.closeOpenGroups(notify: false)
+            if let entry = stack.undo() {
+                apply(entry)
+            }
+        }
     }
 
     /// Runs inside `UndoManager.redo()`: registering here records the undo action again.
     private func performRedo() {
-        let name = stack.redoActionName
-        guard let entry = stack.redo() else { return }
         undoManager?.registerUndo(withTarget: self) { $0.performUndo() }
-        if let name {
+        if let name = stack.redoActionName {
             undoManager?.setActionName(name)
         }
-        apply(entry)
+        scheduled { [self] in
+            if let entry = stack.redo() {
+                apply(entry)
+            }
+        }
+    }
+
+    /// Runs `work` through `schedule`, or inline when already inside scheduled work.
+    private func scheduled(_ work: @escaping @MainActor () -> Void) {
+        if isRunningScheduled {
+            work()
+            return
+        }
+        schedule { [weak self] in
+            guard let self else { return }
+            isRunningScheduled = true
+            defer { isRunningScheduled = false }
+            work()
+        }
     }
 
     private func removeAllActions() {

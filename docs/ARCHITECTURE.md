@@ -28,6 +28,7 @@ notes-app/
     InkEngineMetal/           Metal renderer, tile cache, shaders (.metal)
     InkEnginePencilKit/       PKCanvasView adapter – spike baseline / fallback
     Tools/                    tool state machine, eraser, lasso, undo stack (depends InkModel, InkGeometry)
+    Editing/                  EditPipeline: the one serial path for every notebook change (store → mirror → history)
     Canvas/                   page layout, virtualization, scroll/zoom host, thumbnails (UIKit)
     Document/                 package format, codec, WAL autosave, migrations (Foundation only)
     Library/                  index store, search, folders (Foundation only)
@@ -47,6 +48,7 @@ Dependency direction (arrows = imports). Nothing below imports anything above.
 ```
 App
  ├─ Canvas ─────┬─ InkEngineMetal ─┐
+ ├─ Editing ─ Tools, Document
  ├─ Tools       ├─ InkEnginePencilKit ├─ InkEngine ─┐
  ├─ Library     │                    │             ├─ InkGeometry ─ InkModel
  ├─ Export ─────┤                    │             │
@@ -55,7 +57,7 @@ App
  └─ Perf
 ```
 
-Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Document`, `Library`, `Tools`, `Export` (CoreGraphics is available on macOS). Simulator-only: `InkEngine*`, `Canvas`, `DesignSystem`, App.
+Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Document`, `Library`, `Tools`, `Editing`, `Export` (CoreGraphics is available on macOS). Simulator-only: `InkEngine*`, `Canvas`, `DesignSystem`, App.
 
 Concurrency: value types everywhere in `InkModel` (`Sendable` structs). UIKit/Metal view classes are `@MainActor`. Background work lives in actors (`DocumentStore`, `LibraryStore`, `ThumbnailService`, `TileRenderer`). No `@unchecked Sendable` without a comment explaining why.
 
@@ -252,7 +254,7 @@ Whole body after header compressed with `Compression` framework lz4 (`COMPRESSIO
 
 ### 5.6 Pages overview
 
-As built (#32, mock §04): `PagesOverview` is a SwiftUI overlay in the editor's `ZStack` (regular material + desk tint; the chrome is swapped out while it is up) with a `LazyVGrid` of `PageThumb`s (176×228 r6, `thumbs/<id>.heic` read lazily per visible cell via `ThumbnailImage`, paper + `PaperPatternView` placeholder until a thumb exists, 3 pt blue ring on the current page from `CanvasViewportState.currentPage`). `PagesModel` (owned by `EditorState`) holds the entries and the actions; `NotebookSession+Pages` performs them: tap → dismiss + `scrollToPage`; long-press-drag onto another thumb → `movePage`; the bottom template capsule → `insertPage(after: current)`; Select → multi-select delete, confirming only when a selected page has ink. Page structure is one undo step each: `PageStructureEdit` (`insert` / `delete` carry template + strokes, `move`) lives in `EditEntry.structure` beside ink steps, so a deleted page comes back with its ink and `NotebookSession.applyHistory` walks both kinds in order. `ThumbnailService.Options.onPageWritten` bumps a cell's cache key when its thumb is rewritten while the overview is up. `pages.overview` signpost: Pages tap → first frame; ≈ 75 ms on 300 pages in the Debug simulator (no per-page cost: cells are lazy). DEBUG `-pagesOverview YES` opens it after `-openNotebook`.
+As built (#32, mock §04): `PagesOverview` is a SwiftUI overlay in the editor's `ZStack` (regular material + desk tint; the chrome is swapped out while it is up) with a `LazyVGrid` of `PageThumb`s (176×228 r6, `thumbs/<id>.heic` read lazily per visible cell via `ThumbnailImage`, paper + `PaperPatternView` placeholder until a thumb exists, 3 pt blue ring on the current page from `CanvasViewportState.currentPage`). `PagesModel` (owned by `EditorState`) holds the entries and the actions; `NotebookSession+Pages` performs them: tap → dismiss + `scrollToPage`; long-press-drag onto another thumb → `movePage`; the bottom template capsule → `insertPage(after: current)`; Select → multi-select delete, confirming only when a selected page has ink. Page structure is one undo step each: `PageStructureEdit` (`insert` / `delete` carry template + strokes, `move`) lives in `EditEntry.structure` beside ink steps, so a deleted page comes back with its ink and `EditPipeline` applies both kinds in order. `ThumbnailService.Options.onPageWritten` bumps a cell's cache key when its thumb is rewritten while the overview is up. `pages.overview` signpost: Pages tap → first frame; ≈ 75 ms on 300 pages in the Debug simulator (no per-page cost: cells are lazy). DEBUG `-pagesOverview YES` opens it after `-openNotebook`.
 
 ## 6. Tools
 
@@ -267,7 +269,7 @@ As built (#32, mock §04): `PagesOverview` is a SwiftUI overlay in the editor's 
   - All pens erasable, highlighter included. Each touch event's edit is applied at once (immediate feedback); at gesture end `EraserRun` collapses the gesture's per-event steps into one edit per page, so undo is one step that applies one edit per page. Budget: < 2 ms hit-test per event on a 400-stroke page (`EraserPerformanceTests`).
 - **Lasso**: freeform path closed on pen-up; a stroke is selected if ≥ 50 % of its samples are inside. Selection shows a marching-ants hull with resize handles and a context bar (recolor to quick colors / palette, duplicate, delete). Move/resize → `PageEdit.transform` (samples baked, no persisted transform). Recolor → `PageEdit.recolor`.
   - As built (#29): `Tools.LassoSelection` resolves the path, holds the padded convex hull + corner geometry (proportional resize about the opposite corner) and builds each action's single edit (duplicate = `.add` of fresh-ID copies +20 pt). App: `SelectionOverlayView` (a `CanvasHostView.overlay`: marching ants, handles, drag; claims only touches on the selection) and `SelectionBar` (glass context bar: quick colors, palette, duplicate, delete). Drag preview: `InkEngine.setSelectionPreview` — PencilKit renders the selection once into a layer, leaves it off the canvas and only moves the layer per frame; on release the session commits one transform, then ends the preview. Cleared by a new gesture, tool change, undo/redo, finger tap outside, or the page leaving the screen.
-- **Undo/redo**: our own `EditStack` (per notebook, ring of 200 `PageEdit`s with page IDs), not `UndoManager` as the store. A thin `UndoManager` bridge registers each edit so system three-finger swipe/tap and keyboard ⌘Z work. Undo coalescing: partial-eraser gesture = 1, lasso drag = 1, each stroke = 1.
+- **Undo/redo**: our own `EditStack` (per notebook, ring of 200 `PageEdit`s with page IDs), not `UndoManager` as the store. A thin `UndoManager` bridge registers each edit so system three-finger swipe/tap and keyboard ⌘Z work. Undo coalescing: partial-eraser gesture = 1, lasso drag = 1, each stroke = 1. Every change and every undo/redo runs through `EditPipeline` (package `Editing`) in the order asked, so an undo tapped while a stroke is still saving takes back that stroke; the bridge registers with `UndoManager` at once but moves the stack in pipeline order.
 - **Pencil**: double-tap/squeeze → eraser toggle (§3.2). Hover → cursor preview.
 - **Options popover (#27)**: tap the active tool on the expanded toolbar → `ToolPopover`, anchored to that button, opening away from the dock on every edge. Any tap on the compact/focus pill expands it; the pill has no popover. Pen: family, live preview, 5 widths, 11-color palette + `ColorPicker`, pressure. Highlighter: preview, 3 widths, 6 colors. Eraser: stroke/partial, 3 sizes. Writes `ToolState` directly → next stroke. Preview = `InkPreview` (`InkEnginePencilKit`): synthetic S-curve as a `PKStroke` (same ink, `pencilKitWidth`, pen-profile sizes), `PKDrawing.image` with light traits; bold inks drawn true-size then scaled to fit. Long-press a toolbar quick color → stores the pen's color. Pressure off is stored and previewed; the PencilKit engine doesn't flatten live force yet.
 

@@ -234,7 +234,7 @@ struct EraserPerformanceTests {
     }
 }
 
-/// `NotebookSession` stand-in: two pages, a history, and an `EraserRun` driven batch by batch.
+/// `EditPipeline` stand-in (no store): two pages, a history, and an `EraserRun` driven batch by batch.
 @MainActor
 private struct Editor {
     let a = PageID()
@@ -270,7 +270,7 @@ private struct Editor {
     }
 }
 
-/// `EraserRun` as `NotebookSession` drives it: apply + record each batch, collapse at gesture end.
+/// `EraserRun` as `EditPipeline` drives it: apply + record each batch, collapse at gesture end.
 @MainActor
 struct EraserRunTests {
     /// A gesture over page A, then B, then A again is one undo step of three edits; undo restores both

@@ -1,6 +1,7 @@
 import Canvas
 import CoreGraphics
 import Document
+import Editing
 import InkEngine
 import InkEnginePencilKit
 import InkModel
@@ -12,17 +13,14 @@ import Tools
 /// (ARCHITECTURE.md §3.1, §4.4, §6, §8).
 ///
 /// ```
-/// Pencil ─▶ engine ─didCommit/eraser─▶ session ─PageEdit─▶ DocumentStore.apply (journaled)
-///                                          │                     │
-///                                          │◀────── accepted ────┘
-///                                          ├─▶ PageResidency.didApply ─▶ mirror + engine.apply (echo)
-///                                          └─▶ EditStack.record ─▶ UndoManagerBridge (⌘Z, 3-finger)
-/// undo/redo ─▶ EditStack ─inverse─▶ same path (store first, then mirror + engine)
+/// Pencil ─▶ engine ─didCommit/eraser─▶ session ─▶ EditPipeline ─▶ DocumentStore.apply (journaled)
+///                                                       ├─▶ PageResidency.didApply ─▶ mirror + engine.apply (echo)
+///                                                       └─▶ EditStack.record ─▶ UndoManagerBridge (⌘Z, 3-finger)
+/// undo/redo ─▶ EditPipeline ─inverse─▶ same path (store first, then mirror + engine)
 /// scroll ─▶ CanvasHostView ─PageWindow─▶ PageResidency ─▶ store.page / store.evict, engine.setPages
 /// ```
 ///
-/// Edits run one at a time in arrival order on a main-actor queue (``enqueue(_:_:)``): each one reads the
-/// page mirror, waits for the store to journal it, then updates mirror, engine and history, so the next
+/// Every change goes through ``edits`` (`EditPipeline`), one at a time in arrival order, so the next
 /// edit (a second stroke, the next eraser batch, an undo) always sees the state the store has. The
 /// engine draws a committed stroke itself until the echo arrives, so the hop costs no visible latency.
 ///
@@ -46,12 +44,11 @@ final class NotebookSession {
     /// Page thumbs + cover (`+Thumbnails`, §5.5): fed on every accepted edit, flushed with the store.
     private(set) var thumbnails: ThumbnailService?
     var thumbnailRegeneration: Task<Void, Never>?
-    private var bridge: UndoManagerBridge?
+    /// The one path for changes to the notebook (strokes, erasing, selection, pages, undo); set by ``open()``.
+    private(set) var edits: EditPipeline?
     private var tool = ToolConfiguration.default
-    private var eraser = EraserRun()
     /// Stroke or partial erase (`ToolState.eraser.mode`).
     var eraserMode: EraserSettings.Mode = .stroke
-    private var queue: Task<Void, Never>?
     private(set) var isClosed = false
     private var awaitingFirstPage = true
     var awaitingFirstSharp = true
@@ -117,11 +114,18 @@ final class NotebookSession {
             if let window = host.pageWindow {
                 residency.update(window)
             }
-            bridge = UndoManagerBridge(stack: state.edits, undoManager: host.editUndoManager) { [weak self] entry in
-                self?.applyHistory(entry)
-            }
-            state.onUndo = { [weak self] in self?.bridge?.undo() }
-            state.onRedo = { [weak self] in self?.bridge?.redo() }
+            let edits = EditPipeline(
+                store: store,
+                mirror: ResidencyMirror(residency: residency) { [weak self] in await self?.refreshPages() },
+                history: state.edits,
+                undoManager: host.editUndoManager
+            )
+            edits.onPageEdited = { [weak self] page in self?.thumbnailChanged(page) }
+            edits.onHistoryWillApply = { [weak self] in self?.clearSelection() }
+            edits.onHistoryApplied = { [weak self] pages in self?.reveal(pages) }
+            self.edits = edits
+            state.onUndo = { [weak self] in self?.edits?.undo() }
+            state.onRedo = { [weak self] in self?.edits?.redo() }
         } catch {
             let id = notebookID
             Self.log.error("open \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
@@ -131,7 +135,7 @@ final class NotebookSession {
 
     /// Checkpoints every dirty page and renders pending thumbnails (scene left the foreground).
     func flush() {
-        enqueue("flush") { [store, thumbnails] in
+        edits?.run("flush") { [store, thumbnails] in
             try await store?.flush()
             await thumbnails?.flush()
         }
@@ -145,11 +149,10 @@ final class NotebookSession {
         host.delegate = nil
         residency?.close()
         thumbnailRegeneration?.cancel()
-        bridge?.detach()
-        state.edits.removeAll()
-        let (queue, store, thumbnails, library, id) = (queue, store, thumbnails, library, notebookID)
+        edits?.close()
+        let (edits, store, thumbnails, library, id) = (edits, store, thumbnails, library, notebookID)
         let task = Task { @MainActor in
-            await queue?.value
+            await edits?.drain()
             guard let store else { return }
             do {
                 try await store.flush()
@@ -186,7 +189,7 @@ final class NotebookSession {
         engine.setTheme(theme)
         tintSelection(for: theme)
         initialTheme = theme
-        enqueue("paper") { [weak self] in
+        edits?.run("paper") { [weak self] in
             guard let self, let store, let residency else { return }
             let manifest = await store.manifest
             guard manifest.notebook.theme != theme || manifest.notebook.paper != style else { return }
@@ -203,56 +206,10 @@ final class NotebookSession {
         }
     }
 
-    // MARK: Edits
+    // MARK: History
 
-    /// Runs `operation` after every earlier one, logging (and recovering from) failures.
-    func enqueue(_ name: StaticString, _ operation: @escaping @MainActor () async throws -> Void) {
-        let previous = queue
-        queue = Task { @MainActor in
-            await previous?.value
-            do {
-                try await operation()
-            } catch {
-                Self.log.error("\(name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
-            }
-        }
-    }
-
-    /// Applies `edit` to the store, then mirror + engine; reloads the page if the store refused it.
-    func commit(_ edit: PageEdit, to page: PageID) async throws {
-        guard let store, let residency else { return }
-        do {
-            try await store.apply(edit, to: page)
-        } catch {
-            await residency.reload(page)
-            throw error
-        }
-        residency.didApply(edit, to: page)
-        thumbnailChanged(page)
-    }
-
-    private func applyHistory(_ entry: EditEntry) {
-        clearSelection()
-        enqueue("history") { [weak self] in
-            guard let self, let residency else { return }
-            eraser.reset() // the page may change under an eraser gesture in progress
-            do {
-                try await applyStructure(entry.structure)
-                for step in entry.steps {
-                    _ = try await residency.ensureLoaded(step.pageID)
-                    try await commit(step.edit, to: step.pageID)
-                }
-            } catch {
-                // The history no longer matches the document.
-                state.edits.removeAll()
-                throw error
-            }
-            reveal(entry.pageIDs)
-        }
-    }
-
-    /// Scrolls to the first page `ids` touched if none of them is on screen.
-    private func reveal(_ ids: [PageID]) {
+    /// Undo/redo changed `ids`: scrolls to the first page `ids` touched if none of them is on screen.
+    func reveal(_ ids: [PageID]) {
         guard let window = host.pageWindow else { return }
         let indices = ids.compactMap(host.layout.index(of:))
         guard let first = indices.first, !indices.contains(where: { window.visible.contains($0) }) else { return }
@@ -308,26 +265,13 @@ final class NotebookSession {
 
 extension NotebookSession: InkEngineDelegate {
     func engine(_: any InkEngine, didCommit stroke: Stroke, to page: PageID) {
-        enqueue("stroke") { [weak self] in
-            guard let self, let residency else { return }
-            let edit = try await residency.ensureLoaded(page).addEdit([stroke])
-            try await commit(edit, to: page)
-            state.edits.record(edit, on: page, actionName: "Stroke")
-        }
+        edits?.commitStroke(stroke, to: page)
     }
 
     /// Each batch is applied at once (stroke mode removes the strokes it touched, partial mode splits them,
-    /// highlighter included); at gesture end ``EraserRun`` collapses the batches into one undo step.
+    /// highlighter included); at gesture end ``EditPipeline`` collapses the batches into one undo step.
     func engine(_: any InkEngine, didReceiveEraser samples: [Sample], to page: PageID) {
-        let (diameter, mode) = (tool.width, eraserMode)
-        enqueue("erase") { [weak self] in
-            guard let self, let residency else { return }
-            let current = try await residency.ensureLoaded(page)
-            guard let edit = try eraser.erase(samples, on: page, current: current, diameter: diameter, mode: mode) else { return }
-            try await commit(edit, to: page)
-            state.edits.record(edit, on: page, actionName: "Erase")
-            eraser.accept()
-        }
+        edits?.erase(samples, on: page, diameter: tool.width, mode: eraserMode)
     }
 
     /// A finished lasso: strokes with ≥ 50 % of their samples inside become the selection (`+Selection`).
@@ -341,15 +285,7 @@ extension NotebookSession: InkEngineDelegate {
         if !host.isFirstResponder {
             host.becomeFirstResponder()
         }
-        let isEraser = tool.tool == .eraser
-        enqueue("gesture") { [weak self] in
-            guard let self else { return }
-            eraser.finish(in: state.edits)
-            state.edits.endAllGroups()
-            if isEraser {
-                state.edits.beginGroup(actionName: "Erase")
-            }
-        }
+        edits?.beginGesture(erasing: tool.tool == .eraser)
     }
 }
 
@@ -373,10 +309,6 @@ extension NotebookSession: CanvasHostViewDelegate {
 
     func canvasHostDidLiftAllTouches(_: CanvasHostView) {
         state.strokeEnded()
-        enqueue("gesture end") { [weak self] in
-            guard let self else { return }
-            eraser.finish(in: state.edits)
-            state.edits.endAllGroups()
-        }
+        edits?.endGesture()
     }
 }
