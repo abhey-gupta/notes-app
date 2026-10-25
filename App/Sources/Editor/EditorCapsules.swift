@@ -49,11 +49,28 @@ struct NavCapsule: View {
 struct PagesCapsule: View {
     let tools: ToolState
     let state: EditorState
+    /// Current page (1-based) and page count, for export.
+    let page: (current: Int, total: Int)
+    let isNight: Bool
+
+    @State private var showsShare = false
+    @State private var presenter = ActivityPresenter()
 
     var body: some View {
         GlassCapsule {
             ToolButton(.pages, "Pages") {}
-            ToolButton(.share, "Share") {}
+            ToolButton(.share, "Share") { showsShare.toggle() }
+                .background(ActivityAnchor(presenter: presenter))
+                .popover(isPresented: $showsShare) {
+                    SharePopover(state: state, page: page, isNight: isNight) { url in
+                        showsShare = false
+                        // Present once SwiftUI has started dismissing the popover.
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(50))
+                            presenter.share(url)
+                        }
+                    }
+                }
             Menu {
                 Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
                 #if DEBUG
