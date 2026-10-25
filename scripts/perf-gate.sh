@@ -58,7 +58,8 @@ run() {
   "${PY[@]}" extract "$OUT/run$n.xcresult" "$OUT/run$n.json"
 }
 
-run 1
+# Device-only stress pass (#44, `make perf-device`): not gated.
+run 1 -skip-testing:NotespacePerfTests/CanvasStressPerfTests
 RUNS=("$OUT/run1.json")
 "${PY[@]}" merge "$OUT/metrics.json" "${RUNS[@]}"
 

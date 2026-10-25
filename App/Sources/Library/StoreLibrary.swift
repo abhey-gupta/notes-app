@@ -4,7 +4,7 @@ import InkModel
 import Library
 import Observation
 import os
-#if DEBUG
+#if DEBUG || PERF_FIXTURES
     import FixtureGen
 #endif
 
@@ -54,7 +54,7 @@ final class StoreLibrary: LibraryModel {
             apply(snapshot)
             isLoaded = true
         }
-        #if DEBUG
+        #if DEBUG || PERF_FIXTURES
             if LaunchOptions.seedNotebooks > 0, notebooks.isEmpty {
                 await seed(count: LaunchOptions.seedNotebooks)
             }
@@ -211,7 +211,7 @@ final class StoreLibrary: LibraryModel {
     }
 }
 
-#if DEBUG
+#if DEBUG || PERF_FIXTURES
     extension StoreLibrary {
         /// `-resetLibrary YES`: start from an empty container (UI tests).
         static func erase(_ locations: LibraryLocations = .standard) {
