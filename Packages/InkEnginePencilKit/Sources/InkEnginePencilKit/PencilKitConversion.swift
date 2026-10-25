@@ -9,8 +9,9 @@ import UIKit
 /// Each ``InkModel/Sample`` becomes one `PKStrokePoint` control point (and back). A stroke's
 /// ``InkModel/Stroke/rendering`` holds what PencilKit drew (ink, random seed, per-point size and opacity),
 /// so `PKStroke → Stroke → PKStroke` gives the same points and renders the same pixels (#71). Strokes
-/// without one (v1 files, fixtures) get ``InkGeometry`` 's ``InkModel/Stroke/derivedRendering``: point
-/// size = base width × pen-profile scale, with a seed fixed by the stroke ID.
+/// without one (v1 files, fixtures) get ``InkGeometry`` 's ``InkModel/Stroke/derivedRendering``: the point
+/// size the ink draws at base width × pen-profile scale (``InkModel/InkNib``: PencilKit paints a `.pen`
+/// point `2 × size − 4` wide, not `size`; `InkWidthTests` pins each ink), with a seed fixed by the stroke ID.
 ///
 /// PencilKit keeps force to 3 decimals; normalized pressure maps back to the same value.
 public enum PencilKitConversion {

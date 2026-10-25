@@ -35,14 +35,14 @@ public struct Centerline: Sendable {
         arcLengths.last ?? 0
     }
 
-    /// Centerline for `stroke`: radii from its stored PencilKit point sizes when it has a
-    /// ``InkModel/Stroke/rendering`` (half the larger side), else from its pen's standard profile.
+    /// Centerline for `stroke`: radii from what PencilKit draws for its stored point sizes when it has
+    /// a ``InkModel/Stroke/rendering`` (``InkModel/StrokeRendering/drawnWidths(along:)``), else from
+    /// its pen's standard profile.
     public init(stroke: Stroke, spacing: Float = 1) {
         let profile = PenProfile(stroke.tool)
         if let rendering = stroke.rendering {
-            let radii = rendering.points.map { p in
-                let size = max(p.width, p.height)
-                return (size.isFinite ? max(size, Self.minimumWidth) : 1) / 2
+            let radii = rendering.drawnWidths(along: stroke.samples).map { width in
+                (width.isFinite ? max(width, Self.minimumWidth) : 1) / 2
             }
             self.init(samples: stroke.samples, halfWidth: 0, profile: profile, radii: radii, spacing: spacing)
         } else {

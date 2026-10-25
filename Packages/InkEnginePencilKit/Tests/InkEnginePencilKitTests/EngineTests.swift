@@ -312,9 +312,17 @@ struct RenderTests {
 
     @Test func setPaletteRecolorsRenders() async throws {
         struct RedPaper: InkPalette {
-            func paper(_: PaperTheme) -> RGBA8 { RGBA8(rgba: 0xFF00_00FF) }
-            func templateLine(_ theme: PaperTheme) -> RGBA8 { FixturePalette().templateLine(theme) }
-            func ink(_ color: InkColor, on theme: PaperTheme) -> RGBA8 { FixturePalette().ink(color, on: theme) }
+            func paper(_: PaperTheme) -> RGBA8 {
+                RGBA8(rgba: 0xFF00_00FF)
+            }
+
+            func templateLine(_ theme: PaperTheme) -> RGBA8 {
+                FixturePalette().templateLine(theme)
+            }
+
+            func ink(_ color: InkColor, on theme: PaperTheme) -> RGBA8 {
+                FixturePalette().ink(color, on: theme)
+            }
         }
         let engine = PencilKitInkEngine(palette: FixturePalette())
         engine.setPalette(RedPaper())

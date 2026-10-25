@@ -75,8 +75,10 @@ struct StrokeTests {
     @Test func renderingRoundTripsAndWidensBounds() throws {
         let stroke = Stroke(tool: .ballpoint, color: .primary, width: 2, samples: samples, rendering: rendering)
         #expect(stroke.rendering == rendering)
-        let maxSize = rendering.maximumPointSize
-        let pad = CGFloat(maxSize / 2 * Float(2).squareRoot() + Stroke.boundsMargin)
+        // Pen points draw 2 × width − 4 wide, wider than the stored size here.
+        let widest = rendering.maximumDrawnWidth
+        #expect(widest == 2 * rendering.maximumPointSize - 4)
+        let pad = CGFloat(widest / 2 * Float(2).squareRoot() + Stroke.boundsMargin)
         #expect(stroke.bounds == CGRect(x: 10 - pad, y: 5 - pad, width: 20 + 2 * pad, height: 35 + 2 * pad))
         #expect(try roundTrip(stroke) == stroke)
         #expect(try roundTrip(Stroke(tool: .ballpoint, color: .primary, width: 2, samples: samples)).rendering == nil)
