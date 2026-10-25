@@ -1,5 +1,6 @@
 import Canvas
 import DesignSystem
+import Editing
 import InkEngine
 import InkEnginePencilKit
 import InkModel
@@ -14,7 +15,7 @@ import UIKit
 /// bar ─▶ recolor / duplicate (+20 pt) / delete ─▶ PageEdit.recolor / .add / .remove
 /// ```
 ///
-/// Every action goes through the edit queue like a stroke (store, then mirror + engine, then one
+/// Every action goes through the `EditPipeline` like a stroke (store, then mirror + engine, then one
 /// `EditStack` entry), then the selection is rebuilt from the page. A new gesture, a tool change,
 /// undo/redo, a tap outside or the page scrolling away clears it.
 extension NotebookSession {
@@ -37,10 +38,8 @@ extension NotebookSession {
     }
 
     func select(lasso path: [CGPoint], on page: PageID) {
-        enqueue("lasso") { [weak self] in
-            guard let self, let residency else { return }
-            let resolved = try await LassoSelection(lasso: path, on: residency.ensureLoaded(page))
-            show(resolved)
+        edits?.read(page) { [weak self] page in
+            self?.show(LassoSelection(lasso: path, on: page))
         }
     }
 
@@ -110,29 +109,23 @@ extension NotebookSession {
 
     // MARK: Edits
 
-    /// Runs one selection action as one edit (one undo step) on the edit queue, then shows the selection
+    /// Runs one selection action as one edit (one undo step) through the pipeline, then shows the selection
     /// `make` returns, rebuilt from the edited page (`nil` = none). `make` returning `nil` = nothing to do.
     private func editSelection(
         _ name: String,
         completion: (@MainActor () -> Void)? = nil,
         make: @escaping @MainActor (LassoSelection, Page) throws -> (PageEdit, LassoSelection?)?
     ) {
-        guard let selection else {
+        guard let selection, let edits else {
             completion?()
             return
         }
-        enqueue("selection") { [weak self] in
+        edits.edit(name, on: selection.pageID, make: { page in try make(selection, page) }, then: { [weak self] next, page in
             defer { completion?() }
-            guard let self, let residency else { return }
-            let page = try await residency.ensureLoaded(selection.pageID)
-            guard let result = try make(selection, page) else { return }
-            let (edit, next) = result
-            try await commit(edit, to: selection.pageID)
-            state.edits.record(edit, on: selection.pageID, actionName: name)
-            // Cleared meanwhile (tool change, new lasso)? Then stay cleared.
-            guard self.selection?.strokeIDs == selection.strokeIDs else { return }
-            show(next.flatMap { next in residency.page(selection.pageID).flatMap { LassoSelection(next.strokeIDs, on: $0) } })
-        }
+            // Nothing done, or cleared meanwhile (tool change, new lasso)? Then stay as is.
+            guard let self, let page, self.selection?.strokeIDs == selection.strokeIDs else { return }
+            show(next.flatMap(\.self).flatMap { LassoSelection($0.strokeIDs, on: page) })
+        })
     }
 
     private func show(_ selection: LassoSelection?) {
