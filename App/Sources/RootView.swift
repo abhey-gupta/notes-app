@@ -82,10 +82,12 @@ struct EditorRoute: Hashable {
 }
 
 /// `notebook.open` signpost (§11): tap → the first display frame after page 1's strokes reached the engine
-/// (`NotebookSession`). The engine-side `canvas.firstSharpTile` lands with the tile cache (#22).
+/// (`NotebookSession`); `canvas.firstSharpTile`: the same tap → the first frame after page 1 showed sharp
+/// ink (its raster landed or its canvas drew; until then the page's thumbnail stands in, #43).
 @MainActor
 enum OpenTrace {
     private static var interval: SignpostInterval?
+    private static var sharpInterval: SignpostInterval?
     /// Started by Create: the push that follows keeps the running interval.
     private static var creating = false
 
@@ -102,6 +104,8 @@ enum OpenTrace {
         }
         interval?.end()
         interval = Signpost.notebookOpen.begin()
+        sharpInterval?.end()
+        sharpInterval = Signpost.canvasFirstSharpTile.begin()
     }
 
     static func end() {
@@ -110,9 +114,16 @@ enum OpenTrace {
         creating = false
     }
 
-    /// Create failed: drop the interval unreported.
+    /// Page 1 shows sharp ink.
+    static func sharp() {
+        sharpInterval?.end()
+        sharpInterval = nil
+    }
+
+    /// Create failed: drop the intervals unreported.
     static func cancel() {
         interval = nil
+        sharpInterval = nil
         creating = false
     }
 }

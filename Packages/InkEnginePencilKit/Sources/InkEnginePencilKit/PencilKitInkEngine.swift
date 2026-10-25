@@ -10,9 +10,11 @@ import UIKit
 /// moves paper and ink together. Every visible page has a ``PageLayerView`` (paper, template, a raster
 /// of its ink) and, from a small pool, a `PKCanvasView` covering its visible part (``PageCanvas``,
 /// ``CanvasPlacement``); the raster shows through where no canvas has drawn yet. Rasters are
-/// `PKDrawing.image`, rendered off main, recent ones kept in an ``InkRasterCache`` that empties on memory
-/// warnings. Pens draw through PencilKit; eraser and lasso input goes through the shared
-/// ``InkEngine/InkInputView`` pipeline and is reported, never applied.
+/// `PKDrawing.image`, rendered off main a few at a time nearest the viewport first (``RasterRenderQueue``),
+/// kept per zoom bucket in an ``InkRasterCache`` that empties on memory warnings; while one renders the
+/// page shows its nearest cached raster, its thumbnail or just paper (`+Images`, #70). Pens draw through
+/// PencilKit; eraser and lasso input goes through the shared ``InkEngine/InkInputView`` pipeline and is
+/// reported, never applied.
 ///
 /// A canvas starts its page from the document snapshot. A finished PencilKit stroke is reported via
 /// `didCommit` and kept on the canvas as pending until the document echoes it back through
@@ -34,6 +36,20 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// Canvases at once: the pages nearest the viewport center get one; others show their raster only.
     /// Each canvas is at most viewport-sized (its Metal layer too).
     public var maximumCanvases = 6
+    /// `thumbs/<page>.heic` for a page, shown scaled up while its strokes load or its first raster
+    /// renders (#43, #70). `nil`: the page shows flat paper meanwhile.
+    public var thumbnailURL: ((PageID) -> URL?)?
+    /// A page shows sharp ink (its raster landed, or its canvas drew it); fires on every such event. The
+    /// app's `canvas.firstSharpTile` signpost ends on the first one after an open.
+    public var onPageSharp: ((PageID) -> Void)?
+    /// Thumbnail → raster crossfade, seconds (the app sets `Tokens.Motion.thumbnailCrossfadeDuration`).
+    public var crossfadeDuration: TimeInterval = 0.12 {
+        didSet {
+            for view in pageViews.values {
+                view.crossfadeDuration = crossfadeDuration
+            }
+        }
+    }
 
     private(set) var palette: any InkPalette
     let host = HostView()
@@ -41,8 +57,13 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// The canvas pool: every `PKCanvasView` made so far, assigned to a page or free.
     private(set) var canvases: [PageCanvas] = []
     let input = InkInputView()
-    /// Ink rasters of recently shown pages.
+    /// Ink rasters of recently shown pages, per zoom bucket, and decoded thumbnails.
     let rasters = InkRasterCache()
+    /// Off-main raster renders, nearest the viewport first.
+    let renderQueue = RasterRenderQueue()
+    /// Thumbnails being decoded, and pages that have none on disk.
+    var thumbnailLoads: Set<PageID> = []
+    var thumbnailMisses: Set<PageID> = []
     /// Above the canvases: the live lasso path and lifted (lasso-dragged) strokes (`+Selection`).
     let selection = SelectionLayers()
 
@@ -52,7 +73,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     private(set) var theme = PaperTheme.white
     /// Strokes reported via `didCommit` but not yet in the page snapshot, per page, in draw order.
     private(set) var pending: [PageID: [(id: StrokeID, pk: PKStroke)]] = [:]
-    private(set) var hasSeenPencil = false
+    var hasSeenPencil = false
 
     var pageViews: [PageID: PageLayerView] = [:]
     private var isSettingDrawing = false
@@ -81,6 +102,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             self, selector: #selector(didReceiveMemoryWarning),
             name: UIApplication.didReceiveMemoryWarningNotification, object: nil
         )
+        registerGauges()
     }
 
     @objc private func didReceiveMemoryWarning() {
@@ -104,6 +126,11 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             // Only appended strokes (echoed commits) keep the canvas; anything else rebuilds it.
             let appendedOnly = old[id].map { snapshot.strokes.starts(with: $0.strokes) } ?? false
             contentChanged(id, rebuild: !appendedOnly)
+            if let previous = old[id], !previous.isLoaded, snapshot.isLoaded, let canvas = canvas(for: id) {
+                // The strokes arrived: the thumbnail stays whole until the canvas has drawn them.
+                canvas.renderedRegion = nil
+                capRenderWait(canvas)
+            }
         }
         for canvas in canvases {
             if let page = canvas.page, old[page] != nil, snapshots[page] == nil {
@@ -135,6 +162,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     public func setTheme(_ theme: PaperTheme) {
         guard theme != self.theme else { return }
         self.theme = theme
+        rasters.removeThumbnails() // they show the paper; the service regenerates them
+        thumbnailMisses = []
         applyTool()
         for canvas in canvases where canvas.page != nil {
             rebuildCanvas(canvas)
@@ -240,6 +269,9 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         guard let region = canvas.placement?.region, canvas.renderedRegion != region else { return }
         canvas.renderedRegion = region
         layoutPages()
+        if let page = canvas.page, snapshots[page]?.isLoaded == true {
+            onPageSharp?(page)
+        }
     }
 
     private func contentChanged(_ page: PageID, rebuild: Bool) {
@@ -306,37 +338,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         if let canvas = canvas(for: page) {
             rebuildCanvas(canvas)
         }
-    }
-
-    // MARK: Tool
-
-    private func applyTool() {
-        input.allowsFingerDrawing = tool.allowsFingerDrawing
-        input.isHidden = tool.penKind != nil
-        for canvas in canvases {
-            applyTool(to: canvas)
-        }
-    }
-
-    private func applyTool(to canvas: PageCanvas) {
-        canvas.view.drawingPolicy = tool.allowsFingerDrawing && !hasSeenPencil ? .anyInput : .pencilOnly
-        switch tool.tool {
-        case let .pen(kind):
-            canvas.view.tool = PencilKitConversion.inkingTool(kind, color: uiColor(tool.color), width: tool.width)
-            canvas.view.isUserInteractionEnabled = true
-        case .eraser, .lasso:
-            canvas.view.isUserInteractionEnabled = false
-        }
-    }
-
-    func pencilSeen() {
-        guard !hasSeenPencil else { return }
-        hasSeenPencil = true
-        applyTool()
-    }
-
-    func uiColor(_ color: InkColor) -> UIColor {
-        UIColor(palette.ink(color, on: theme))
     }
 }
 

@@ -174,7 +174,9 @@ public enum Tokens {
         public static let dock: Animation = .spring(duration: 0.42, bounce: 0.18)
         /// Continuous inking before chrome collapses (§7).
         public static let focusDelay: Duration = .milliseconds(1500)
-        public static let thumbnailCrossfade: Animation = .easeOut(duration: 0.12)
+        /// A page's thumbnail giving way to its sharp raster (editor open, #43; page images, #70).
+        public static let thumbnailCrossfadeDuration: TimeInterval = 0.12
+        public static let thumbnailCrossfade: Animation = .easeOut(duration: thumbnailCrossfadeDuration)
         /// Popover selection highlight (segment, width) sliding to a new option.
         public static let selection: Animation = .spring(duration: 0.32, bounce: 0.22)
         /// Stroke preview: new ink writes itself in left to right / crossfades.

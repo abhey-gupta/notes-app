@@ -54,6 +54,7 @@ final class NotebookSession {
     private var queue: Task<Void, Never>?
     private(set) var isClosed = false
     private var awaitingFirstPage = true
+    var awaitingFirstSharp = true
     /// Lasso selection (`+Selection`).
     var selection: LassoSelection?
     var isBakingSelection = false
@@ -124,7 +125,7 @@ final class NotebookSession {
         } catch {
             let id = notebookID
             Self.log.error("open \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
-            OpenTrace.end()
+            OpenTrace.cancel()
         }
     }
 
@@ -281,6 +282,7 @@ final class NotebookSession {
         // PencilKit is the ink engine (spike #16, ARCHITECTURE.md §3); the Metal engine stays unwired.
         let engine = PencilKitInkEngine(palette: palette)
         engine.setTheme(initialTheme)
+        installPageImages(on: engine)
         let host = CanvasHostView(engine: engine)
         // Paper for every page from the first frame; real page IDs replace these when the manifest is read.
         host.layout = PageLayout(pageIDs: (0 ..< initialPageCount).map { _ in PageID() }, footer: CanvasHostView.footerHeight)
