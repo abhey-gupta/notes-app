@@ -15,8 +15,16 @@ public final class ToolState {
 
     /// Current tool.
     public var tool: Tool {
-        didSet { changed(tool != oldValue) }
+        didSet {
+            if tool != oldValue {
+                previousTool = oldValue
+            }
+            changed(tool != oldValue)
+        }
     }
+
+    /// Tool before the last switch (not persisted): Pencil "switch to previous" and eraser toggles go back to it.
+    public private(set) var previousTool: Tool = .pen
 
     /// Pen settings.
     public var pen: PenSettings {
@@ -96,6 +104,18 @@ public final class ToolState {
         let wasCurrent = self.tool == tool
         self.tool = tool
         return wasCurrent
+    }
+
+    // MARK: Pencil gestures (#24)
+
+    /// Pencil double-tap / squeeze "switch to eraser": eraser, or back to the tool before it.
+    public func toggleEraser() {
+        tool = tool == .eraser ? (previousTool == .eraser ? .pen : previousTool) : .eraser
+    }
+
+    /// Pencil "switch to previous tool".
+    public func switchToPrevious() {
+        tool = previousTool == tool ? .pen : previousTool
     }
 
     /// Color of the current inking tool; the pen's color for eraser and lasso (it tints the chrome).

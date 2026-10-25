@@ -107,6 +107,30 @@ struct ToolStateTests {
         #expect(state.select(.highlighter))
     }
 
+    @Test func pencilEraserToggleReturnsToPreviousTool() throws {
+        let state = try makeState(makeDefaults())
+        state.select(.highlighter)
+        state.toggleEraser()
+        #expect(state.tool == .eraser)
+        state.toggleEraser()
+        #expect(state.tool == .highlighter)
+        state.select(.lasso)
+        state.switchToPrevious()
+        #expect(state.tool == .highlighter)
+        state.switchToPrevious()
+        #expect(state.tool == .lasso)
+    }
+
+    @Test func eraserToggleFromFreshEraserFallsBackToPen() throws {
+        let state = try makeState(makeDefaults())
+        state.tool = .eraser
+        state.toggleEraser()
+        #expect(state.tool == .pen)
+        state.toggleEraser()
+        state.toggleEraser()
+        #expect(state.tool == .pen)
+    }
+
     @Test func currentColorFollowsInkingTool() throws {
         let state = try makeState(makeDefaults())
         state.pen.color = .semantic(.red)
