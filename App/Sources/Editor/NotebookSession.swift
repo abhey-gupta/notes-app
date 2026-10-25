@@ -38,7 +38,7 @@ final class NotebookSession {
     let state: EditorState
     let notebookID: NotebookID
 
-    private let library: any LibraryModel
+    let library: any LibraryModel
     private let initialPageCount: Int
     private var initialTheme: PaperTheme
     private(set) var store: DocumentStore?
@@ -67,6 +67,7 @@ final class NotebookSession {
         initialTheme = notebook.theme
         state = EditorState(startsFocused: startsFocused)
         state.onSelectionAction = { [weak self] in self?.performSelectionAction($0) }
+        state.onKeepsExactColors = { [weak self] in self?.setKeepsExactColors($0) }
         state.onExportPDF = { [weak self] selection, asShown, progress in
             guard let self else { throw CancellationError() }
             return try await exportPDF(selection, asShown: asShown, progress: progress)
@@ -100,6 +101,10 @@ final class NotebookSession {
             residency.onPageLoaded = { [weak self] id in self?.pageLoaded(id) }
             self.residency = residency
             engine.setTheme(manifest.notebook.theme)
+            if manifest.notebook.keepsExactColors {
+                state.keepsExactColors = true
+                applyPalette(keepsExactColors: true)
+            }
             host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
             if let window = host.pageWindow {
                 residency.update(window)

@@ -35,7 +35,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// Each canvas is at most viewport-sized (its Metal layer too).
     public var maximumCanvases = 6
 
-    let palette: any InkPalette
+    private(set) var palette: any InkPalette
     let host = HostView()
     let pagesView = UIView()
     /// The canvas pool: every `PKCanvasView` made so far, assigned to a page or free.
@@ -120,6 +120,16 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         }
         self.tool = tool
         applyTool()
+    }
+
+    /// Replaces the color source (e.g. the notebook's "Keep exact colors" changed) and redraws.
+    public func setPalette(_ palette: any InkPalette) {
+        self.palette = palette
+        applyTool()
+        for canvas in canvases where canvas.page != nil {
+            rebuildCanvas(canvas)
+        }
+        layoutPages()
     }
 
     public func setTheme(_ theme: PaperTheme) {

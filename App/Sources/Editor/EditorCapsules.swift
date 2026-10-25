@@ -7,6 +7,8 @@ struct NavCapsule: View {
     let title: String
     @Binding var paper: PaperTheme
     @Binding var pattern: PaperPattern
+    /// "Keep exact colors", offered on Night paper.
+    @Binding var keepsExactColors: Bool
     let onBack: () -> Void
 
     var body: some View {
@@ -22,6 +24,9 @@ struct NavCapsule: View {
                     ForEach(PaperPattern.allCases) { pattern in
                         Text(pattern.displayName).tag(pattern)
                     }
+                }
+                if paper == .night {
+                    Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
                 }
             } label: {
                 HStack(spacing: 6) {
