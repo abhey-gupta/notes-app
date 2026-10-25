@@ -293,6 +293,18 @@ struct Gray {
         return (x0 ..< x1, y0 ..< y1)
     }
 
+    /// Pixels darker than `threshold` in `region` (normalized): ink on paper.
+    func darkPixelCount(in region: CGRect, threshold: UInt8 = 96) -> Int {
+        let (xs, ys) = rect(region)
+        var count = 0
+        for y in ys {
+            for x in xs where self[x, y] < threshold {
+                count += 1
+            }
+        }
+        return count
+    }
+
     /// Paper is pure white; the desk around it is not. Width of the white run through the row at 12 %.
     func pageWidth() -> CGFloat {
         let y = Int(CGFloat(height) * 0.12)

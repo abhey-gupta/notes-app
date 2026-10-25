@@ -7,7 +7,9 @@ import os
 import Perf
 import UIKit
 
-/// The shipping `InkEngine`: custom Metal ink at the hardware latency floor (ARCHITECTURE.md §3).
+/// Shelved `InkEngine` (spike #16, ARCHITECTURE.md §3): custom Metal ink at the hardware latency floor.
+/// Predates the content-sized engine view: it still draws as if its view were pinned to the visible rect
+/// (`Viewport.viewRect`), so wiring it into the host again means moving it to content space first.
 ///
 /// **Frame** (one command buffer, presented on a two-drawable `CAMetalLayer`):
 /// 1. ``CommittedContentRenderer/prepare(_:commandBuffer:)``: re-renders committed content only if

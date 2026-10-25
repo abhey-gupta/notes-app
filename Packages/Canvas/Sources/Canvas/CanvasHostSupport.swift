@@ -16,8 +16,8 @@
         func canvasHostDidLiftAllTouches(_ host: CanvasHostView)
     }
 
-    /// A view the host keeps above the ink engine (``CanvasHostView/overlay``), in the engine view's
-    /// coordinates (view space of ``InkEngine/Viewport``).
+    /// A view the host keeps above the ink engine (``CanvasHostView/overlay``), pinned to the visible rect
+    /// (view space of ``InkEngine/Viewport``), so its chrome doesn't zoom with the pages.
     @MainActor
     public protocol CanvasOverlay: UIView {
         /// Every scroll/zoom frame, after the engine got the same viewport.
@@ -29,15 +29,15 @@
             guard old !== overlay else { return }
             old?.removeFromSuperview()
             guard let overlay else { return }
-            engine.view.superview?.insertSubview(overlay, aboveSubview: engine.view)
+            canvasScrollView.insertSubview(overlay, aboveSubview: contentView)
             updateOverlay(viewport)
         }
 
-        /// Pins the overlay to the engine view (the visible rect) and passes on the viewport.
+        /// Pins the overlay to the visible rect and passes on the viewport.
         func updateOverlay(_ viewport: Viewport) {
             guard let overlay else { return }
-            if overlay.frame != engine.view.frame {
-                overlay.frame = engine.view.frame
+            if overlay.frame != canvasScrollView.bounds {
+                overlay.frame = canvasScrollView.bounds
             }
             overlay.canvasHost(self, didUpdate: viewport)
         }
@@ -143,11 +143,10 @@
             set { super.accessibilityValue = newValue }
         }
 
-        /// Applies this scroll view's own pinch if UIKit didn't. With the engine view (a sibling of the
-        /// zoomed content view, holding a `PKCanvasView`) under the fingers, `UIScrollView` recognizes the
-        /// pinch and reports its scale (seeded with the current zoom) but leaves `zoomScale` alone (#71:
-        /// "pinch zoomed only the stroke"). Zooms about the pinch centroid, within the zoom range; a no-op
-        /// when UIKit already zoomed.
+        /// Applies this scroll view's own pinch if UIKit didn't. With a `PKCanvasView` (itself a scroll
+        /// view) under the fingers, `UIScrollView` can recognize the pinch and report its scale (seeded with
+        /// the current zoom) yet leave `zoomScale` alone (#71: "pinch zoomed only the stroke"). Zooms about
+        /// the pinch centroid, within the zoom range; a no-op when UIKit already zoomed.
         @objc func applyPinch(_ pinch: UIPinchGestureRecognizer) {
             guard pinch.state == .changed, pinch.numberOfTouches >= 2 else { return }
             let old = zoomScale

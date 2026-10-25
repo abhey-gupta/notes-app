@@ -1,102 +1,78 @@
 import CoreGraphics
 import InkModel
 
-/// Where the `PKCanvasView` sits for one viewport (ARCHITECTURE.md §3, Zoom).
+/// Where a page's `PKCanvasView` sits in the engine view (ARCHITECTURE.md §3, Zoom).
 ///
-/// The canvas draws `region` (page space) at `renderZoom` (its pinned `zoomScale`) and is scaled by
-/// `scale = zoom / renderZoom` about its center to the viewport's zoom. Settled, `renderZoom == zoom` and
-/// the canvas is exactly the page's visible rect. During a zoom gesture `renderZoom` and `region` stay
-/// what the canvas last rendered and only `center` and `scale` follow the pinch: plain Core Animation
-/// geometry, composited in the same transaction as the paper, with nothing for PencilKit to redraw.
-///
-/// Page point `p` lands at `pageOrigin + zoom · p` in view space, like the paper (``viewPoint(_:)``).
+/// The engine view lives inside the host's zoom view, in content space (unzoomed points): UIKit's one
+/// zoom transform scales paper and ink together, every frame of a pinch, bounce or fling. For crisp ink
+/// the canvas renders at `zoom` (its pinned `zoomScale`, so PencilKit draws at screen resolution) and
+/// is scaled back by `1 / zoom`, so in content space it covers exactly `region` of the page: page point
+/// `p` lands at `pageOrigin + p`, where the paper puts it (``contentPoint(_:)``). Only the visible
+/// part of the page gets a canvas (never a Metal layer the size of a page at 4×); it is re-placed on
+/// every scroll frame and left alone while a zoom is under way.
 struct CanvasPlacement: Equatable {
-    /// `PKCanvasView.zoomScale` (min = max = this).
-    var renderZoom: CGFloat
-    /// Canvas content size: the page at `renderZoom`.
-    var contentSize: CGSize
+    /// `PKCanvasView.zoomScale` (min = max = this): the viewport zoom when placed.
+    var zoom: CGFloat
+    /// Page frame in content space.
+    var pageFrame: CGRect
+    /// The part of the page the canvas covers (page space).
+    var region: CGRect
+
+    /// The canvas for the part of `pageFrame` inside `visibleRect` (both content space), `nil` when none.
+    static func visible(pageFrame: CGRect, in visibleRect: CGRect, zoom: CGFloat) -> CanvasPlacement? {
+        guard zoom > 0 else { return nil }
+        let shown = pageFrame.intersection(visibleRect)
+        guard !shown.isNull, shown.width > 0, shown.height > 0 else { return nil }
+        return CanvasPlacement(
+            zoom: zoom, pageFrame: pageFrame,
+            region: shown.offsetBy(dx: -pageFrame.minX, dy: -pageFrame.minY)
+        )
+    }
+
+    /// Canvas content size: the page at `zoom`.
+    var contentSize: CGSize {
+        CGSize(width: pageFrame.width * zoom, height: pageFrame.height * zoom)
+    }
+
     /// Canvas bounds; `origin` is its `contentOffset`.
-    var bounds: CGRect
-    /// Canvas center in engine view space.
-    var center: CGPoint
-    /// Uniform scale transform (1 when settled).
-    var scale: CGFloat
-
-    /// Settled: the canvas is `visible` (the page's visible rect, view space) at the viewport zoom.
-    static func settled(visible: CGRect, pageRect: CGRect, zoom: CGFloat, pageSize: CGSize) -> CanvasPlacement {
-        CanvasPlacement(
-            renderZoom: zoom,
-            contentSize: CGSize(width: pageSize.width * zoom, height: pageSize.height * zoom),
-            bounds: CGRect(
-                origin: CGPoint(x: visible.minX - pageRect.minX, y: visible.minY - pageRect.minY),
-                size: visible.size
-            ),
-            center: CGPoint(x: visible.midX, y: visible.midY),
-            scale: 1
-        )
+    var bounds: CGRect {
+        CGRect(x: region.minX * zoom, y: region.minY * zoom, width: region.width * zoom, height: region.height * zoom)
     }
 
-    /// Mid-zoom: the canvas still draws `region` (page space) at `renderZoom`, scaled to `zoom` with the
-    /// page's top-left at `pageOrigin` (view space).
-    static func scaled(
-        region: CGRect, renderZoom: CGFloat, pageOrigin: CGPoint, zoom: CGFloat, pageSize: CGSize
-    ) -> CanvasPlacement {
-        CanvasPlacement(
-            renderZoom: renderZoom,
-            contentSize: CGSize(width: pageSize.width * renderZoom, height: pageSize.height * renderZoom),
-            bounds: CGRect(
-                x: region.minX * renderZoom, y: region.minY * renderZoom,
-                width: region.width * renderZoom, height: region.height * renderZoom
-            ),
-            center: CGPoint(x: pageOrigin.x + region.midX * zoom, y: pageOrigin.y + region.midY * zoom),
-            scale: zoom / renderZoom
-        )
+    /// Canvas center in content space.
+    var center: CGPoint {
+        center(contentOffset: bounds.origin)
     }
 
-    /// The page-space rect the canvas shows.
-    var region: CGRect {
-        CGRect(
-            x: bounds.minX / renderZoom, y: bounds.minY / renderZoom,
-            width: bounds.width / renderZoom, height: bounds.height / renderZoom
-        )
-    }
-
-    /// Where page point `p` appears in engine view space: canvas content `p · renderZoom`, through the
-    /// bounds and the scale about the center (UIKit's own view geometry).
-    func viewPoint(_ p: CGPoint) -> CGPoint {
+    /// Canvas center in content space for the `contentOffset` the canvas actually took: `UIScrollView`
+    /// pixel-aligns offsets (20.4 → 20.5 at 2×), and the center must follow or the ink lands a fraction
+    /// of a point off the paper.
+    func center(contentOffset: CGPoint) -> CGPoint {
         CGPoint(
-            x: center.x + scale * (p.x * renderZoom - bounds.midX),
-            y: center.y + scale * (p.y * renderZoom - bounds.midY)
+            x: pageFrame.minX + (contentOffset.x + bounds.width / 2) * scale,
+            y: pageFrame.minY + (contentOffset.y + bounds.height / 2) * scale
         )
     }
 
-    /// The canvas's frame in engine view space (its bounds scaled about its center).
+    /// Uniform scale transform back to content space.
+    var scale: CGFloat {
+        1 / zoom
+    }
+
+    /// Where page point `p` appears in content space: canvas content `p · zoom`, through the bounds and
+    /// the scale about the center (UIKit's own view geometry). Equals `pageFrame.origin + p`.
+    func contentPoint(_ p: CGPoint) -> CGPoint {
+        CGPoint(
+            x: center.x + scale * (p.x * zoom - bounds.midX),
+            y: center.y + scale * (p.y * zoom - bounds.midY)
+        )
+    }
+
+    /// The canvas's frame in content space (its bounds scaled about its center): `region` on the page.
     var frame: CGRect {
         CGRect(
             x: center.x - bounds.width * scale / 2, y: center.y - bounds.height * scale / 2,
             width: bounds.width * scale, height: bounds.height * scale
         )
     }
-}
-
-/// The canvas's zoom bookkeeping (``PencilKitInkEngine/layoutCanvas()``).
-struct CanvasZoomState {
-    /// Set while a zoom gesture runs and until the canvas has redrawn after it.
-    var freeze: ZoomFreeze?
-    /// The page the canvas was last placed on (`nil`: hidden).
-    var placedPage: PageID?
-    /// Invalidates a pending settle timeout.
-    var settleToken = 0
-}
-
-/// The canvas's zoom state while a pinch is under way and just after.
-struct ZoomFreeze {
-    /// The active page the canvas was on when the zoom began.
-    var page: PageID
-    /// What the canvas had rendered when the zoom began (page space) and at which `zoomScale`.
-    var region: CGRect
-    var renderZoom: CGFloat
-    /// The zoom ended and the canvas is re-rendering at the final zoom; the page raster still fills in
-    /// around `region` until `canvasViewDidFinishRendering`.
-    var settling = false
 }

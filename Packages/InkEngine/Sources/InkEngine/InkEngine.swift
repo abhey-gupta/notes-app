@@ -11,7 +11,8 @@ import UIKit
 /// them into ``InkModel/PageEdit``s, `DocumentStore` applies them and calls back ``apply(_:to:)``.
 @MainActor
 public protocol InkEngine: AnyObject {
-    /// The engine's view. Sized and pinned to the host's visible rect, never to the content.
+    /// The engine's view: content-sized (unzoomed points), inside the host's zoom view, so the host's one
+    /// zoom transform scales paper and ink together. It must draw only what the viewport shows.
     var view: UIView { get }
     /// Receives committed ink and tool input.
     var delegate: (any InkEngineDelegate)? { get set }

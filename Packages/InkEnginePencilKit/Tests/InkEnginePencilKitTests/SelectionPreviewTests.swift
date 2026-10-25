@@ -9,12 +9,10 @@ import UIKit
 /// Lasso chrome in the engine (#29): live path, lifted-strokes drag preview.
 @MainActor
 struct SelectionPreviewTests {
-    @Test func lassoTouchActivatesPageAndDrawsLivePath() {
+    @Test func lassoDrawsItsLivePathInContentSpace() {
         let h = Harness()
         h.scroll(toY: 900)
         h.engine.setTool(ToolConfiguration(tool: .lasso))
-        h.engine.willReceiveTouch(at: CGPoint(x: 100, y: 900)) // page 3
-        #expect(h.engine.activePage == h.frames[2].id)
         var tracker = InkInputTracker()
         let at = { (x: CGFloat, y: CGFloat, t: Double) in TouchRecord(id: TouchID(1), location: CGPoint(x: x, y: y), timestamp: t) }
         let send = { (events: [InkInputTracker.Event]) in
@@ -22,28 +20,52 @@ struct SelectionPreviewTests {
                 h.engine.inkInputView(h.engine.input, didProduce: event)
             }
         }
-        send(tracker.began(at(100, 900, 0)) { h.engine.inkInputView(h.engine.input, targetAt: $0) })
-        send(tracker.moved(at(200, 950, 0.01)))
-        #expect(h.engine.selection.lasso.path?.boundingBoxOfPath == CGRect(x: 100, y: 900, width: 100, height: 50))
-        send(tracker.ended(at(150, 990, 0.02)))
+        // Content (100, 1800): page 3 (content y 1732...), page point (100, 68).
+        send(tracker.began(at(100, 1800, 0)) { h.engine.inkInputView(h.engine.input, targetAt: $0) })
+        send(tracker.moved(at(200, 1850, 0.01)))
+        #expect(h.engine.selection.lasso.path?.boundingBoxOfPath == CGRect(x: 100, y: 1800, width: 100, height: 50))
+        send(tracker.ended(at(150, 1890, 0.02)))
         #expect(h.engine.selection.lasso.path == nil)
+        #expect(h.recorder.lassos.first?.1 == h.frames[2].id)
+        #expect(h.recorder.lassos.first?.0.first == CGPoint(x: 100, y: 68))
+    }
+
+    /// The lasso layer zooms with the page, so its dash is scaled back to stay 1.5 pt on screen.
+    @Test func lassoDashStaysScreenSizedAtAnyZoom() {
+        let h = Harness()
+        h.engine.setTool(ToolConfiguration(tool: .lasso))
+        for zoom in [0.5, 2] as [CGFloat] {
+            h.scroll(toY: 0, zoom: zoom)
+            var tracker = InkInputTracker()
+            let at = { (x: CGFloat, y: CGFloat, t: Double) in TouchRecord(id: TouchID(1), location: CGPoint(x: x, y: y), timestamp: t) }
+            for event in tracker.began(at(100, 100, 0), target: { h.engine.inkInputView(h.engine.input, targetAt: $0) }) {
+                h.engine.inkInputView(h.engine.input, didProduce: event)
+            }
+            #expect(h.engine.selection.lasso.lineWidth == 1.5 / zoom)
+            let dash = h.engine.selection.lasso.lineDashPattern?.map { CGFloat($0.doubleValue) } ?? []
+            #expect(dash.count == 2 && abs(dash[0] - 5 / zoom) < 1e-3 && abs(dash[1] - 4 / zoom) < 1e-3, "\(dash)")
+            for event in tracker.ended(at(100, 100, 0.1)) {
+                h.engine.inkInputView(h.engine.input, didProduce: event)
+            }
+        }
     }
 
     /// A drag preview lifts the strokes into one image layer moved by its transform; ending it puts
-    /// them back on the canvas.
+    /// them back on the page's canvas.
     @Test func selectionPreviewLiftsStrokesAndTransformsOneLayer() throws {
         let h = Harness()
         h.scroll(toY: 900)
-        let page = h.frames[1].id
+        let page = h.frames[1]
         let id = RenderFixtures.strokeID(9)
-        let snapshot = try #require(h.engine.snapshots[page])
+        let snapshot = try #require(h.engine.snapshots[page.id])
         let other = RenderFixtures.line(2, from: CGPoint(x: 50, y: 300), to: CGPoint(x: 300, y: 300))
-        h.engine.apply(snapshot.page.addEdit([other]), to: page)
-        #expect(h.engine.canvas.drawing.strokes.count == 2)
+        h.engine.apply(snapshot.page.addEdit([other]), to: page.id)
+        let canvas = try #require(h.engine.canvas(for: page.id))
+        #expect(canvas.view.drawing.strokes.count == 2)
 
-        h.engine.setSelectionPreview(SelectionPreview(page: page, strokes: [id]))
-        #expect(h.engine.canvasIDs == [other.id], "lifted stroke leaves the canvas")
-        #expect(h.engine.canvas.drawing.strokes.count == 1)
+        h.engine.setSelectionPreview(SelectionPreview(page: page.id, strokes: [id]))
+        #expect(canvas.ids == [other.id], "lifted stroke leaves the canvas")
+        #expect(canvas.view.drawing.strokes.count == 1)
         #expect(!h.engine.selection.lifted.isHidden)
         #expect(h.engine.selection.lifted.contents != nil)
         let rect = h.engine.selection.rect
@@ -52,19 +74,18 @@ struct SelectionPreviewTests {
         // Drag frames only move the layer: no canvas rebuilds.
         let rebuilds = h.engine.rebuildCount
         let move = CGAffineTransform(translationX: 40, y: 10)
-        h.engine.setSelectionPreview(SelectionPreview(page: page, strokes: [id], transform: move))
+        h.engine.setSelectionPreview(SelectionPreview(page: page.id, strokes: [id], transform: move))
         #expect(h.engine.rebuildCount == rebuilds)
-        let viewport = Viewport(contentOffset: CGPoint(x: 0, y: 900), zoomScale: 1, size: h.engine.view.bounds.size, pages: h.frames)
-        let expected = CGPoint(x: rect.minX, y: rect.minY).applying(move).applying(viewport.pageToView(h.frames[1]))
+        let expected = CGPoint(x: rect.minX, y: rect.minY).applying(move).applying(CGAffineTransform(translationX: 0, y: page.frame.minY))
         let origin = CGPoint.zero.applying(h.engine.selection.lifted.affineTransform())
         #expect(abs(origin.x - expected.x) < 1e-6 && abs(origin.y - expected.y) < 1e-6)
 
         // Baked edit arrives, then the preview ends: the stroke is back, moved.
-        try h.engine.apply(#require(h.engine.snapshots[page]).page.transformEdit([id], by: move), to: page)
-        #expect(h.engine.canvasIDs == [other.id], "still lifted until the preview ends")
+        try h.engine.apply(#require(h.engine.snapshots[page.id]).page.transformEdit([id], by: move), to: page.id)
+        #expect(canvas.ids == [other.id], "still lifted until the preview ends")
         h.engine.setSelectionPreview(nil)
-        #expect(h.engine.canvasIDs == [id, other.id])
-        h.engine.canvasViewDidFinishRendering(h.engine.canvas)
+        #expect(canvas.ids == [id, other.id])
+        h.engine.canvasViewDidFinishRendering(canvas.view)
         #expect(h.engine.selection.lifted.isHidden)
         #expect(h.engine.selection.preview == nil)
     }

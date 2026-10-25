@@ -138,9 +138,16 @@ public struct PageLayout: Hashable, Sendable {
 }
 
 extension PageLayout {
+    /// The content-space rect (unzoomed points) a scroll view shows: its `bounds` (origin = content offset,
+    /// in zoomed points) divided by `zoom`. The engine's canvases and the page window come from it.
+    public static func contentRect(visible bounds: CGRect, zoom: CGFloat) -> CGRect {
+        guard zoom > 0 else { return .null }
+        return CGRect(x: bounds.minX / zoom, y: bounds.minY / zoom, width: bounds.width / zoom, height: bounds.height / zoom)
+    }
+
     /// Horizontal scroll offset clamped to the content's edges (insets included): with content narrower
     /// than the view (and insets that center it) the only valid offset is the centered one. Applied while
-    /// zooming so a pinch never drifts sideways and snaps back on release.
+    /// zooming so a narrow page stays centered through a pinch instead of rubber-banding sideways.
     static func pinnedOffsetX(
         _ x: CGFloat, contentWidth: CGFloat, viewWidth: CGFloat, leftInset: CGFloat, rightInset: CGFloat
     ) -> CGFloat {
