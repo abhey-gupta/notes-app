@@ -35,7 +35,8 @@ final class LaunchPerfTests: XCTestCase {
         }
     }
 
-    /// `notebook.open` (cover tap → editor appears) on the 100-page fixture.
+    /// `notebook.open` (cover tap → page 1's strokes in the engine) and `canvas.firstSharpTile` (→ page 1
+    /// shows sharp ink after its thumbnail, #43) on the 100-page fixture.
     @MainActor
     func testOpenNotebook() throws {
         let app = try makeApp(notebooks: 200)
@@ -49,8 +50,11 @@ final class LaunchPerfTests: XCTestCase {
             XCTAssertTrue(cover.waitForExistence(timeout: Self.timeout))
         }
         open() // warm-up: first editor open
-        let metric = XCTOSSignpostMetric(subsystem: Self.subsystem, category: "notebook", name: "notebook.open")
-        measure(metrics: [metric], options: Self.options, block: open)
+        let metrics = [
+            XCTOSSignpostMetric(subsystem: Self.subsystem, category: "notebook", name: "notebook.open"),
+            XCTOSSignpostMetric(subsystem: Self.subsystem, category: "canvas", name: "canvas.firstSharpTile"),
+        ]
+        measure(metrics: metrics, options: Self.options, block: open)
     }
 
     /// Resident memory with 1 000 notebooks: launch, then scroll the library.

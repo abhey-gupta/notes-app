@@ -10,9 +10,10 @@ let package = Package(
         .package(path: "../InkModel"),
         .package(path: "../InkGeometry"),
         .package(path: "../Document"),
+        .package(path: "../Perf"),
     ],
     targets: [
-        .target(name: "InkEnginePencilKit", dependencies: ["InkEngine", "InkModel", "InkGeometry"]),
+        .target(name: "InkEnginePencilKit", dependencies: ["InkEngine", "InkModel", "InkGeometry", "Perf"]),
         .testTarget(
             name: "InkEnginePencilKitTests",
             dependencies: [

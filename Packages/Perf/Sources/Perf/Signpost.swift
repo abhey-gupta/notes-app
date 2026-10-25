@@ -13,13 +13,14 @@ public enum Signpost: String, CaseIterable, Sendable {
     case docCheckpoint = "doc.checkpoint"
     case thumbRender = "thumb.render"
     case exportPDF = "export.pdf"
+    case pageImageRender = "page.image.render"
     /// Pages overview (#32): Pages tap → the overlay's first frame.
     case pagesOverview = "pages.overview"
 
     public static let subsystem = "com.abhey.notespace"
 
     public enum Category: String, CaseIterable, Sendable {
-        case launch, notebook, canvas, tile, stroke, doc, thumb, export, pages
+        case launch, notebook, canvas, tile, stroke, doc, thumb, export, page, pages
     }
 
     public var category: Category {
@@ -32,6 +33,7 @@ public enum Signpost: String, CaseIterable, Sendable {
         case .docCheckpoint: .doc
         case .thumbRender: .thumb
         case .exportPDF: .export
+        case .pageImageRender: .page
         case .pagesOverview: .pages
         }
     }
@@ -48,6 +50,7 @@ public enum Signpost: String, CaseIterable, Sendable {
         case .docCheckpoint: "doc.checkpoint"
         case .thumbRender: "thumb.render"
         case .exportPDF: "export.pdf"
+        case .pageImageRender: "page.image.render"
         case .pagesOverview: "pages.overview"
         }
     }
@@ -103,6 +106,7 @@ extension Signpost.Category {
     private static let docSP = OSSignposter(subsystem: Signpost.subsystem, category: "doc")
     private static let thumbSP = OSSignposter(subsystem: Signpost.subsystem, category: "thumb")
     private static let exportSP = OSSignposter(subsystem: Signpost.subsystem, category: "export")
+    private static let pageSP = OSSignposter(subsystem: Signpost.subsystem, category: "page")
     private static let pagesSP = OSSignposter(subsystem: Signpost.subsystem, category: "pages")
 
     var signposter: OSSignposter {
@@ -115,6 +119,7 @@ extension Signpost.Category {
         case .doc: Self.docSP
         case .thumb: Self.thumbSP
         case .export: Self.exportSP
+        case .page: Self.pageSP
         case .pages: Self.pagesSP
         }
     }

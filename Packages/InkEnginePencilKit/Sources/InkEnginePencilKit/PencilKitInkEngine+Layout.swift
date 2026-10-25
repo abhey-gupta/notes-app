@@ -24,7 +24,7 @@ extension PencilKitInkEngine {
         let center = CGPoint(x: visible.midX, y: visible.midY)
         let wanted = viewport.pages
             .filter { snapshots[$0.id] != nil && $0.frame.intersects(visible) }
-            .sorted { distance(center, $0.frame) < distance(center, $1.frame) }
+            .sorted { Self.distance(center, $0.frame) < Self.distance(center, $1.frame) }
             .prefix(maximumCanvases)
         let wantedIDs = Set(wanted.map(\.id))
         // A canvas mid-stroke keeps its page (even off screen), so the stroke commits where it began.
@@ -52,7 +52,7 @@ extension PencilKitInkEngine {
         }
     }
 
-    private func distance(_ p: CGPoint, _ r: CGRect) -> CGFloat {
+    static func distance(_ p: CGPoint, _ r: CGRect) -> CGFloat {
         hypot(max(r.minX - p.x, 0, p.x - r.maxX), max(r.minY - p.y, 0, p.y - r.maxY))
     }
 
@@ -101,14 +101,18 @@ extension PencilKitInkEngine {
         }
     }
 
-    /// Paper, template and ink raster for every visible page; rasters keep out of the region a canvas
-    /// has drawn.
+    /// Paper, template and ink image for every visible page; images keep out of the region a canvas
+    /// has drawn. Renders queue nearest the viewport first (`+Images`).
     func layoutPages() {
         let visible = Set(viewport.pages.map(\.id))
         for (id, view) in pageViews where !visible.contains(id) {
             view.removeFromSuperview()
             pageViews[id] = nil
         }
+        renderQueue.dropWaiting { !visible.contains($0) }
+        let center = CGPoint(x: visibleRect.midX, y: visibleRect.midY)
+        let frames = Dictionary(viewport.pages.map { ($0.id, $0.frame) }, uniquingKeysWith: { _, last in last })
+        renderQueue.priority = { page in frames[page].map { Self.distance(center, $0) } ?? .greatestFiniteMagnitude }
         let colors = PageLayerView.Colors(paper: palette.paper(theme).cgColor, line: palette.templateLine(theme).cgColor)
         let screenScale = host.window?.screen.scale ?? host.traitCollection.displayScale
         // Template marks re-rasterize at the zoom; not mid-pinch (the last settled zoom holds until then).
@@ -116,6 +120,7 @@ extension PencilKitInkEngine {
         for page in viewport.pages {
             let view = pageViews[page.id] ?? {
                 let view = PageLayerView()
+                view.crossfadeDuration = crossfadeDuration
                 pagesView.addSubview(view)
                 pageViews[page.id] = view
                 return view
@@ -123,12 +128,19 @@ extension PencilKitInkEngine {
             let snapshot = snapshots[page.id]
             view.layout(frame: page.frame, template: snapshot?.page.template ?? .blank, markScale: markScale, colors: colors)
             let canvas = canvas(for: page.id)
-            // The raster shows wherever the canvas hasn't drawn: around it (zooming out reveals more page),
+            guard var snapshot else { continue }
+            guard snapshot.isLoaded else {
+                // Strokes still loading: the thumbnail stands in for the whole page (its canvas is empty).
+                view.inkHole = nil
+                showThumbnail(view, for: page.id)
+                continue
+            }
+            // The image shows wherever the canvas hasn't drawn: around it (zooming out reveals more page),
             // all of it until the canvas has drawn, and the part a scroll or settled zoom just added.
             let drawn = canvas?.drawnRegion
             view.inkHole = drawn
-            // A page whose canvas has drawn all it covers needs its raster only while a zoom may reveal more.
-            guard var snapshot, canvas == nil || drawn != canvas?.placement?.region || viewport.isZooming else { continue }
+            // A page whose canvas has drawn all it covers needs its image only while a zoom may reveal more.
+            guard canvas == nil || drawn != canvas?.placement?.region || viewport.isZooming else { continue }
             if !selection.strokes.isEmpty {
                 // Lasso-lifted strokes are drawn by the selection layer, not a canvas or its raster.
                 let model = snapshot.page
@@ -146,39 +158,5 @@ extension PencilKitInkEngine {
     func pixelScale(for size: CGSize, screenScale: CGFloat) -> CGFloat {
         let bucket = [0.5, 1, 2, 4].first { $0 >= viewport.zoomScale } ?? 4
         return min(max(screenScale, 1) * bucket, maximumRasterDimension / max(size.width, size.height, 1))
-    }
-
-    /// Brings a page's raster up to date: snapshot strokes plus strokes still pending on the way to the
-    /// document, rendered off main by PencilKit. Whatever is on screen (current raster or a stale one from
-    /// the cache) stays until the new raster replaces it.
-    func refreshInk(_ view: PageLayerView, snapshot: PageSnapshot, pixelScale: CGFloat) {
-        let pendingStrokes = (pending[snapshot.id] ?? []).map(\.pk)
-        let key = PageLayerView.InkKey(
-            rev: snapshot.rev, theme: theme, pixelScale: pixelScale,
-            strokeCount: snapshot.strokes.count, pendingCount: pendingStrokes.count
-        )
-        guard view.shownKey != key, view.requestedKey != key else { return }
-        view.requestedKey = key
-        let job = RenderJob(page: snapshot, palette: palette, theme: theme, pending: pendingStrokes)
-        guard !job.isEmpty else {
-            view.setInk(nil, key: key)
-            return
-        }
-        let id = snapshot.id
-        if let cached = rasters.image(for: id, key: key) {
-            view.setInk(cached, key: key)
-            return
-        }
-        if view.shownKey == nil, let stale = rasters.latestImage(for: id) {
-            view.setStaleInk(stale)
-        }
-        Task { [weak self, weak view] in
-            let image = await Task.detached(priority: .userInitiated) { job.ink(scale: pixelScale) }.value
-            if let image {
-                self?.rasters.insert(image, for: id, key: key)
-            }
-            guard let view, view.requestedKey == key else { return }
-            view.setInk(image, key: key)
-        }
     }
 }

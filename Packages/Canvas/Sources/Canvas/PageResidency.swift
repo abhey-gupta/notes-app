@@ -234,8 +234,11 @@
         }
 
         private func snapshot(for id: PageID) -> PageSnapshot? {
-            let page = resident[id] ?? Page(id: id, template: templates[id] ?? .blank)
-            return PageSnapshot(page: page, size: pageSize)
+            if let page = resident[id] {
+                return PageSnapshot(page: page, size: pageSize)
+            }
+            // Not loaded yet: template only, flagged so the engine shows the page's thumbnail, not a blank page.
+            return PageSnapshot(page: Page(id: id, template: templates[id] ?? .blank), size: pageSize, isLoaded: false)
         }
     }
 #endif
