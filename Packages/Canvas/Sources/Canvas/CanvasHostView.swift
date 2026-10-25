@@ -186,11 +186,15 @@
             guard window != nil else { return }
             dismissGestures.claim(above: self)
             // After SwiftUI finishes the transition (which installs its dismiss gestures and shuffles responders).
+            // Becoming first responder waits too: the first time in a launch it takes ~50 ms on main, a dropped
+            // frame mid-zoom.
             Task { @MainActor [weak self] in
-                self?.becomeFirstResponder()
                 try? await Task.sleep(for: .milliseconds(600))
-                guard let self else { return }
+                guard let self, window != nil else { return }
                 dismissGestures.claim(above: self)
+                if !isFirstResponder {
+                    becomeFirstResponder()
+                }
             }
         }
 

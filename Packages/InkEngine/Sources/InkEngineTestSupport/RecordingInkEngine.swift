@@ -21,6 +21,8 @@ public final class RecordingInkEngine: InkEngine {
     public private(set) var applied: [(edit: PageEdit, page: PageID)] = []
     public private(set) var previews: [SelectionPreview?] = []
     public private(set) var prepared: [(strokes: Set<StrokeID>, page: PageID)] = []
+    /// Pages handed to ``prepare(_:)``.
+    public private(set) var preparedPages: [PageID] = []
     /// What ``render(page:size:scale:)`` returns.
     public var renderResult: CGImage?
 
@@ -37,6 +39,10 @@ public final class RecordingInkEngine: InkEngine {
 
     public func setPages(_ pages: [PageSnapshot]) {
         pageSets.append(pages)
+    }
+
+    public func prepare(_ page: PageSnapshot) async {
+        preparedPages.append(page.id)
     }
 
     public func setTool(_ tool: ToolConfiguration) {

@@ -111,6 +111,7 @@ Cost: the Metal engine is the single biggest engineering risk (§14). Mitigation
 
     func setViewport(_ v: Viewport)                   // content offset + zoom + visible page frames
     func setPages(_ pages: [PageSnapshot])            // immutable stroke snapshots for visible pages
+    func prepare(_ page: PageSnapshot) async          // a loaded page's setPages work, off main
     func setTool(_ tool: ToolConfiguration)
     func setTheme(_ theme: PaperTheme)
     func setPalette(_ palette: InkPalette)            // "Keep exact colors" toggled

@@ -174,6 +174,9 @@ public final class MetalInkEngine: InkEngine {
 
     public func prepareSelectionPreview(_: Set<StrokeID>, on _: PageID) {}
 
+    /// Page buffers build off main already (on `setPages`).
+    public func prepare(_: PageSnapshot) async {}
+
     public func apply(_ edit: PageEdit, to page: PageID) {
         guard let snapshot = snapshots[page] else { return }
         do {

@@ -11,6 +11,8 @@ public protocol PageSink: AnyObject {
     func setPages(_ pages: [PageSnapshot])
     /// An edit the store accepted, for a page last handed over in ``setPages(_:)`` (the echo).
     func apply(_ edit: PageEdit, to page: PageID)
+    /// A loaded page is about to go to the sink: get it ready off main (the engine converts its strokes).
+    func prepare(_ page: PageSnapshot) async
 }
 
 /// Page virtualization (ARCHITECTURE.md §5.2, §5.4): the notebook's page order, which pages' strokes are
@@ -190,6 +192,11 @@ public final class PageResidency {
         return Set(window.resident.compactMap { pageIDs.indices.contains($0) ? pageIDs[$0] : nil })
     }
 
+    private func isInEngineWindow(_ id: PageID) -> Bool {
+        guard !isClosed, let window, let index = pageIDs.firstIndex(of: id) else { return false }
+        return window.engine.contains(index)
+    }
+
     /// Starts background loads in priority order, up to the concurrency limit.
     private func pump() {
         guard !isClosed, let window else { return }
@@ -204,6 +211,9 @@ public final class PageResidency {
                     result = try await .success(store.page(id))
                 } catch {
                     result = .failure(error)
+                }
+                if case let .success(page) = result, isInEngineWindow(id) {
+                    await sink.prepare(PageSnapshot(page: page, size: pageSize))
                 }
                 self.finishLoad(id, result)
             }
@@ -297,6 +307,10 @@ public final class PageResidency {
 
         func apply(_ edit: PageEdit, to page: PageID) {
             engine.apply(edit, to: page)
+        }
+
+        func prepare(_ page: PageSnapshot) async {
+            await engine.prepare(page)
         }
     }
 #endif

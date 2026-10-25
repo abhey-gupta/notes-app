@@ -41,8 +41,11 @@ struct RootView: View {
         }
         // Library and editor chrome follow Dynamic Type up to AX1; capsules grow with it (#45).
         .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
-        // After the first frame: finish a slow/rebuilding index load, purge old trash.
-        .task { await library.start() }
+        // After the first frame: finish a slow/rebuilding index load, purge old trash, warm up the canvas.
+        .task {
+            await library.start()
+            EditorWarmUp.run()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 tools.flush()
