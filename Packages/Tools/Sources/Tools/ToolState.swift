@@ -61,7 +61,8 @@ public final class ToolState {
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let key: String
-    @ObservationIgnored private var saveTask: Task<Void, Never>?
+    /// Pending debounced write; internal so tests can await it instead of racing a clock.
+    @ObservationIgnored private(set) var saveTask: Task<Void, Never>?
 
     /// Loads persisted settings from `defaults[key]`, falling back field by field to `initial`.
     public init(
