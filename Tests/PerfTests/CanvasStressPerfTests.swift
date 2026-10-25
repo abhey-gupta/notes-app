@@ -18,12 +18,19 @@ final class CanvasStressPerfTests: XCTestCase {
     @MainActor
     func testScrollZoomStress() {
         let app = XCUIApplication()
-        app.launchArguments += ["-fixtureNotebook", "\(Self.pages)"]
-        app.launch()
         let title = FixtureGenerator(FixtureSpec(pages: Self.pages)).notebook.title
-        let cover = app.buttons["cover-\(title)"]
-        XCTAssertTrue(cover.waitForExistence(timeout: 300), "fixture not shown")
-        cover.tap()
+        app.launchArguments += ["-fixtureNotebook", "\(Self.pages)"]
+        // `PERF_FOCUS=1`: chrome collapsed (the fixture must exist already: `-openNotebook` runs at launch).
+        let focus = ProcessInfo.processInfo.environment["PERF_FOCUS"] == "1"
+        if focus {
+            app.launchArguments += ["-openNotebook", title, "-focusMode", "YES"]
+        }
+        app.launch()
+        if !focus {
+            let cover = app.buttons["cover-\(title)"]
+            XCTAssertTrue(cover.waitForExistence(timeout: 300), "fixture not shown")
+            cover.tap()
+        }
         let canvas = app.scrollViews["canvas"]
         XCTAssertTrue(canvas.waitForExistence(timeout: 60))
 
