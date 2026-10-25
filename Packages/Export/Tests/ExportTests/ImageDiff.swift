@@ -16,16 +16,9 @@ enum ReferenceRenderer {
             // Page space: origin top-left, y down, points.
             context.translateBy(x: 0, y: CGFloat(height))
             context.scaleBy(x: scale, y: -scale)
-            context.setFillColor(palette.paper(theme))
-            context.fill(CGRect(origin: .zero, size: pageSize))
-            let template = TemplateArt(page.template, pageSize: pageSize)
-            context.setStrokeColor(palette.templateLine(theme))
-            context.setFillColor(palette.templateLine(theme))
-            context.setLineWidth(TemplateArt.lineWidth)
-            context.addPath(template.lines)
-            context.strokePath()
-            context.addPath(template.dots)
-            context.fillPath()
+            TemplateGeometry.drawBackground(
+                page.template, size: pageSize, paper: palette.paper(theme), line: palette.templateLine(theme), in: context
+            )
 
             func fill(_ stroke: Stroke, alpha: CGFloat) {
                 let color = palette.ink(stroke.color, on: theme, keepsExactColors: false)

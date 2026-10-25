@@ -44,32 +44,42 @@ public struct PaperPatternView: View {
         max(0.5, spacing / Tokens.Size.templateSpacing)
     }
 
+    /// Mirrors `InkGeometry.TemplateGeometry` (which DesignSystem can't import) at `spacing / 24` view
+    /// points per page point: rules from 72 pt, grid on multiples of the spacing, Cornell 24 pt rules with
+    /// a 180 pt cue column and a 144 pt summary band.
     private func path(in size: CGSize) -> Path {
         var path = Path()
-        let top = pattern == .cornell ? spacing * 3 : spacing * (pattern == .lined ? 2.5 : 0.5)
-        let bottom = pattern == .cornell ? size.height * 0.8 : size.height
-        var y = top
-        while y < bottom {
-            path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: size.width, y: y))
-            y += spacing
+        let k = spacing / Tokens.Size.templateSpacing
+        let top = 72 * k
+        let summary = pattern == .cornell ? max(size.height - 144 * k, top) : size.height
+        func rules(from start: CGFloat) {
+            var y = start
+            while y < summary {
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                y += spacing
+            }
         }
         switch pattern {
+        case .lined, .cornell:
+            rules(from: top)
         case .grid:
-            var x = spacing / 2
+            rules(from: spacing)
+            var x = spacing
             while x < size.width {
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: size.height))
                 x += spacing
             }
-        case .cornell:
-            let cue = size.width * 0.28
-            path.move(to: CGPoint(x: cue, y: spacing * 2))
-            path.addLine(to: CGPoint(x: cue, y: bottom))
-            path.move(to: CGPoint(x: 0, y: bottom))
-            path.addLine(to: CGPoint(x: size.width, y: bottom))
         default:
             break
+        }
+        if pattern == .cornell {
+            let cue = min(180 * k, size.width / 2)
+            path.move(to: CGPoint(x: cue, y: top - spacing))
+            path.addLine(to: CGPoint(x: cue, y: summary))
+            path.move(to: CGPoint(x: 0, y: summary))
+            path.addLine(to: CGPoint(x: size.width, y: summary))
         }
         return path
     }

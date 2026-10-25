@@ -155,12 +155,12 @@ public struct PDFExporter: Sendable {
         context.setFillColor(palette.paper(theme))
         context.fill(CGRect(origin: .zero, size: size))
 
-        let template = TemplateArt(art.template, pageSize: size)
+        let template = TemplateGeometry(art.template, size: size)
         if !template.isEmpty {
             let color = palette.templateLine(theme)
             context.setStrokeColor(color)
             context.setFillColor(color)
-            context.setLineWidth(TemplateArt.lineWidth)
+            context.setLineWidth(TemplateGeometry.lineWidth)
             context.addPath(template.lines)
             context.strokePath()
             context.addPath(template.dots)

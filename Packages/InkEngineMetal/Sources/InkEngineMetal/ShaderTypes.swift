@@ -87,7 +87,7 @@ struct BackgroundUniforms: Equatable {
     var dotRadius: Float = 1
     var pad: Float = 0
 
-    /// Template geometry matches the PencilKit adapter's `TemplatePaths` (rules from y = 72 pt,
+    /// Template geometry matches `InkGeometry.TemplateGeometry` (rules from y = 72 pt,
     /// 0.75 pt hairlines, 1 pt dots, spacings clamped to ≥ 4 pt).
     init(template: PageTemplate, size: CGSize, paper: RGBA8, line: RGBA8) {
         self.paper = paper.simd
