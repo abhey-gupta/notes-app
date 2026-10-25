@@ -37,6 +37,8 @@
         public private(set) var window: PageWindow?
         /// Called when a page's strokes reached the engine (or the mirror, outside the engine window).
         public var onPageLoaded: ((PageID) -> Void)?
+        /// Called when a page leaves the window (its unflushed thumbnail should be rendered now).
+        public var onPageEvicted: ((PageID) -> Void)?
 
         private var templates: [PageID: PageTemplate]
         private var inFlight: Set<PageID> = []
@@ -74,6 +76,7 @@
             let wanted = wantedPages()
             for id in Array(resident.keys) where !wanted.contains(id) {
                 resident[id] = nil
+                onPageEvicted?(id)
                 evict(id)
             }
             pushEngine()

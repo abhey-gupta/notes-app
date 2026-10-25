@@ -26,6 +26,9 @@ final class StoreLibrary: LibraryModel {
     @ObservationIgnored private var generation: UInt64 = 0
     /// Package path (relative to the notebooks directory) by notebook, from the last snapshot.
     @ObservationIgnored private var packagePaths: [NotebookID: String] = [:]
+    /// When the editor last wrote a notebook's cover this launch; keeps the cover's cache key moving even
+    /// when the index entry (and so `modifiedAt`) didn't change.
+    @ObservationIgnored private var coverVersions: [NotebookID: Date] = [:]
 
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "library")
 
@@ -112,6 +115,15 @@ final class StoreLibrary: LibraryModel {
         perform("did save") { try await $0.didSave(manifest) }
     }
 
+    /// `cover.heic` was (re)written: the "Continue" card reloads it, with no index round trip.
+    func coverDidChange(for id: NotebookID) {
+        coverVersions[id] = Date()
+        guard let index = notebooks.firstIndex(where: { $0.id == id }) else { return }
+        var notebook = notebooks[index]
+        applyCoverVersion(to: &notebook, packagePath: packagePaths[id])
+        notebooks[index] = notebook
+    }
+
     func rename(_ id: NotebookID, to title: String) {
         if let index = notebooks.firstIndex(where: { $0.id == id }) {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -183,7 +195,19 @@ final class StoreLibrary: LibraryModel {
     }
 
     private func summary(_ entry: LibraryEntry) -> NotebookSummary {
-        NotebookSummary(entry, coverThumbnail: locations.coverThumbnailURL(for: entry))
+        var summary = NotebookSummary(entry, coverThumbnail: locations.coverThumbnailURL(for: entry))
+        applyCoverVersion(to: &summary, packagePath: entry.packagePath)
+        return summary
+    }
+
+    /// A cover written this launch: its version is the write time (if after the index's modified date),
+    /// and the file is shown even before the index entry learns it exists.
+    private func applyCoverVersion(to notebook: inout NotebookSummary, packagePath: String?) {
+        guard let written = coverVersions[notebook.id] else { return }
+        notebook.coverVersion = written > notebook.modifiedAt ? written : nil
+        if notebook.coverThumbnail == nil, let packagePath {
+            notebook.coverThumbnail = locations.notebooksURL("\(packagePath)/thumbs/cover.heic")
+        }
     }
 }
 

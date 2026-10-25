@@ -1,11 +1,11 @@
 import Canvas
+import CoreGraphics
 import Document
 import InkEngine
 import InkEnginePencilKit
 import InkModel
 import os
 import Perf
-import QuartzCore
 import Tools
 
 /// One open notebook in the editor: the wiring between canvas, engine, document and history
@@ -43,13 +43,16 @@ final class NotebookSession {
     private var initialTheme: PaperTheme
     private(set) var store: DocumentStore?
     private(set) var residency: PageResidency?
+    /// Page thumbs + cover (`+Thumbnails`, §5.5): fed on every accepted edit, flushed with the store.
+    private(set) var thumbnails: ThumbnailService?
+    var thumbnailRegeneration: Task<Void, Never>?
     private var bridge: UndoManagerBridge?
     private var tool = ToolConfiguration.default
     private var eraser = EraserRun()
     /// Stroke or partial erase (`ToolState.eraser.mode`).
     var eraserMode: EraserSettings.Mode = .stroke
     private var queue: Task<Void, Never>?
-    private var isClosed = false
+    private(set) var isClosed = false
     private var awaitingFirstPage = true
     /// Lasso selection (`+Selection`).
     var selection: LassoSelection?
@@ -99,7 +102,9 @@ final class NotebookSession {
             let pages = manifest.pages.map { (id: $0.id, template: $0.template) }
             let residency = PageResidency(store: store, engine: engine, pageSize: manifest.notebook.pageSize, pages: pages)
             residency.onPageLoaded = { [weak self] id in self?.pageLoaded(id) }
+            residency.onPageEvicted = { [weak self] id in self?.flushThumbnail(id) }
             self.residency = residency
+            thumbnails = makeThumbnailService(package: url)
             engine.setTheme(manifest.notebook.theme)
             if manifest.notebook.keepsExactColors {
                 state.keepsExactColors = true
@@ -121,9 +126,12 @@ final class NotebookSession {
         }
     }
 
-    /// Checkpoints every dirty page (scene left the foreground).
+    /// Checkpoints every dirty page and renders pending thumbnails (scene left the foreground).
     func flush() {
-        enqueue("flush") { [store] in try await store?.flush() }
+        enqueue("flush") { [store, thumbnails] in
+            try await store?.flush()
+            await thumbnails?.flush()
+        }
     }
 
     /// The editor went away: stop input, finish queued edits, checkpoint, update the library entry.
@@ -133,14 +141,17 @@ final class NotebookSession {
         engine.delegate = nil
         host.delegate = nil
         residency?.close()
+        thumbnailRegeneration?.cancel()
         bridge?.detach()
         state.edits.removeAll()
-        let (queue, store, library, id) = (queue, store, library, notebookID)
+        let (queue, store, thumbnails, library, id) = (queue, store, thumbnails, library, notebookID)
         let task = Task { @MainActor in
             await queue?.value
             guard let store else { return }
             do {
                 try await store.flush()
+                // Cover before the library entry refreshes, so the index sees `cover.heic`.
+                await thumbnails?.flush()
                 await library.documentDidSave(store.manifest)
             } catch {
                 Self.log.error("close flush failed: \(String(describing: error), privacy: .public)")
@@ -185,6 +196,7 @@ final class NotebookSession {
                 residency.setTemplate(style.defaultTemplate, for: residency.pageIDs)
             }
             await library.documentDidSave(store.manifest)
+            regenerateThumbnails()
         }
     }
 
@@ -213,6 +225,7 @@ final class NotebookSession {
             throw error
         }
         residency.didApply(edit, to: page)
+        thumbnailChanged(page)
     }
 
     private func applyHistory(_ entry: EditEntry) {
@@ -245,6 +258,7 @@ final class NotebookSession {
     // MARK: Pages
 
     private func pageLoaded(_ id: PageID) {
+        ensureThumbnails(id)
         guard awaitingFirstPage, let window = host.pageWindow,
               window.visible.contains(where: { host.layout.pageIDs[$0] == id }) else { return }
         awaitingFirstPage = false
@@ -374,27 +388,5 @@ extension NotebookSession: CanvasHostViewDelegate {
             eraser.finish(in: state.edits)
             state.edits.endAllGroups()
         }
-    }
-}
-
-/// Runs a closure on the next display refresh (one-shot `CADisplayLink`).
-@MainActor
-private final class FrameAfter: NSObject {
-    private var action: (() -> Void)?
-    private var link: CADisplayLink?
-
-    static func next(_ action: @escaping () -> Void) {
-        let frame = FrameAfter()
-        frame.action = action
-        let link = CADisplayLink(target: frame, selector: #selector(tick))
-        frame.link = link
-        link.add(to: .main, forMode: .common)
-    }
-
-    @objc private func tick() {
-        link?.invalidate()
-        link = nil
-        action?()
-        action = nil
     }
 }

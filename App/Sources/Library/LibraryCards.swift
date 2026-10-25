@@ -14,7 +14,7 @@ struct RecentCard: View {
                 PagePreview(notebook: notebook)
                     .overlay {
                         if let url = notebook.coverThumbnail {
-                            ThumbnailImage(url: url, version: notebook.modifiedAt)
+                            ThumbnailImage(url: url, version: notebook.coverVersion ?? notebook.modifiedAt)
                         }
                     }
                     .aspectRatio(Tokens.Size.recentCard.width / Tokens.Size.recentCard.height, contentMode: .fit)

@@ -14,6 +14,9 @@ let package = Package(
         .package(path: "../InkModel"),
         .package(path: "../Document"),
         .package(path: "../Perf"),
+        // Test-only: the real engine renders thumbnail fixtures; FixtureGen builds the 300-page regen case.
+        .package(path: "../InkEnginePencilKit"),
+        .package(path: "../Fixtures"),
     ],
     targets: [
         .target(
@@ -25,6 +28,14 @@ let package = Package(
                 .product(name: "Perf", package: "Perf", condition: iOS),
             ]
         ),
-        .testTarget(name: "CanvasTests", dependencies: ["Canvas"]),
+        .testTarget(
+            name: "CanvasTests",
+            dependencies: [
+                "Canvas",
+                .product(name: "InkEnginePencilKit", package: "InkEnginePencilKit", condition: iOS),
+                .product(name: "InkEngineTestSupport", package: "InkEngine", condition: iOS),
+                .product(name: "FixtureGen", package: "Fixtures", condition: iOS),
+            ]
+        ),
     ]
 )

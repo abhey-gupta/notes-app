@@ -248,7 +248,7 @@ Whole body after header compressed with `Compression` framework lz4 (`COMPRESSIO
 
 ### 5.5 Thumbnails
 
-`ThumbnailService` actor: debounced 1 s after the last edit on a page, and on page leave/close, renders `thumbs/<pageID>.heic` via `engine.render(...)` on the background command queue; also `cover.heic` when page 1 changes. The Library and pages overview read HEIC from disk only; never render on demand in UI.
+`ThumbnailService` actor (`Canvas`, #33): debounced 1 s after the last edit on a page, and on page leave/close/background, renders `thumbs/<pageID>.heic` (176×228 pt @2x, page scaled to fill, top-aligned) via `engine.render(...)` off main; also `cover.heic` (344×196 pt @2x: page 1 from (30, 26) pt, 500 pt wide, the framing of the library's paper placeholder) when page 1 changes. Rendering, HEIC encoding and the temp + `rename` write run one page at a time on a detached task; each is a `thumb.render` signpost; debug asserts none of it runs on main. Notebooks from before thumbnails existed get theirs lazily as pages load (`ensure`: two `stat`s when present); a paper or theme change regenerates every page, one in memory at a time. After `cover.heic` is written the session tells the library (`coverDidChange`), which bumps the card's cache key so the file is re-decoded without waiting for the next checkpoint's `modifiedAt`. The Library and pages overview read HEIC from disk only; never render on demand in UI.
 
 ## 6. Tools
 
