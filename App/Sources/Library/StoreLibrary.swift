@@ -42,6 +42,9 @@ final class StoreLibrary: LibraryModel {
         Self.log.info("library.index launch read \(elapsed, privacy: .public): \(index?.notebooks.count ?? -1) notebooks")
     }
 
+    /// Wait before purging trash, so launch I/O stays free.
+    static let purgeDelay = Duration.seconds(2)
+
     func start() async {
         if !isLoaded {
             let snapshot = await store.load { [weak self] snapshot in await self?.apply(snapshot) }
@@ -57,7 +60,9 @@ final class StoreLibrary: LibraryModel {
             }
         #endif
         let store = store
+        // Purge runs on the store actor, never in the first 2 s after launch (#41).
         Task(priority: .background) {
+            try? await Task.sleep(for: Self.purgeDelay)
             do {
                 try await store.purgeTrash()
             } catch {
