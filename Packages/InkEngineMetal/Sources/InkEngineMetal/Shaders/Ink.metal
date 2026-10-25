@@ -115,10 +115,9 @@ vertex StrokeOut stroke_vertex_single(uint vid [[vertex_id]],
 
 // Signed-distance edge coverage (StrokeVertex doc comment in InkGeometry), no MSAA.
 //
-// Butt (chisel) caps: every cap is drawn round (InkGeometry's butt formula `max(|y|, max(x, 0) + r)`
-// puts the whole body at d = r, i.e. 50 % coverage, since `along` is 0 throughout the body), then the
-// two ends are squared off against the stroke's end planes, which also trims the round joins of a
-// highlighter's capsule chain that would poke past its ends. Only geometry within ~1.5 radii of arc
+// Butt (chisel) caps: every cap is drawn round, then the two ends are squared off against the
+// stroke's end planes, which also trims the round joins of a highlighter's capsule chain that would
+// poke past its ends. Only geometry within ~1.5 radii of arc
 // length from an end is clipped, so a stroke curling back past its own start stays whole.
 static float strokeCoverage(StrokeOut in, StrokeStyle s, float ppp) {
     float px = 1.0 / ppp;

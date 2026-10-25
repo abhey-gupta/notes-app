@@ -16,7 +16,7 @@ import InkModel
 /// Fragment coverage (interpolated attributes, `ppp` = pixels per point):
 /// ```
 /// round caps: d = length(float2(max(edge.x, 0), edge.y))
-/// butt caps:  d = max(abs(edge.y), max(edge.x, 0) + radius)
+/// butt caps:  d = edge.x > 0 ? max(abs(edge.y), radius + edge.x) : abs(edge.y)   // ends at the end plane
 /// hard edge:  coverage = saturate((radius - d) * ppp + 0.5)
 /// soft edge:  coverage = 1 - smoothstep(radius * (1 - edgeSoftness), radius, d)   // PenProfile.edgeSoftness
 /// ```
