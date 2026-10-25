@@ -19,6 +19,7 @@ struct SharePopover: View {
     @State private var progress: Double?
     @State private var failure: String?
     @State private var task: Task<Void, Never>?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     enum Scope: CaseIterable {
         case all, current, range
@@ -35,7 +36,7 @@ struct SharePopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Export PDF")
-                .font(.system(size: 15, weight: .semibold))
+                .scaledFont(size: 15, weight: .semibold)
                 .foregroundStyle(Tokens.Colors.textPrimary)
                 .padding(.horizontal, Tokens.Spacing.xs)
                 .padding(.bottom, 12)
@@ -47,7 +48,7 @@ struct SharePopover: View {
             }
             if isNight {
                 Toggle("Export as shown", isOn: $asShown)
-                    .font(.system(size: 14, weight: .medium))
+                    .scaledFont(size: 14, weight: .medium)
                     .foregroundStyle(Tokens.Colors.textPrimary)
                     .padding(.horizontal, Tokens.Spacing.xs)
                     .padding(.top, 14)
@@ -57,15 +58,16 @@ struct SharePopover: View {
                 .padding(.top, 16)
             if let failure {
                 Text(failure)
-                    .font(.system(size: 12))
+                    .scaledFont(size: 12)
                     .foregroundStyle(.secondary)
                     .padding(.top, 8)
                     .padding(.horizontal, Tokens.Spacing.xs)
             }
         }
         .padding(Tokens.Size.popoverPadding)
-        .frame(width: Tokens.Size.popoverWidth)
+        .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
         .presentationCompactAdaptation(.popover)
+        .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         .onAppear {
             from = page.current
             to = page.total
@@ -80,7 +82,7 @@ struct SharePopover: View {
             Stepper("From page \(from)", value: $from, in: 1 ... max(to, 1))
             Stepper("To page \(to)", value: $to, in: from ... max(page.total, from))
         }
-        .font(.system(size: 14, weight: .medium))
+        .scaledFont(size: 14, weight: .medium)
         .foregroundStyle(Tokens.Colors.textPrimary)
         .monospacedDigit()
         .padding(.horizontal, Tokens.Spacing.xs)

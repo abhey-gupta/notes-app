@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// 44×40 r20 chrome button. Active = interactive glass tinted with the current ink + 4 pt ink dot.
+/// 44×40 r20 chrome button (grows with Dynamic Type, ``DynamicTypeSize/chromeScale``). Active = interactive glass tinted with the current
+/// ink + 4 pt ink dot.
 public struct ToolButton: View {
     private let symbol: Symbol
     private let label: String
@@ -12,6 +13,7 @@ public struct ToolButton: View {
     private let action: () -> Void
 
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// - Parameters:
     ///   - ink: current ink; tints the active glass and fills the dot. Defaults to primary ink.
@@ -37,17 +39,18 @@ public struct ToolButton: View {
     }
 
     public var body: some View {
+        let scale = typeSize.chromeScale
         Button(action: action) {
             Image(systemName: symbol.name)
-                .font(.system(size: iconSize, weight: .regular))
+                .font(.system(size: iconSize * scale, weight: .regular))
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(isActive ? Tokens.Colors.iconActive : Tokens.Colors.icon)
-                .frame(width: size.width, height: size.height)
+                .frame(width: size.width * scale, height: size.height * scale)
                 .overlay(alignment: .bottom) {
                     if isActive, showsDot {
                         Circle()
                             .fill(inkColor)
-                            .frame(width: Tokens.Size.activeDot, height: Tokens.Size.activeDot)
+                            .frame(width: Tokens.Size.activeDot * scale, height: Tokens.Size.activeDot * scale)
                             .padding(.bottom, 3)
                             .transition(.scale.combined(with: .opacity))
                     }

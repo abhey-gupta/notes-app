@@ -5,6 +5,7 @@ import Foundation
 import InkModel
 import Observation
 import Tools
+import UIKit
 
 /// A lasso context-bar action (§6). Each one is a single undo step.
 enum SelectionAction: Equatable {
@@ -114,7 +115,8 @@ final class EditorState {
     private func focusDeadlineReached() {
         let stillWriting = isInking || lastPenUp.map { clock.now - $0 < Self.continuityGap } ?? false
         sessionStart = nil
-        if stillWriting {
+        // VoiceOver and Switch Control walk the chrome element by element: it doesn't hide itself under them (#45).
+        if stillWriting, !UIAccessibility.isVoiceOverRunning, !UIAccessibility.isSwitchControlRunning {
             isFocused = true
         }
     }

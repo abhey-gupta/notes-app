@@ -41,7 +41,7 @@ struct PageThumb: View {
             .overlay(alignment: .topTrailing) {
                 if isSelecting {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22, weight: .semibold))
+                        .scaledFont(size: 22, weight: .semibold)
                         .foregroundStyle(Color.white, isSelected ? Tokens.Colors.selection.color : Color.black.opacity(0.35))
                         .padding(8)
                 }
@@ -49,27 +49,21 @@ struct PageThumb: View {
             .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
             .shadow(Tokens.Shadows.thumb)
             Text("\(number)")
-                .font(.system(size: 12.5, weight: isCurrent ? .semibold : .medium))
+                .scaledFont(size: 12.5, weight: isCurrent ? .semibold : .medium)
                 .foregroundStyle(isCurrent ? Tokens.Colors.selection.color : Tokens.Colors.textSecondary.color)
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelecting && isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityLabel(label)
         .accessibilityValue(entry.pattern.displayName)
+        .accessibilityHint(isSelecting ? "Toggles selection" : "Opens this page")
         .accessibilityIdentifier("page-\(number)")
     }
 
-    /// "Page 3 of 12, current" (+ ", selected").
+    /// "Page 3 of 12, current".
     private var label: String {
-        var label = "Page \(number) of \(total)"
-        if isCurrent {
-            label += ", current"
-        }
-        if isSelecting, isSelected {
-            label += ", selected"
-        }
-        return label
+        isCurrent ? "Page \(number) of \(total), current" : "Page \(number) of \(total)"
     }
 }
 
@@ -83,7 +77,7 @@ struct TemplateCapsule: View {
             height: Tokens.Size.templateCapsuleHeight, leading: Tokens.Spacing.xl, trailing: Tokens.Spacing.s, spacing: Tokens.Spacing.s
         ) {
             Text("New page")
-                .font(.system(size: 13.5, weight: .medium))
+                .scaledFont(size: 13.5, weight: .medium)
                 .foregroundStyle(Tokens.Colors.textSecondary)
                 .padding(.trailing, Tokens.Spacing.s)
                 .accessibilityHidden(true)
@@ -95,7 +89,7 @@ struct TemplateCapsule: View {
                         PaperSurface(paper, pattern: style.pattern, spacing: 4, cornerRadius: 3)
                             .frame(width: 16, height: 20)
                         Text(style.displayName)
-                            .font(.system(size: 13.5, weight: .medium))
+                            .scaledFont(size: 13.5, weight: .medium)
                             .foregroundStyle(Tokens.Colors.textPrimary)
                     }
                     .padding(.horizontal, 12)

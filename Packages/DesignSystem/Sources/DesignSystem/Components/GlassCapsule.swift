@@ -13,6 +13,8 @@ public struct GlassCapsule<Content: View>: View {
     private let spacing: CGFloat
     private let content: Content
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     /// - Parameters:
     ///   - height: thickness across `axis` (the width of a vertical capsule).
     ///   - leading, trailing: end padding along `axis` (top and bottom when vertical).
@@ -43,10 +45,15 @@ public struct GlassCapsule<Content: View>: View {
                 ? EdgeInsets(top: 0, leading: leading, bottom: 0, trailing: trailing)
                 : EdgeInsets(top: leading, leading: 0, bottom: trailing, trailing: 0)
         )
-        .frame(width: horizontal ? nil : height, height: horizontal ? height : nil)
+        // Thicker at large Dynamic Type sizes so scaled buttons and text fit (#45).
+        .frame(width: horizontal ? nil : thickness, height: horizontal ? thickness : nil)
         // Keeps content inside the glass while the capsule resizes (expanded ⇄ compact, axis re-flow).
         .clipShape(.capsule)
         .glassEffect(.regular, in: .capsule)
+    }
+
+    private var thickness: CGFloat {
+        height * typeSize.chromeScale
     }
 }
 
@@ -72,6 +79,8 @@ public struct ChromeSeparator: View {
     private let axis: Axis
     private let height: CGFloat
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     /// - Parameter height: length across the capsule.
     public init(axis: Axis = .horizontal, height: CGFloat = Tokens.Size.separator.height) {
         self.axis = axis
@@ -81,6 +90,7 @@ public struct ChromeSeparator: View {
     public var body: some View {
         let horizontal = axis == .horizontal
         let thin = Tokens.Size.separator.width
+        let height = height * typeSize.chromeScale
         let gap = Tokens.Spacing.s
         Capsule()
             .fill(Tokens.Colors.separator)

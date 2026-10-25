@@ -49,7 +49,7 @@ public struct NotebookCover: View {
                 )
             }
             .overlay(alignment: .leading) { spine }
-            .overlay(alignment: .topLeading) { label }
+            .overlay(alignment: .topLeading) { label.accessibilityHidden(true) }
             .frame(width: width, height: width * Tokens.Size.cover.height / Tokens.Size.cover.width)
             .compositingGroup()
             .shadow(color: .black.opacity(0.08), radius: 0.5, y: 1)

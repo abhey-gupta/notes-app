@@ -1,3 +1,4 @@
+import DesignSystem
 import InkModel
 import Perf
 import SwiftUI
@@ -38,6 +39,8 @@ struct RootView: View {
                 }
             }
         }
+        // Library and editor chrome follow Dynamic Type up to AX1; capsules grow with it (#45).
+        .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         // After the first frame: finish a slow/rebuilding index load, purge old trash.
         .task { await library.start() }
         .onChange(of: scenePhase) { _, phase in

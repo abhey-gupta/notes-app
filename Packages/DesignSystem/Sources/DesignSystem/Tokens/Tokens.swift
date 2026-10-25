@@ -18,8 +18,8 @@ public enum Tokens {
         public static let glassBorder = DynamicColor(light: RGBA(0x000000, alpha: 0.07), dark: RGBA(0xFFFFFF, alpha: 0.10))
 
         public static let textPrimary = DynamicColor(light: RGBA(0x1E2129), dark: RGBA(0xECECEE))
-        public static let textSecondary = DynamicColor(light: RGBA(0x8A8C92), dark: RGBA(0xA9ABB2))
-        public static let textTertiary = DynamicColor(light: RGBA(0x9A9CA3), dark: RGBA(0x8D8F96))
+        public static let textSecondary = DynamicColor(light: RGBA(0x666970), dark: RGBA(0xA9ABB2))
+        public static let textTertiary = DynamicColor(light: RGBA(0x6A6D74), dark: RGBA(0x8D8F96))
 
         /// Toolbar glyphs at rest / active.
         public static let icon = DynamicColor(light: RGBA(0x3A3D45), dark: RGBA(0xD6D7DB))

@@ -1,5 +1,6 @@
 import CoreText
 @testable import DesignSystem
+import SwiftUI
 import Testing
 import UIKit
 
@@ -74,6 +75,35 @@ struct TokenTests {
         #expect(Tokens.Size.toolButton == CGSize(width: 44, height: 40))
         #expect(Tokens.Size.toolButton.height == 2 * Tokens.Radius.toolButton)
         #expect(Tokens.Size.swatch == 22)
+    }
+
+    /// Text tokens meet WCAG AA (4.5:1) on the library and desk in both appearances, and the cover label's
+    /// print on its paper (#45; the audit samples glass and cover art pixels, so this checks the tokens).
+    @Test(arguments: [ColorScheme.light, .dark])
+    func textMeetsAAContrast(scheme: ColorScheme) {
+        let colors = Tokens.Colors.self
+        let library = [colors.textPrimary, colors.textSecondary, colors.textTertiary, colors.chipText, colors.pillText]
+        let desk = [colors.textPrimary, colors.textSecondary, colors.pillText]
+        for (background, texts) in [(colors.libraryBackground, library), (colors.desk, desk)] {
+            let bg = background.resolved(for: scheme)
+            for text in texts {
+                #expect(text.resolved(for: scheme).contrastRatio(against: bg) >= 4.5, "\(text) on \(background)")
+            }
+        }
+        let label = CoverColor.label.opacity(1)
+        #expect(CoverColor.labelText.contrastRatio(against: label) >= 4.5)
+        #expect(CoverColor.labelCaption.contrastRatio(against: label) >= 4.5)
+    }
+
+    /// Chrome keeps mock geometry up to the default text size, grows with larger sizes, stops at AX1 (#45).
+    @Test func chromeScaleFollowsDynamicTypeUpToAX1() {
+        #expect(DynamicTypeSize.xSmall.chromeScale == 1)
+        #expect(DynamicTypeSize.large.chromeScale == 1)
+        let sizes = DynamicTypeSize.allCases.filter { $0 >= .large && $0 <= .chromeLimit }
+        for (smaller, larger) in zip(sizes, sizes.dropFirst()) {
+            #expect(smaller.chromeScale < larger.chromeScale)
+        }
+        #expect(DynamicTypeSize.accessibility5.chromeScale == DynamicTypeSize.accessibility1.chromeScale)
     }
 }
 

@@ -71,6 +71,9 @@ struct PagesOverview: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pagesOverview")
+        // VoiceOver stays in the overlay; two-finger scrub leaves select mode, then the overview.
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { isSelecting ? endSelecting() : model.dismiss() }
         .accessibilityValue(model.openMilliseconds.map { String(format: "%.1f ms", $0) } ?? "")
     }
 
@@ -83,8 +86,9 @@ struct PagesOverview: View {
                     .font(.pagesHeading)
                     .foregroundStyle(Tokens.Colors.textPrimary)
                     .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
                 Text(EditedLabel.pages(model.entries.count))
-                    .font(.system(size: 13, weight: .medium))
+                    .scaledFont(size: 13, weight: .medium)
                     .foregroundStyle(Tokens.Colors.textSecondary)
                     .contentTransition(.numericText())
                     .accessibilityIdentifier("pagesCount")
@@ -154,6 +158,7 @@ struct PagesOverview: View {
         .animation(.snappy(duration: 0.18), value: dragging)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { frames[index] = $0 }
         .onTapGesture { tapped(entry, at: index) }
+        .accessibilityAction { tapped(entry, at: index) }
         .gesture(isSelecting ? nil : reorderGesture(from: index))
         .accessibilityActions {
             if index > 0 {

@@ -25,20 +25,23 @@ struct RecentCard: View {
                         $0.clipShape(.rect(cornerRadius: Tokens.Size.recentRadius))
                     }
                 Text(notebook.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .scaledFont(size: 14, weight: .semibold)
                     .foregroundStyle(Tokens.Colors.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .padding(.top, 12)
                 Text(EditedLabel.recent(notebook))
                     .font(.meta)
                     .foregroundStyle(Tokens.Colors.textSecondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .padding(.top, 3)
             }
             .contentShape(.rect)
         }
         .buttonStyle(PressableStyle())
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(notebook.title)
+        .accessibilityValue(EditedLabel.recent(notebook))
+        .accessibilityHint("Opens the notebook")
         .accessibilityIdentifier("recent-\(notebook.title)")
     }
 }
@@ -132,9 +135,9 @@ struct CoverTile: View {
                         $0.clipShape(.rect(cornerRadius: Tokens.Radius.coverEdge))
                     }
                 Text(notebook.title)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .scaledFont(size: 13.5, weight: .semibold)
                     .foregroundStyle(Tokens.Colors.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .padding(.top, 12)
                 Text(EditedLabel.pages(notebook.pageCount))
                     .font(.meta)
@@ -146,6 +149,9 @@ struct CoverTile: View {
         }
         .buttonStyle(PressableStyle())
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(notebook.title)
+        .accessibilityValue([folder, EditedLabel.pages(notebook.pageCount)].compactMap(\.self).joined(separator: ", "))
+        .accessibilityHint("Opens the notebook")
         .accessibilityIdentifier("cover-\(notebook.title)")
     }
 }

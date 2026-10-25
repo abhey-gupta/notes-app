@@ -64,7 +64,7 @@ final class PagesOverviewTests: XCTestCase {
         // Delete the blank Cornell page: no ink, so no confirmation.
         app.buttons["pagesSelect"].tap()
         first.tap()
-        XCTAssertEqual(first.label, "Page 1 of 12, selected")
+        XCTAssertTrue(first.isSelected, "selected trait")
         let delete = app.buttons["pagesDelete"]
         XCTAssertTrue(delete.waitForExistence(timeout: 3))
         delete.tap()

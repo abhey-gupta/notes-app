@@ -19,6 +19,7 @@ struct LibraryScreen: View {
     @State private var isCreating = false
     @State private var prompt: LibraryPrompt?
     @Namespace private var chipSelection
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private let margin = Tokens.Spacing.libraryMargin
 
@@ -28,6 +29,7 @@ struct LibraryScreen: View {
                 if query.isEmpty, !library.recents.isEmpty {
                     Text("Continue")
                         .sectionLabelStyle()
+                        .accessibilityAddTraits(.isHeader)
                         .padding(.horizontal, margin)
                     recents
                         .padding(.top, Tokens.Spacing.l)
@@ -81,10 +83,11 @@ struct LibraryScreen: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: Symbol.search.name)
-                .font(.system(size: 16, weight: .medium))
+                .scaledFont(size: 16, weight: .medium)
                 .foregroundStyle(Tokens.Colors.textSecondary)
+                .accessibilityHidden(true)
             TextField("Search notebooks", text: $query)
-                .font(.system(size: 15))
+                .scaledFont(size: 15)
                 .textFieldStyle(.plain)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -96,7 +99,9 @@ struct LibraryScreen: View {
             }
         }
         .padding(.horizontal, Tokens.Spacing.l)
-        .frame(width: 250, height: 40)
+        .padding(.vertical, Tokens.Spacing.xs)
+        .frame(width: 250 * typeSize.chromeScale)
+        .frame(minHeight: 40)
         .glassEffect(.regular.interactive(), in: .capsule)
     }
 
@@ -105,7 +110,7 @@ struct LibraryScreen: View {
             showsSettings = true
         } label: {
             Image(systemName: Symbol.settings.name)
-                .font(.system(size: 17, weight: .medium))
+                .scaledFont(size: 17, weight: .medium)
                 .foregroundStyle(Tokens.Colors.pillText)
                 .frame(width: 40, height: 40)
                 .contentShape(.circle)
@@ -126,10 +131,11 @@ struct LibraryScreen: View {
                 .font(.chromeTitle)
                 .foregroundStyle(Tokens.Colors.libraryBackground)
                 .padding(.horizontal, 2)
-                .frame(height: 28)
+                .frame(minHeight: 28)
         }
         .buttonStyle(.glassProminent)
         .tint(Tokens.Colors.textPrimary.color)
+        .fixedSize()
         .accessibilityIdentifier("newNotebook")
     }
 
@@ -160,6 +166,8 @@ struct LibraryScreen: View {
         HStack(spacing: Tokens.Spacing.s) {
             Text("Notebooks")
                 .sectionLabelStyle()
+                .fixedSize()
+                .accessibilityAddTraits(.isHeader)
                 .padding(.trailing, Tokens.Spacing.l)
             chip("All", id: nil)
             ForEach(library.folders) { folder in
@@ -178,10 +186,12 @@ struct LibraryScreen: View {
                 prompt = .newFolder
             } label: {
                 Text("+ Folder")
-                    .font(.system(size: 13, weight: .medium))
+                    .scaledFont(size: 13, weight: .medium)
                     .foregroundStyle(Tokens.Colors.textTertiary)
                     .padding(.horizontal, Tokens.Spacing.l)
                     .padding(.vertical, 7)
+                    .frame(minHeight: 44)
+                    .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("newFolder")
@@ -196,42 +206,16 @@ struct LibraryScreen: View {
                 HStack(spacing: 4) {
                     Text("Sorted by \(sort.rawValue)")
                     Image(systemName: Symbol.disclosure.name)
-                        .font(.system(size: 10, weight: .semibold))
+                        .scaledFont(size: 10, weight: .semibold)
                 }
-                .font(.system(size: 13, weight: .medium))
+                .scaledFont(size: 13, weight: .medium)
                 .foregroundStyle(Tokens.Colors.textSecondary)
+                .frame(minHeight: 44)
+                .contentShape(.rect)
             }
             .menuIndicator(.hidden)
             .buttonStyle(.plain)
         }
-    }
-
-    private func chip(_ name: String, id: FolderID?) -> some View {
-        let selected = folder == id
-        return Button {
-            withAnimation(.snappy(duration: 0.25)) { folder = id }
-        } label: {
-            Text(name)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(selected ? Tokens.Colors.libraryBackground : Tokens.Colors.chipText)
-                .padding(.horizontal, Tokens.Spacing.l)
-                .padding(.vertical, 7)
-                .background {
-                    if selected {
-                        Capsule()
-                            .fill(Tokens.Colors.textPrimary)
-                            .matchedGeometryEffect(id: "chip", in: chipSelection)
-                    }
-                }
-                .contentShape(.capsule)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    private var shownNotebooks: [NotebookSummary] {
-        let notebooks = library.notebooks(in: folder, matching: query)
-        return sort == .recent ? notebooks : notebooks.sorted(by: sort)
     }
 
     @ViewBuilder
@@ -241,7 +225,7 @@ struct LibraryScreen: View {
             // Hidden while a slow index load/rebuild is still running: never flash "No notebooks yet".
             if library.isLoaded {
                 Text(query.isEmpty ? "No notebooks yet. Tap New to start one." : "No notebooks match “\(query)”.")
-                    .font(.system(size: 15))
+                    .scaledFont(size: 15)
                     .foregroundStyle(Tokens.Colors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, Tokens.Spacing.xxxl)
@@ -268,6 +252,36 @@ struct LibraryScreen: View {
 }
 
 extension LibraryScreen {
+    // MARK: Folders
+
+    private func chip(_ name: String, id: FolderID?) -> some View {
+        let selected = folder == id
+        return Button {
+            withAnimation(.snappy(duration: 0.25)) { folder = id }
+        } label: {
+            Text(name)
+                .scaledFont(size: 13, weight: .medium)
+                .foregroundStyle(selected ? Tokens.Colors.libraryBackground : Tokens.Colors.chipText)
+                .padding(.horizontal, Tokens.Spacing.l)
+                .padding(.vertical, 7)
+                .background {
+                    if selected {
+                        Capsule()
+                            .fill(Tokens.Colors.textPrimary)
+                            .matchedGeometryEffect(id: "chip", in: chipSelection)
+                    }
+                }
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var shownNotebooks: [NotebookSummary] {
+        let notebooks = library.notebooks(in: folder, matching: query)
+        return sort == .recent ? notebooks : notebooks.sorted(by: sort)
+    }
+
     /// Package + index entry first, then the editor: no interim library state (§8).
     private func create(_ draft: NotebookDraft) {
         guard !isCreating else { return }
