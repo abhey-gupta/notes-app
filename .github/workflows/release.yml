@@ -19,15 +19,22 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - run: export PATH="$PATH_PREFIX:$PATH" && make ipa
+      - name: Build .ipa
+        run: |
+          export PATH="$PATH_PREFIX:$PATH"
+          # Tag v1.2.3 → version 1.2.3; manual runs keep project.yml's version. Build = run number.
+          VERSION=""; [[ "$GITHUB_REF" == refs/tags/v* ]] && VERSION="${GITHUB_REF_NAME#v}"
+          make ipa VERSION="$VERSION" BUILD="${{ github.run_number }}"
       - uses: actions/upload-artifact@v4
         with:
           name: Notespace-ipa
-          path: build/Notespace.ipa
+          path: |
+            build/Notespace.ipa
+            build/Notespace.dSYM.zip
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           export PATH="$PATH_PREFIX:$PATH"
-          gh release create "$GITHUB_REF_NAME" build/Notespace.ipa --generate-notes
+          gh release create "$GITHUB_REF_NAME" build/Notespace.ipa build/Notespace.dSYM.zip --generate-notes

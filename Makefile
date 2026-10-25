@@ -22,18 +22,21 @@ test-packages:
 build: gen
 	set -o pipefail; xcodebuild build -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(XCB)
 
-# Unsigned Release .ipa for sideloading (AltStore/SideStore re-sign it with your Apple ID).
+# Unsigned Release .ipa + dSYM zip for sideloading (AltStore/SideStore re-sign it with your Apple ID).
+# VERSION/BUILD override MARKETING_VERSION/CURRENT_PROJECT_VERSION (release.yml: tag, run number).
 IPA_DD := build/ipa
+IPA_VERSION := $(if $(VERSION),MARKETING_VERSION=$(VERSION)) $(if $(BUILD),CURRENT_PROJECT_VERSION=$(BUILD))
 
 ipa: gen
 	set -o pipefail; xcodebuild build -project Notespace.xcodeproj -scheme Notespace -configuration Release \
 		-destination 'generic/platform=iOS' -derivedDataPath $(IPA_DD) \
-		CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= $(XCB)
-	rm -rf $(IPA_DD)/Payload build/Notespace.ipa
+		CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= $(IPA_VERSION) $(XCB)
+	rm -rf $(IPA_DD)/Payload build/Notespace.ipa build/Notespace.dSYM.zip
 	mkdir -p $(IPA_DD)/Payload
 	cp -R $(IPA_DD)/Build/Products/Release-iphoneos/Notespace.app $(IPA_DD)/Payload/
 	cd $(IPA_DD) && zip -qry ../Notespace.ipa Payload
-	@echo "▸ build/Notespace.ipa"
+	cd $(IPA_DD)/Build/Products/Release-iphoneos && zip -qry ../../../../Notespace.dSYM.zip Notespace.app.dSYM
+	@echo "▸ build/Notespace.ipa, build/Notespace.dSYM.zip"
 
 # No post-failure diagnostics (can hang 10 min); retry flaky UI gestures once.
 TESTFLAGS := -collect-test-diagnostics never -retry-tests-on-failure -test-iterations 2
