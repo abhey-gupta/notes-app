@@ -48,9 +48,8 @@ final class NotebookSession {
     var thumbnailRegeneration: Task<Void, Never>?
     /// The one path for changes to the notebook (strokes, erasing, selection, pages, undo); set by ``open()``.
     private(set) var edits: EditPipeline?
-    private var tool = ToolConfiguration.default
-    /// Stroke or partial erase (`ToolState.eraser.mode`).
-    var eraserMode: EraserSettings.Mode = .stroke
+    /// The toolbar's current tool (``setTool(_:allowsFingerDrawing:)``); erasing reads its mode and size.
+    private var tool = ActiveTool.ink(.ballpoint, color: .primary, width: 2)
     private(set) var isClosed = false
     private var awaitingFirstPage = true
     var awaitingFirstSharp = true
@@ -175,13 +174,13 @@ final class NotebookSession {
 
     // MARK: Settings
 
-    func setTool(_ configuration: ToolConfiguration) {
-        if configuration.tool != .lasso {
+    func setTool(_ tool: ActiveTool, allowsFingerDrawing: Bool) {
+        if tool != .lasso {
             clearSelection()
         }
-        tool = configuration
-        engine.setTool(configuration)
-        host.allowsFingerDrawing = configuration.allowsFingerDrawing
+        self.tool = tool
+        engine.setTool(tool.configuration(allowsFingerDrawing: allowsFingerDrawing))
+        host.allowsFingerDrawing = allowsFingerDrawing
     }
 
     /// Paper color and pattern from the title menu: the engine re-themes at once; the pattern becomes the
@@ -271,7 +270,8 @@ extension NotebookSession: InkEngineDelegate {
     /// Each batch is applied at once (stroke mode removes the strokes it touched, partial mode splits them,
     /// highlighter included); at gesture end ``EditPipeline`` collapses the batches into one undo step.
     func engine(_: any InkEngine, didReceiveEraser samples: [Sample], to page: PageID) {
-        edits?.erase(samples, on: page, diameter: tool.width, mode: eraserMode)
+        guard case let .eraser(eraser) = tool else { return }
+        edits?.erase(samples, on: page, diameter: eraser.width, mode: eraser.mode)
     }
 
     /// A finished lasso: strokes with ≥ 50 % of their samples inside become the selection (`+Selection`).
@@ -285,7 +285,7 @@ extension NotebookSession: InkEngineDelegate {
         if !host.isFirstResponder {
             host.becomeFirstResponder()
         }
-        edits?.beginGesture(erasing: tool.tool == .eraser)
+        edits?.beginGesture(erasing: tool.isEraser)
     }
 }
 

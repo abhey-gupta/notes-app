@@ -265,7 +265,7 @@ As built (#32, mock §04): `PagesOverview` is a SwiftUI overlay in the editor's 
 
 ## 6. Tools
 
-`Tools` package, headless-tested. `ToolState` is an `@Observable` main-actor object: current tool, per-tool settings (persisted in `UserDefaults` as a Codable blob), three quick-color slots (default `#1E2129`, `#2C4FD6`, `#D2402F`).
+`Tools` package, headless-tested. `ToolState` is an `@Observable` main-actor object: current tool, per-tool settings (persisted in `UserDefaults` as a Codable blob), three quick-color slots (default `#1E2129`, `#2C4FD6`, `#D2402F`). The editor gets one value from it, `ToolState.active` (`ActiveTool`: ink with kind/color/width, eraser with mode/size, or lasso — only what that tool uses); the session derives the engine's `ToolConfiguration` and the erase settings from it, and settings of other tools or the toolbar don't reach it.
 
 - **Pens**: fountain / ballpoint / brush, 5 widths (3/5/8/11/15 mock units → pt widths 1.5/2.5/4/6/8), pressure toggle, 11-color palette + custom.
 - **Highlighter**: 3 widths, palette subset, multiply, under-ink (§3.3).
