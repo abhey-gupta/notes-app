@@ -70,6 +70,11 @@ public struct NotebookPackage: Sendable {
 
     /// `thumbs/`.
     public var thumbnailsDirectory: URL {
+        Self.thumbnailsDirectory(in: url)
+    }
+
+    /// `thumbs/` of the package at `url` (for the thumbnail service, which doesn't open the package).
+    public static func thumbnailsDirectory(in url: URL) -> URL {
         url.appending(path: "thumbs", directoryHint: .isDirectory)
     }
 

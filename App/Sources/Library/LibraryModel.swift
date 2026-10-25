@@ -32,6 +32,8 @@ protocol LibraryModel: AnyObject, Observable {
     /// The editor's store wrote the manifest (checkpoint, page added, paper changed): refresh the entry
     /// (modified date, page count, cover thumbnail…).
     func documentDidSave(_ manifest: Manifest)
+    /// The editor wrote `thumbs/cover.heic` (§5.5): show the new file even if the manifest didn't change.
+    func coverDidChange(for id: NotebookID)
     func rename(_ id: NotebookID, to title: String)
     func move(_ id: NotebookID, to folder: FolderID?)
     func duplicate(_ id: NotebookID)
@@ -44,6 +46,9 @@ protocol LibraryModel: AnyObject, Observable {
 }
 
 extension LibraryModel {
+    /// Covers come from disk only where a `LibraryStore` backs the model; sample libraries have none.
+    func coverDidChange(for _: NotebookID) {}
+
     /// "Continue" row: last 6 by modified (`notebooks` is already in that order).
     var recents: [NotebookSummary] {
         Array(notebooks.prefix(6))
@@ -77,6 +82,9 @@ struct NotebookSummary: Identifiable, Hashable, LibraryItem {
     var pageSize: CGSize = Notebook.a4Portrait
     /// `thumbs/cover.heic`, when the notebook has one (§5.5). Recents show it over the paper preview.
     var coverThumbnail: URL?
+    /// When `coverThumbnail` last changed, if later than `modifiedAt` (the cover is written before the
+    /// checkpoint that bumps the modified date, and on its own for older notebooks).
+    var coverVersion: Date?
     /// Placeholder ink on fixture pages (`SampleLibrary` only). Nil = blank notebook.
     var sampleInk: SampleInk.Kind?
 }
