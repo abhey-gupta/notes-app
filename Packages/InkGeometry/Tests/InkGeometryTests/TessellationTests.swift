@@ -225,10 +225,13 @@ struct CoverageFormulaTests {
     private static let ppp: Float = 2
 
     private static func coverage(edge: Point2, radius: Float, butt: Bool) -> Float {
-        let d = if butt {
-            edge.x > 0 ? max(abs(edge.y), radius + edge.x) : abs(edge.y)
+        let along = max(edge.x, 0)
+        let d: Float = if !butt {
+            (along * along + edge.y * edge.y).squareRoot()
+        } else if edge.x > 0 {
+            max(abs(edge.y), radius + edge.x)
         } else {
-            (max(edge.x, 0) * max(edge.x, 0) + edge.y * edge.y).squareRoot()
+            abs(edge.y)
         }
         return min(max((radius - d) * ppp + 0.5, 0), 1)
     }
