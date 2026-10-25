@@ -272,6 +272,7 @@ extension LibraryScreen {
     private func create(_ draft: NotebookDraft) {
         guard !isCreating else { return }
         isCreating = true
+        OpenTrace.beginCreate()
         Task {
             defer { isCreating = false }
             do {
@@ -280,6 +281,7 @@ extension LibraryScreen {
                 query = ""
                 open(EditorRoute(id: notebook.id, source: .cover))
             } catch {
+                OpenTrace.cancel()
                 Logger(subsystem: "com.abhey.notespace", category: "library")
                     .error("create: \(error.localizedDescription, privacy: .public)")
             }
