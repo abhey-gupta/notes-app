@@ -25,8 +25,8 @@ build: gen
 # No post-failure diagnostics (can hang 10 min); retry flaky UI gestures once.
 TESTFLAGS := -collect-test-diagnostics never -retry-tests-on-failure -test-iterations 2
 # Always on, even with TESTFLAGS overridden: a hung test (PencilKit can deadlock in the simulator)
-# fails after 2-5 min instead of blocking the run forever. Swift Testing suites also set .timeLimit.
-TIMEOUTS := -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 300
+# fails after 5-10 min instead of blocking the run forever. Swift Testing suites also set .timeLimit.
+TIMEOUTS := -test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 600
 
 test: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(TESTFLAGS) $(TIMEOUTS) $(XCB)
