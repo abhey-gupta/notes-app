@@ -11,6 +11,7 @@ import UIKit
 
 /// PencilKit strokes as the canvas captures them must come back from the model and the file format
 /// exactly: same control points, ink and seed, same pixels (#71).
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct LosslessRoundTripTests {
     /// Colors exactly representable in 8-bit sRGB, so `.custom(RGBA8)` round-trips them.
@@ -189,6 +190,7 @@ struct LosslessRoundTripTests {
 }
 
 /// RGBA8 pixels of an image, for exact comparisons.
+@Suite(.timeLimit(.minutes(2)))
 struct Pixels {
     let width: Int
     let height: Int

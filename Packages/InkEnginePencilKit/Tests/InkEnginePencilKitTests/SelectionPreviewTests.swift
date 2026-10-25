@@ -7,6 +7,7 @@ import Testing
 import UIKit
 
 /// Lasso chrome in the engine (#29): live path, lifted-strokes drag preview.
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct SelectionPreviewTests {
     @Test func lassoDrawsItsLivePathInContentSpace() {

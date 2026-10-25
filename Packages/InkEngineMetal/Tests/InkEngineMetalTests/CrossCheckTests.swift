@@ -8,6 +8,7 @@ import Testing
 
 /// Same fixtures through both engines (ARCHITECTURE.md §13): the looks differ by design (our pen
 /// profiles vs PencilKit's inks), but the ink must land in the same places at about the same size.
+@Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct CrossCheckTests {
     struct Agreement {
