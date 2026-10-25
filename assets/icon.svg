@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#dc2626"/>
-  <text x="32" y="32" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="26" font-weight="600" fill="#ffffff">NA</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FBFAF7"/><stop offset="1" stop-color="#E9E5DC"/></linearGradient></defs>
+  <rect width="100" height="100" rx="22.5" fill="url(#bg)"/>
+  <path d="M22 64 C34 64 40 30 52 32 C62 34 50 62 42 58 C36 54 56 40 64 48 C70 54 72 62 80 60" fill="none" stroke="#1E2129" stroke-width="5.5" stroke-linecap="round"/>
+  <circle cx="72" cy="30" r="5" fill="#E0A400"/>
 </svg>
