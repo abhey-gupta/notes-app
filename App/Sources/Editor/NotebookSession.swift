@@ -1,5 +1,6 @@
 import Canvas
 import CoreGraphics
+import enum DesignSystem.Tokens
 import Document
 import Editing
 import InkEngine
@@ -237,6 +238,7 @@ final class NotebookSession {
         let palette = DesignSystemInkPalette()
         // PencilKit is the ink engine (spike #16, ARCHITECTURE.md §3); the Metal engine stays unwired.
         let engine = PencilKitInkEngine(palette: palette)
+        engine.crossfadeDuration = Tokens.Motion.thumbnailCrossfadeDuration
         engine.setTheme(initialTheme)
         installPageImages(on: engine)
         let host = CanvasHostView(engine: engine)

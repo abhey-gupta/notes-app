@@ -14,6 +14,7 @@ final class Recorder: InkEngineDelegate {
     var eraser: [([Sample], PageID)] = []
     var lassos: [([CGPoint], PageID)] = []
     var begins = 0
+    var sharp: [PageID] = []
     /// Echo commits back like the document does.
     var echo: ((Stroke, PageID) -> Void)?
 
@@ -32,6 +33,10 @@ final class Recorder: InkEngineDelegate {
 
     func engineDidBeginStroke(_: any InkEngine) {
         begins += 1
+    }
+
+    func engine(_: any InkEngine, didShowSharpInkOn page: PageID) {
+        sharp.append(page)
     }
 }
 

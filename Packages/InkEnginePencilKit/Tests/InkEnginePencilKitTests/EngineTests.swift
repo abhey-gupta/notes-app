@@ -13,6 +13,7 @@ final class Recorder: InkEngineDelegate {
     var eraser: [([Sample], PageID)] = []
     var lassos: [([CGPoint], PageID)] = []
     var begins = 0
+    var sharp: [PageID] = []
 
     func engine(_: any InkEngine, didCommit stroke: Stroke, to page: PageID) {
         commits.append((stroke, page))
@@ -28,6 +29,10 @@ final class Recorder: InkEngineDelegate {
 
     func engineDidBeginStroke(_: any InkEngine) {
         begins += 1
+    }
+
+    func engine(_: any InkEngine, didShowSharpInkOn page: PageID) {
+        sharp.append(page)
     }
 }
 

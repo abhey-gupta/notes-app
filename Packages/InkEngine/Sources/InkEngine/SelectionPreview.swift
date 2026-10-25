@@ -19,10 +19,3 @@ public struct SelectionPreview: Hashable, Sendable {
         self.transform = transform
     }
 }
-
-public extension InkEngine {
-    /// Engines without a preview path show the strokes in place until the baked edit arrives.
-    func setSelectionPreview(_: SelectionPreview?) {}
-
-    func prepareSelectionPreview(_: Set<StrokeID>, on _: PageID) {}
-}

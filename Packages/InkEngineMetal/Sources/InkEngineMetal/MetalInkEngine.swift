@@ -38,12 +38,16 @@ public final class MetalInkEngine: InkEngine {
     }
 
     public weak var delegate: (any InkEngineDelegate)?
+    /// Unused: the live lasso path is drawn in the palette's primary ink.
+    public var selectionColor: UIColor = .systemBlue
+    /// Unused: pages draw from geometry at once, with no thumbnail phase.
+    public var thumbnailURL: ((PageID) -> URL?)?
 
     /// Pen-to-pixel latency (touch timestamp → presented time), also shown in the debug HUD.
     public let latency = LatencyProbe()
 
     let gpu: GPUContext
-    let palette: any InkPalette
+    private(set) var palette: any InkPalette
     let hostView: MetalInkView
     let content: any CommittedContentRenderer
     let ring: FrameBufferRing
@@ -157,6 +161,19 @@ public final class MetalInkEngine: InkEngine {
         driver.requestFrame()
     }
 
+    public func setPalette(_ palette: any InkPalette) {
+        self.palette = palette
+        for id in snapshots.keys {
+            scheduleBuild(id)
+        }
+        driver.requestFrame()
+    }
+
+    /// No lifted-strokes preview: selected strokes stay in place until the baked edit arrives.
+    public func setSelectionPreview(_: SelectionPreview?) {}
+
+    public func prepareSelectionPreview(_: Set<StrokeID>, on _: PageID) {}
+
     public func apply(_ edit: PageEdit, to page: PageID) {
         guard let snapshot = snapshots[page] else { return }
         do {
@@ -173,6 +190,7 @@ public final class MetalInkEngine: InkEngine {
         scheduleBuild(page)
     }
 
+    /// Redraws `rect` (page space) of `page`.
     public func invalidate(_ rect: CGRect, in page: PageID) {
         guard let snapshot = snapshots[page] else { return }
         for stroke in snapshot.strokes where stroke.bounds.intersects(rect) {
@@ -236,6 +254,7 @@ public final class MetalInkEngine: InkEngine {
         }
         content.setNeedsUpdate(page: page, rect: nil)
         driver.requestFrame()
+        delegate?.engine(self, didShowSharpInkOn: page)
     }
 
     private func cachedGeometry(for strokes: [Stroke]) -> [StrokeID: StrokeGeometry] {

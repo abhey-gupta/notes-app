@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import InkModel
 import UIKit
 
@@ -25,10 +26,15 @@ public protocol InkEngine: AnyObject {
     func setTool(_ tool: ToolConfiguration)
     /// Paper theme; ink colors resolve against it at render time.
     func setTheme(_ theme: PaperTheme)
+    /// Replaces the color source (e.g. the notebook's "Keep exact colors" changed) and redraws.
+    func setPalette(_ palette: any InkPalette)
+    /// Color of the live lasso path.
+    var selectionColor: UIColor { get set }
+    /// `thumbs/<page>.heic` for a page: what an engine that draws ink asynchronously shows while a page's
+    /// strokes load or its first raster renders. `nil`: flat paper meanwhile. Engines that draw at once ignore it.
+    var thumbnailURL: ((PageID) -> URL?)? { get set }
     /// Applies an edit the document already accepted (commit echo, undo/redo, lasso, erase).
     func apply(_ edit: PageEdit, to page: PageID)
-    /// Redraws `rect` (page space) of `page`.
-    func invalidate(_ rect: CGRect, in page: PageID)
     /// Lasso drag preview: lifts the strokes and draws them transformed; `nil` puts them back (call it
     /// after the baked edit has been applied, so they reappear where they landed). Called every drag frame.
     func setSelectionPreview(_ preview: SelectionPreview?)
@@ -52,4 +58,7 @@ public protocol InkEngineDelegate: AnyObject {
     func engine(_ engine: any InkEngine, didReceiveLasso path: [CGPoint], to page: PageID)
     /// A pen, eraser or lasso gesture began (focus-mode chrome collapse; new eraser gesture).
     func engineDidBeginStroke(_ engine: any InkEngine)
+    /// `page` shows its ink sharp (final raster or vectors drawn); fires on every such event. The app's
+    /// `canvas.firstSharpTile` signpost ends on the first one after an open.
+    func engine(_ engine: any InkEngine, didShowSharpInkOn page: PageID)
 }
