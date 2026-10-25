@@ -4,21 +4,17 @@ import InkModel
 import SwiftUI
 import Tools
 
-extension ToolState {
-    /// What the engine needs for the current tool (§6): pen kind, width and color; the highlighter as a pen
-    /// profile; the eraser's diameter.
+extension ActiveTool {
+    /// What the engine needs (§6): a pen profile (the highlighter is one) with its color and width, the
+    /// eraser's diameter, or the lasso. Stroke vs partial erase stays with the session.
     func configuration(allowsFingerDrawing: Bool) -> ToolConfiguration {
-        switch tool {
-        case .pen:
-            ToolConfiguration(tool: .pen(pen.kind), color: pen.color, width: pen.width, allowsFingerDrawing: allowsFingerDrawing)
-        case .highlighter:
-            ToolConfiguration(
-                tool: .pen(.highlighter), color: highlighter.color, width: highlighter.width, allowsFingerDrawing: allowsFingerDrawing
-            )
-        case .eraser:
-            ToolConfiguration(tool: .eraser, color: pen.color, width: eraser.width, allowsFingerDrawing: allowsFingerDrawing)
+        switch self {
+        case let .ink(kind, color, width):
+            ToolConfiguration(tool: .pen(kind), color: color, width: width, allowsFingerDrawing: allowsFingerDrawing)
+        case let .eraser(eraser):
+            ToolConfiguration(tool: .eraser, width: eraser.width, allowsFingerDrawing: allowsFingerDrawing)
         case .lasso:
-            ToolConfiguration(tool: .lasso, color: pen.color, width: 1, allowsFingerDrawing: allowsFingerDrawing)
+            ToolConfiguration(tool: .lasso, allowsFingerDrawing: allowsFingerDrawing)
         }
     }
 }

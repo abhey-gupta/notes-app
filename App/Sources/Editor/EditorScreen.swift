@@ -67,11 +67,8 @@ struct EditorScreen: View {
             #endif
         }
         .onAppear { pencil.install(on: session.host) }
-        .onChange(of: tools.configuration(allowsFingerDrawing: LaunchOptions.allowsFingerDrawing), initial: true) { _, configuration in
-            session.setTool(configuration)
-        }
-        .onChange(of: tools.eraser.mode, initial: true) { _, mode in
-            session.eraserMode = mode
+        .onChange(of: tools.active, initial: true) { _, tool in
+            session.setTool(tool, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {

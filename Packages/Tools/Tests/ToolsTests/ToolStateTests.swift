@@ -202,4 +202,38 @@ struct ToolStateTests {
         state.pen.color = .custom(RGBA8(r: 0x1E, g: 0x8E, b: 0x6E))
         #expect(state.activeQuickColor == nil)
     }
+
+    // MARK: Active tool
+
+    @Test func activeToolCarriesOnlyItsOwnSettings() throws {
+        let state = try makeState(makeDefaults())
+        state.pen.kind = .brush
+        state.pen.widthIndex = 3
+        state.pen.color = .semantic(.blue)
+        #expect(state.active == .ink(.brush, color: .semantic(.blue), width: 6))
+        state.highlighter.color = .semantic(.accent)
+        state.select(.highlighter)
+        #expect(state.active == .ink(.highlighter, color: .semantic(.accent), width: 16))
+        state.eraser.mode = .partial
+        state.select(.eraser)
+        #expect(state.active == .eraser(EraserSettings(mode: .partial, widthIndex: 1)))
+        state.select(.lasso)
+        #expect(state.active == .lasso)
+    }
+
+    /// Settings of other tools, quick colors and toolbar placement don't touch the active tool, so the
+    /// editor isn't re-told (and a lasso selection isn't cleared) when they change.
+    @Test func otherSettingsLeaveTheActiveToolAlone() throws {
+        let state = try makeState(makeDefaults())
+        state.select(.eraser)
+        let eraser = state.active
+        state.pen.color = .semantic(.red)
+        state.highlighter.widthIndex = 0
+        state.setQuickColor(.semantic(.accent), at: 1)
+        state.dock = .left
+        state.isCompact = true
+        #expect(state.active == eraser)
+        state.eraser.mode = .partial
+        #expect(state.active != eraser, "the eraser's own mode does")
+    }
 }
