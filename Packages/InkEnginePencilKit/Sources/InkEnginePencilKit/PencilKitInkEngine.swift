@@ -279,9 +279,15 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     private func contentChanged(_ page: PageID, rebuild: Bool) {
         if let canvas = canvas(for: page) {
-            let shown = (snapshots[page]?.strokes.map(\.id) ?? []).filter { !selection.strokes.contains($0) }
-            let desired = shown + (pending[page] ?? []).map(\.id)
-            if rebuild || desired != canvas.ids {
+            let shown = (snapshots[page]?.strokes ?? []).filter { !selection.strokes.contains($0.id) }
+            let desired = InkLayering.layered(
+                shown.map { ($0.id, InkLayering.isHighlight($0)) } + (pending[page] ?? []).map { ($0.id, InkLayering.isHighlight($0.pk)) },
+                isHighlight: \.1
+            ).map(\.0)
+            // A committed highlight stays above the ink it was drawn over until a rebuild moves it beneath.
+            if rebuild || desired != canvas
+                .ids && (Set(desired) != Set(canvas.ids) || InkLayering.highlightCoversInk(canvas.view.drawing.strokes))
+            {
                 rebuildCanvas(canvas)
             }
         }
@@ -317,21 +323,16 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             absorbCanvasStrokes(canvas)
         }
         canvas.needsRebuild = false
-        var strokes: [PKStroke] = []
-        var ids: [StrokeID] = []
+        var entries: [(id: StrokeID, pk: PKStroke)] = []
         if let page = canvas.page, let snapshot = snapshots[page] {
             let shown = snapshot.strokes.filter { !selection.strokes.contains($0.id) }
-            strokes = strokeCache.pkStrokes(shown, on: page) { PencilKitConversion.pkStroke(from: $0, color: uiColor($0.color)) }
-            ids = shown.map(\.id)
-            for entry in pending[page] ?? [] {
-                strokes.append(entry.pk)
-                ids.append(entry.id)
-            }
+            let pks = strokeCache.pkStrokes(shown, on: page) { PencilKitConversion.pkStroke(from: $0, color: uiColor($0.color)) }
+            entries = InkLayering.layered(Array(zip(shown.map(\.id), pks)) + (pending[page] ?? [])) { InkLayering.isHighlight($0.pk) }
         }
         isSettingDrawing = true
-        canvas.view.drawing = PKDrawing(strokes: strokes)
+        canvas.view.drawing = PKDrawing(strokes: entries.map(\.pk))
         isSettingDrawing = false
-        canvas.ids = ids
+        canvas.ids = entries.map(\.id)
     }
 
     /// Rebuilds the canvas of `page`, if it has one.

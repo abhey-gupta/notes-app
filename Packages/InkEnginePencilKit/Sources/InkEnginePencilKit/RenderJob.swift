@@ -10,7 +10,7 @@ struct RenderJob: Sendable {
     let page: PageSnapshot
     let palette: any InkPalette
     let theme: PaperTheme
-    /// Strokes on the canvas not yet in `page` (drawn last, as on the canvas).
+    /// Strokes on the canvas not yet in `page` (after the stored strokes of their layer, as on the canvas).
     var pending: [PKStroke] = []
 
     /// PencilKit adapts ink for dark appearance; the canvas is pinned to light (the palette already
@@ -66,8 +66,8 @@ struct RenderJob: Sendable {
     }
 
     func drawing() -> PKDrawing {
-        PKDrawing(strokes: page.strokes.map { stroke in
+        PKDrawing(strokes: InkLayering.layered(page.strokes.map { stroke in
             PencilKitConversion.pkStroke(from: stroke, color: UIColor(palette.ink(stroke.color, on: theme)))
-        } + pending)
+        } + pending))
     }
 }
