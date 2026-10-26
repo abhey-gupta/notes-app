@@ -34,7 +34,10 @@ struct PagePopover: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            exactColorsToggle
+            if paper == .night {
+                exactColorsToggle
+                    .transition(.reveal)
+            }
             Divider()
                 .padding(.vertical, 12)
             if let onShare {
@@ -57,17 +60,16 @@ struct PagePopover: View {
         }
         .padding(Tokens.Size.popoverPadding)
         .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
+        .animation(.snappy(duration: 0.28), value: paper == .night)
         .presentationCompactAdaptation(.popover)
         .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pagePopover")
     }
 
-    /// Always laid out, live only on Night: showing and hiding it resized the popover, which jumps rather than
-    /// animates, and shoved the rows around while the thumbnails recolored.
+    /// Below the templates so nothing above moves when it slides open on Night.
     private var exactColorsToggle: some View {
-        let night = paper == .night
-        return Toggle(isOn: $keepsExactColors) {
+        Toggle(isOn: $keepsExactColors) {
             Label("Keep exact colors", systemImage: "eyedropper")
         }
         .scaledFont(size: 14, weight: .medium)
@@ -75,10 +77,6 @@ struct PagePopover: View {
         .tint(Tokens.Colors.selection.color)
         .padding(.horizontal, Tokens.Spacing.xs)
         .padding(.top, 14)
-        .disabled(!night)
-        .opacity(night ? 1 : 0.35)
-        .animation(.easeInOut(duration: 0.2), value: night)
-        .accessibilityHint(night ? "" : "Available on Night paper")
         .accessibilityIdentifier("keepExactColors")
     }
 
@@ -159,6 +157,7 @@ struct PagePopover: View {
                         }
                     }
                     .frame(width: 40, height: 54)
+                    .animation(nil, value: paper) // recolor with the page, no crossfade
                     .padding(3)
                 Text(option.displayName)
                     .scaledFont(size: 11, weight: selected ? .semibold : .medium)
@@ -178,4 +177,30 @@ struct PagePopover: View {
             Binding { tools.dock } set: { tools.dock = $0 }
         }
     #endif
+}
+
+private extension AnyTransition {
+    /// Unrolls from the top edge as the rows below slide down; fading alone left the switch popping in.
+    static var reveal: AnyTransition {
+        .modifier(active: RevealModifier(progress: 0), identity: RevealModifier(progress: 1))
+    }
+}
+
+private nonisolated struct RevealModifier: ViewModifier, Animatable {
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(progress)
+            .mask(alignment: .top) {
+                GeometryReader { proxy in
+                    Rectangle().frame(height: proxy.size.height * progress)
+                }
+            }
+    }
 }

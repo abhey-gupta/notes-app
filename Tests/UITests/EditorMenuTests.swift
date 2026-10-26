@@ -21,11 +21,9 @@ final class EditorMenuTests: XCTestCase {
         let night = app.buttons["paper.night"]
         XCTAssertTrue(night.waitForExistence(timeout: 5))
         night.tap()
-        let exact = app.switches["keepExactColors"]
-        XCTAssertTrue(exact.waitForExistence(timeout: 2))
-        XCTAssertTrue(exact.isEnabled, "live on Night")
+        XCTAssertTrue(app.switches["keepExactColors"].waitForExistence(timeout: 2), "offered on Night")
         app.buttons["paper.white"].tap()
-        XCTAssertFalse(exact.isEnabled, "Night only")
+        XCTAssertTrue(app.switches["keepExactColors"].waitForNonExistence(timeout: 2), "Night only")
         app.buttons["template.grid"].tap()
         XCTAssertTrue(app.buttons["template.grid"].isSelected)
         XCTAssertEqual(app.buttons["More"].value as? String, "White paper, Grid")
