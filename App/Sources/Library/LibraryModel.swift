@@ -24,6 +24,9 @@ protocol LibraryModel: AnyObject, Observable {
     func start() async
     /// Creates a notebook (package + index entry, one blank page) and returns it. The caller opens it (§8).
     func createNotebook(_ draft: NotebookDraft) async throws -> NotebookSummary
+    /// Creates a notebook from a PDF (one page per PDF page, drawn on a copy of the file, #119) and
+    /// returns it. The caller opens it and discards the staged file.
+    func importPDF(_ draft: PDFImportDraft) async throws -> NotebookSummary
     /// Persists metadata edits (title, cover, paper, theme) made outside the editor.
     func update(_ notebook: NotebookSummary)
     /// The notebook's package, for the editor's `DocumentStore` (§8). While the editor is open its store is

@@ -2,28 +2,48 @@ import CoreGraphics
 import Foundation
 import InkModel
 
-/// Where a page's background comes from (§4.5). Day 0 only has ``template`` (the page's
-/// ``PageEntry/template``); `.pdf(file, pageIndex)` is reserved for PDF import.
+/// Where a page's background comes from (§4.5): ``template`` (the page's ``PageEntry/template``) or a
+/// page of an imported PDF in the package's `backgrounds/` (#119).
 ///
-/// Persisted as `{"kind": "template"}`; omitted from the manifest while it is ``template``.
+/// Persisted as `{"kind": "pdf", "file": "<name>.pdf", "page": <index>}`; omitted from the manifest while
+/// it is ``template``. Builds before #119 refuse a manifest with a PDF page (unknown kind), never drop it.
 public enum PageBackground: Hashable, Sendable, Codable {
     /// Procedural template.
     case template
+    /// Page `page` (zero-based) of `backgrounds/<file>`.
+    case pdf(file: String, page: Int)
 
-    private enum CodingKeys: String, CodingKey { case kind }
+    private enum CodingKeys: String, CodingKey { case kind, file, page }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try c.decode(String.self, forKey: .kind)
-        guard kind == "template" else {
+        switch kind {
+        case "template":
+            self = .template
+        case "pdf":
+            let file = try c.decode(String.self, forKey: .file)
+            let page = try c.decode(Int.self, forKey: .page)
+            // A name, never a path: the file must stay inside the package.
+            guard !file.isEmpty, !file.contains("/"), !file.hasPrefix("."), page >= 0 else {
+                throw DecodingError.dataCorruptedError(forKey: .file, in: c, debugDescription: "Bad PDF background \(file) #\(page)")
+            }
+            self = .pdf(file: file, page: page)
+        default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "Unknown background kind \(kind)")
         }
-        self = .template
     }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode("template", forKey: .kind)
+        switch self {
+        case .template:
+            try c.encode("template", forKey: .kind)
+        case let .pdf(file, page):
+            try c.encode("pdf", forKey: .kind)
+            try c.encode(file, forKey: .file)
+            try c.encode(page, forKey: .page)
+        }
     }
 }
 
@@ -33,7 +53,7 @@ public struct PageEntry: Hashable, Sendable, Identifiable {
     public let id: PageID
     /// Background template.
     public var template: PageTemplate
-    /// Background source (reserved for PDF import).
+    /// Background source: the template, or an imported PDF page drawn under it.
     public var background: PageBackground
     /// ``Page/rev`` as of the last save.
     public var rev: UInt64

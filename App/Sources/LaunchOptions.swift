@@ -16,6 +16,7 @@ import Tools
 /// - `-focusMode YES`: with `-openNotebook`, start with the chrome collapsed.
 /// - `-pagesOverview YES`: with `-openNotebook`, open the pages overview a few seconds after the notebook.
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
+/// - `-importSamplePDF YES`: start with the import sheet up on a generated 24-page PDF (#119).
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
 /// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
 /// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests); also silences
@@ -30,6 +31,15 @@ import Tools
 enum LaunchOptions {
     static var showsNewNotebook: Bool {
         flag("newNotebook")
+    }
+
+    /// `-importSamplePDF YES`: a generated PDF in the import sheet (the system Files picker can't be scripted).
+    static var pdfImport: PDFImportRequest? {
+        #if DEBUG
+            flag("importSamplePDF") ? PDFInbox.sample() : nil
+        #else
+            nil
+        #endif
     }
 
     /// With `-openNotebook`: open the pages overview once the notebook is up (screenshots, timing).
