@@ -5,6 +5,7 @@ import SwiftUI
 /// One page in the overview grid (mock §04): `thumbs/<id>.heic` over paper with the page's template
 /// (the placeholder until the thumb exists), 176×228 r6, a 3 pt blue ring on the current page, the
 /// page number under it. Select mode adds a check badge; the ring marks selected pages instead.
+/// While it stands in for the canvas page (open/close zoom, #124) the ring and number fade out.
 struct PageThumb: View {
     let entry: PagesModel.Entry
     let number: Int
@@ -15,6 +16,7 @@ struct PageThumb: View {
     let paper: DesignSystem.PaperTheme
     /// Thumbnail cache key.
     let version: Date
+    var isFlying = false
 
     private static let size = Tokens.Size.pageThumb
     /// Template spacing scaled from page points to thumb points.
@@ -36,7 +38,7 @@ struct PageThumb: View {
                 RoundedRectangle(cornerRadius: Tokens.Radius.pageThumb + Tokens.Size.pageThumbRing)
                     .strokeBorder(Tokens.Colors.selection, lineWidth: Tokens.Size.pageThumbRing)
                     .padding(-Tokens.Size.pageThumbRing)
-                    .opacity(ringed ? 1 : 0)
+                    .opacity(ringed && !isFlying ? 1 : 0)
             }
             .overlay(alignment: .topTrailing) {
                 if isSelecting {
@@ -51,6 +53,7 @@ struct PageThumb: View {
             Text("\(number)")
                 .scaledFont(size: 12.5, weight: isCurrent ? .semibold : .medium)
                 .foregroundStyle(isCurrent ? Tokens.Colors.selection.color : Tokens.Colors.textSecondary.color)
+                .opacity(isFlying ? 0 : 1)
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)

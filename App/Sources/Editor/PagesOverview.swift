@@ -6,6 +6,8 @@ import SwiftUI
 /// Pages overview (mock §04, #32): a blurred overlay over the editor with every page as a thumbnail
 /// (`thumbs/<id>.heic`, read lazily per visible cell, never rendered here), the current page ringed.
 ///
+/// - Open: the canvas page zooms down into its cell while the rest fades in; closing reverses it, and a
+///   tapped page grows into the canvas (#124). Reduce Motion crossfades instead.
 /// - Tap a page: close and scroll the canvas to it.
 /// - Long-press and drag a page onto another: move it there (one undo step).
 /// - Bottom capsule: new page with that template after the current one.
@@ -25,6 +27,15 @@ struct PagesOverview: View {
     @State private var drag: Drag?
     /// Visible cells' frames in ``gridSpace`` (drop targets).
     @State private var frames: [Int: CGRect] = [:]
+    /// ``gridSpace``'s origin in window points (cell frames → the canvas page's space).
+    @State private var gridOrigin: CGPoint = .zero
+    /// Open/close zoom: settled = grid shown; otherwise the ``flight`` cell sits on ``pageFrame``.
+    @State private var isSettled = false
+    @State private var isClosing = false
+    @State private var flight: Int?
+    @State private var pageFrame: CGRect?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private struct Drag: Equatable {
         var index: Int
@@ -41,11 +52,17 @@ struct PagesOverview: View {
     ]
 
     var body: some View {
+        let settled = isSettled || reduceMotion
         ZStack(alignment: .bottom) {
-            Rectangle().fill(.regularMaterial).ignoresSafeArea()
-            Rectangle().fill(Tokens.Colors.libraryBackground.color.opacity(0.55)).ignoresSafeArea()
+            Group {
+                Rectangle().fill(.regularMaterial)
+                Rectangle().fill(Tokens.Colors.libraryBackground.color.opacity(0.55))
+            }
+            .ignoresSafeArea()
+            .opacity(settled ? 1 : 0)
             VStack(spacing: 0) {
                 header
+                    .opacity(settled ? 1 : 0)
                 grid
             }
             if !isSelecting {
@@ -53,6 +70,7 @@ struct PagesOverview: View {
                     model.onInsert(currentIndex, style)
                 }
                 .padding(.bottom, Tokens.Spacing.xxl)
+                .opacity(settled ? 1 : 0)
                 .transition(.opacity)
             }
         }
@@ -73,7 +91,7 @@ struct PagesOverview: View {
         .accessibilityIdentifier("pagesOverview")
         // VoiceOver stays in the overlay; two-finger scrub leaves select mode, then the overview.
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { isSelecting ? endSelecting() : model.dismiss() }
+        .accessibilityAction(.escape) { isSelecting ? endSelecting() : close() }
         .accessibilityValue(model.openMilliseconds.map { String(format: "%.1f ms", $0) } ?? "")
     }
 
@@ -107,7 +125,7 @@ struct PagesOverview: View {
                 onSelect: { isSelecting = true },
                 onDelete: requestDelete,
                 onCancel: endSelecting,
-                onDone: model.dismiss
+                onDone: { close() }
             )
         }
         .padding(.horizontal, Tokens.Spacing.libraryMargin)
@@ -118,18 +136,24 @@ struct PagesOverview: View {
     // MARK: Grid
 
     private var grid: some View {
-        ScrollView {
-            LazyVGrid(columns: Self.columns, alignment: .leading, spacing: Tokens.Spacing.xxl) {
-                ForEach(Array(model.entries.enumerated()), id: \.element.id) { index, entry in
-                    cell(entry, at: index)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: Self.columns, alignment: .leading, spacing: Tokens.Spacing.xxl) {
+                    ForEach(Array(model.entries.enumerated()), id: \.element.id) { index, entry in
+                        cell(entry, at: index)
+                    }
                 }
+                .padding(.horizontal, Tokens.Spacing.libraryMargin)
+                .padding(.top, Tokens.Spacing.s)
+                .padding(.bottom, Tokens.Size.templateCapsuleHeight + 2 * Tokens.Spacing.xxl)
             }
-            .padding(.horizontal, Tokens.Spacing.libraryMargin)
-            .padding(.top, Tokens.Spacing.s)
-            .padding(.bottom, Tokens.Size.templateCapsuleHeight + 2 * Tokens.Spacing.xxl)
+            .coordinateSpace(.named(Self.gridSpace))
+            .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { gridOrigin = $0 }
+            .scrollIndicators(.hidden)
+            // The flying page is drawn past the grid's edges.
+            .scrollClipDisabled(flight != nil)
+            .onAppear { open(proxy) }
         }
-        .coordinateSpace(.named(Self.gridSpace))
-        .scrollIndicators(.hidden)
     }
 
     private func cell(_ entry: PagesModel.Entry, at index: Int) -> some View {
@@ -142,7 +166,8 @@ struct PagesOverview: View {
             isSelecting: isSelecting,
             isSelected: selected.contains(entry.id),
             paper: paper,
-            version: model.thumbnailVersion(entry.id)
+            version: model.thumbnailVersion(entry.id),
+            isFlying: flight == index && !isSettled
         )
         .overlay(alignment: dropEdge(for: index)) {
             if drag?.target == index, !dragging {
@@ -154,9 +179,10 @@ struct PagesOverview: View {
         }
         .scaleEffect(dragging ? 1.04 : 1)
         .offset(dragging ? drag?.translation ?? .zero : .zero)
-        .zIndex(dragging ? 1 : 0)
+        .zIndex(dragging || flight == index ? 1 : 0)
         .animation(.snappy(duration: 0.18), value: dragging)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { frames[index] = $0 }
+        .modifier(zoom(for: index))
         .onTapGesture { tapped(entry, at: index) }
         .accessibilityAction { tapped(entry, at: index) }
         .gesture(isSelecting ? nil : reorderGesture(from: index))
@@ -188,7 +214,7 @@ struct PagesOverview: View {
                 selected.insert(entry.id)
             }
         } else {
-            model.onShow(index)
+            close(showing: index)
         }
     }
 
@@ -248,5 +274,81 @@ struct PagesOverview: View {
     private func endSelecting() {
         isSelecting = false
         selected = []
+    }
+}
+
+// MARK: - Open / close (#124)
+
+extension PagesOverview {
+    /// Unsettled: the flight cell's paper covers the canvas page, the others wait faded and slightly small.
+    private func zoom(for index: Int) -> CellZoom {
+        guard !isSettled, !reduceMotion else { return CellZoom() }
+        guard flight == index, let page = pageFrame, let cell = frames[index] else { return CellZoom(opacity: 0, scale: 0.96) }
+        let paper = Tokens.Size.pageThumb
+        return CellZoom(
+            scaleX: page.width / paper.width,
+            scaleY: page.height / paper.height,
+            offset: CGSize(width: page.minX - gridOrigin.x - cell.minX, height: page.minY - gridOrigin.y - cell.minY)
+        )
+    }
+
+    /// Brings the current cell into view, starts it on the canvas page, then zooms it down a frame later.
+    private func open(_ proxy: ScrollViewProxy) {
+        guard !reduceMotion, model.entries.indices.contains(currentIndex) else { return }
+        flight = currentIndex
+        pageFrame = model.pageFrame(currentIndex)
+        proxy.scrollTo(model.entries[currentIndex].id, anchor: .center)
+        FrameAfter.next {
+            withAnimation(Tokens.Motion.pageZoom) {
+                isSettled = true
+            } completion: {
+                if isSettled {
+                    flight = nil
+                }
+            }
+        }
+    }
+
+    /// Zooms the page at `index` (the current one if `nil`) back up onto the canvas, then dismisses;
+    /// a tapped page is scrolled to first so it lands where it will stay.
+    private func close(showing index: Int? = nil) {
+        guard !isClosing else { return }
+        let target = index ?? currentIndex
+        guard !reduceMotion else {
+            if let index {
+                model.onShow(index)
+            } else {
+                model.dismiss()
+            }
+            return
+        }
+        if let index {
+            model.onScroll(index)
+        }
+        isClosing = true
+        flight = target
+        pageFrame = model.pageFrame(target)
+        withAnimation(Tokens.Motion.pageZoom) {
+            isSettled = false
+        } completion: {
+            model.dismiss()
+        }
+    }
+}
+
+/// A cell's part in the open/close zoom; the default is the settled grid.
+private struct CellZoom: ViewModifier {
+    var opacity: Double = 1
+    var scale: CGFloat = 1
+    var scaleX: CGFloat = 1
+    var scaleY: CGFloat = 1
+    var offset: CGSize = .zero
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(x: scaleX, y: scaleY, anchor: .topLeading)
+            .offset(offset)
+            .scaleEffect(scale)
+            .opacity(opacity)
     }
 }

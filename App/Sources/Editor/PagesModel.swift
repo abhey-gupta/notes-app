@@ -27,6 +27,10 @@ final class PagesModel {
 
     /// Dismiss and scroll the canvas to the page (0-based).
     @ObservationIgnored var onShow: (Int) -> Void = { _ in }
+    /// Scroll the canvas to the page with the overview still up (the close zoom lands on it).
+    @ObservationIgnored var onScroll: (Int) -> Void = { _ in }
+    /// The page's frame on the canvas (window points), where the open/close zoom starts and ends.
+    @ObservationIgnored var pageFrame: (Int) -> CGRect? = { _ in nil }
     /// Insert a page with the template after the index (`nil` appends).
     @ObservationIgnored var onInsert: (Int?, PaperStyle) -> Void = { _, _ in }
     @ObservationIgnored var onMove: (_ from: Int, _ to: Int) -> Void = { _, _ in }
