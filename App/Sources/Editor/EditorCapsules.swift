@@ -74,7 +74,7 @@ struct PagesCapsule: View {
         let onShare: (() -> Void)? = isCompactLayout ? { shareFromMore() } : nil
         return ToolButton(.more, "More") { showsMore.toggle() }
             .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
-            .popover(isPresented: $showsMore) {
+            .popover(isPresented: $showsMore, attachmentAnchor: Self.moreAnchor, arrowEdge: .top) {
                 PagePopover(
                     tools: tools, paper: $paper, pattern: $pattern,
                     onShare: onShare
@@ -96,7 +96,7 @@ struct PagesCapsule: View {
     private func sharing(_ button: some View) -> some View {
         button
             .background(ActivityAnchor(presenter: presenter))
-            .popover(isPresented: $showsShare) {
+            .popover(isPresented: $showsShare, arrowEdge: .top) {
                 SharePopover(state: state, page: page, isNight: paper == .night) { url in
                     showsShare = false
                     // Present once SwiftUI has started dismissing the popover.
@@ -108,6 +108,11 @@ struct PagesCapsule: View {
                 .chromePopover(paper)
             }
     }
+
+    /// ⋯ sits at the screen edge, so its popover is pushed against it and an arrow at ⋯'s center lands on the
+    /// popover's rounded corner, which the system squares off into a glass bump. Aiming left of center keeps
+    /// the arrow clear of the corner.
+    private static let moreAnchor = PopoverAttachmentAnchor.point(UnitPoint(x: 0.1, y: 1))
 
     private func shareFromMore() {
         sharesAfterMore = true
