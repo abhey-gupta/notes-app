@@ -79,6 +79,7 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(new.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["No notebooks yet. Tap New to start one."].exists, "fresh install shows the empty state")
         new.tap()
+        app.buttons["New Notebook"].tap()
 
         let title = app.textFields["notebookTitle"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))

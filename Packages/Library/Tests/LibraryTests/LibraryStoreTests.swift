@@ -1,3 +1,4 @@
+import CoreGraphics
 import Document
 import Foundation
 import InkModel
@@ -25,6 +26,28 @@ struct LibraryStoreTests {
         // Persisted: a fresh store and the synchronous launch read both see it.
         #expect(await lib.store().snapshot().notebooks == [entry])
         #expect(LibraryStore.readIndex(at: lib.locations)?.notebooks == [entry])
+    }
+
+    @Test func importPDFWritesOnePagePerPDFPageInTheFolder() async throws {
+        let lib = try TempLibrary()
+        let store = lib.store()
+        let folder = try await store.createFolder(named: "Physics")
+        let pdf = lib.root.appending(path: "Slides.pdf")
+        let context = try #require(CGContext(pdf as CFURL, mediaBox: nil, nil))
+        for _ in 0 ..< 4 {
+            context.beginPDFPage(nil)
+            context.endPDFPage()
+        }
+        context.closePDF()
+        let entry = try await store.importPDF(pdf, as: notebook("Slides", pages: 0), in: folder.id)
+        #expect(entry.title == "Slides" && entry.folderID == folder.id)
+        #expect(entry.pageCount == 4)
+        #expect(entry.pageSize == CGSize(width: 612, height: 792), "CoreGraphics' default media box")
+        let package = try NotebookPackage.open(at: lib.locations.packageURL(for: entry))
+        #expect(package.artwork().count == 4)
+        #expect(lib.exists(pdf), "the source is copied, not moved")
+        await #expect(throws: LibraryError.self) { try await store.importPDF(lib.root, as: notebook("x")) }
+        #expect(await store.snapshot().notebooks.count == 1)
     }
 
     @Test func blankTitlesAreNumbered() async throws {

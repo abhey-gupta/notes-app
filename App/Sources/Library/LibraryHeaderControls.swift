@@ -36,27 +36,41 @@ struct LibrarySearchField: View {
 }
 
 struct NewNotebookButton: View {
-    let action: () -> Void
+    let onNew: () -> Void
+    let onImportPDF: () -> Void
 
     @Environment(\.isCompactLayout) private var isCompactLayout
 
     var body: some View {
-        Button(action: action) {
-            if isCompactLayout {
-                Image(systemName: Symbol.add.name)
-                    .scaledFont(size: 17, weight: .semibold)
-                    .frame(width: 28, height: 28)
-            } else {
-                Label("New", systemImage: Symbol.add.name)
-                    .font(.chromeTitle)
-                    .padding(.horizontal, 2)
-                    .frame(minHeight: 28)
+        Menu {
+            Button("New Notebook", systemImage: "square.and.pencil", action: onNew)
+                .accessibilityIdentifier("newNotebookItem")
+            Button("Import PDF…", systemImage: "doc.richtext", action: onImportPDF)
+                .accessibilityIdentifier("importPDFItem")
+        } label: {
+            Group {
+                if isCompactLayout {
+                    Image(systemName: Symbol.add.name)
+                        .scaledFont(size: 17, weight: .semibold)
+                        .frame(width: 40, height: 40)
+                } else {
+                    Label("New", systemImage: Symbol.add.name)
+                        .font(.chromeTitle)
+                        .padding(.horizontal, Tokens.Spacing.l)
+                        .frame(minHeight: 42)
+                }
             }
+            .foregroundStyle(Tokens.Colors.libraryBackground)
+            .contentShape(isCompactLayout ? AnyShape(.circle) : AnyShape(.capsule))
         }
-        .foregroundStyle(Tokens.Colors.libraryBackground)
-        .buttonStyle(.glassProminent)
-        .buttonBorderShape(isCompactLayout ? .circle : .capsule)
-        .tint(Tokens.Colors.textPrimary.color)
+        .menuIndicator(.hidden)
+        // A plain label in dark glass (the title menu's pattern), kept out of `GlassChrome`: a glass button
+        // style, or a glass container around the menu, swallowed taps on the menu's first row.
+        .buttonStyle(.plain)
+        .glassEffect(
+            .regular.tint(Tokens.Colors.textPrimary.color).interactive(),
+            in: isCompactLayout ? AnyShape(.circle) : AnyShape(.capsule)
+        )
         .fixedSize()
         .accessibilityLabel("New")
         .accessibilityIdentifier("newNotebook")

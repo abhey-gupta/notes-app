@@ -90,17 +90,24 @@ extension NotebookSession {
         guard let store, let residency else { return }
         let manifest = await store.manifest
         let pages = manifest.pages.map { (id: $0.id, template: $0.template) }
+        // Before the layout widens the pages, so their artwork redraws in place.
+        artworkPlacement.pageExtension = manifest.notebook.pageExtension
         residency.setPages(pages)
         residency.setPageSize(manifest.notebook.extendedPageSize)
-        host.layout = PageLayout(
-            pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, pageExtension: manifest.notebook.pageExtension,
-            footer: CanvasHostView.footerHeight
-        )
+        host.layout = pageLayout(manifest)
         if let window = host.pageWindow {
             residency.update(window)
         }
         syncPagesModel(pages)
         library.documentDidSave(manifest)
+    }
+
+    /// Every page of `manifest`, at its (widened) size.
+    func pageLayout(_ manifest: Manifest) -> PageLayout {
+        PageLayout(
+            pageIDs: manifest.notebook.pages, pageSize: manifest.notebook.pageSize, pageExtension: manifest.notebook.pageExtension,
+            footer: CanvasHostView.footerHeight
+        )
     }
 
     func syncPagesModel(_ pages: [(id: PageID, template: PageTemplate)]) {

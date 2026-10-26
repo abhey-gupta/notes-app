@@ -15,6 +15,7 @@ struct InkRun: Sendable {
 
 /// A page reduced to what the PDF needs, built off the drawing thread (outlines are the expensive part).
 struct PageArt: Sendable {
+    var page: PageID
     var template: PageTemplate
     /// One run per highlighter stroke (each multiplies separately, like on screen).
     var highlights: [InkRun] = []
@@ -43,7 +44,7 @@ struct PageArt: Sendable {
             return resolved
         }
 
-        var art = PageArt(template: page.template)
+        var art = PageArt(page: page.id, template: page.template)
         if let rasterizer {
             let brushes = page.strokes.filter { $0.tool == .brush && !$0.samples.isEmpty }
             if !brushes.isEmpty {

@@ -1,5 +1,6 @@
 import DesignSystem
 import InkModel
+import os
 import Perf
 import SwiftUI
 import Tools
@@ -9,6 +10,8 @@ struct RootView: View {
     @State private var library: any LibraryModel
     @State private var path: [EditorRoute]
     @State private var showsNewNotebook: Bool
+    /// A PDF in the import sheet (#119): from the library's + menu, or opened in Notespace from elsewhere.
+    @State private var pdfImport: PDFImportRequest?
     /// App-wide tool choice and toolbar placement (§6); persisted, flushed when the scene backgrounds.
     @State private var tools = LaunchOptions.makeToolState()
     @Environment(\.scenePhase) private var scenePhase
@@ -26,11 +29,14 @@ struct RootView: View {
         _library = State(initialValue: library)
         _path = State(initialValue: LaunchOptions.initialPath(in: library))
         _showsNewNotebook = State(initialValue: LaunchOptions.showsNewNotebook)
+        _pdfImport = State(initialValue: LaunchOptions.pdfImport)
     }
 
     var body: some View {
         NavigationStack(path: $path) {
-            LibraryScreen(library: library, zoom: zoom, showsNewNotebook: $showsNewNotebook, showsGallery: galleryBinding) { route in
+            LibraryScreen(
+                library: library, zoom: zoom, showsNewNotebook: $showsNewNotebook, pdfImport: $pdfImport, showsGallery: galleryBinding
+            ) { route in
                 OpenTrace.begin()
                 path.append(route)
             }
@@ -49,6 +55,19 @@ struct RootView: View {
         .task {
             await library.start()
             EditorWarmUp.run()
+        }
+        // Files / share sheet "Open in Notespace" (PDF document type): back to the library, import sheet up.
+        .onOpenURL { url in
+            guard url.isFileURL, url.pathExtension.lowercased() == "pdf" else { return }
+            do {
+                let request = try PDFInbox.stage(url)
+                path = []
+                showsNewNotebook = false
+                pdfImport = request
+            } catch {
+                Logger(subsystem: "com.abhey.notespace", category: "library")
+                    .error("open PDF: \(error.localizedDescription, privacy: .public)")
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {

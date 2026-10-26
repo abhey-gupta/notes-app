@@ -2,6 +2,7 @@ import DesignSystem
 import Library
 import os
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Library (mock §01): folder sidebar (#117), serif title, glass search/settings/New, "Continue" recents, covers grid.
 /// Compact chrome (#118): sidebar · search · + on top, the title under them, one Continue card, three columns of
@@ -10,6 +11,8 @@ struct LibraryScreen: View {
     let library: any LibraryModel
     let zoom: Namespace.ID
     @Binding var showsNewNotebook: Bool
+    /// A PDF waiting in the import sheet: picked here, or opened in Notespace from Files / the share sheet.
+    @Binding var pdfImport: PDFImportRequest?
     /// DEBUG: DesignSystem gallery toggle, surfaced in Settings.
     let showsGallery: Binding<Bool>?
     let open: (EditorRoute) -> Void
@@ -20,6 +23,7 @@ struct LibraryScreen: View {
     @State private var sort = LibrarySort.recent
     @State private var showsSettings = false
     @State private var isCreating = false
+    @State private var showsPDFPicker = false
     @State private var prompt: LibraryPrompt?
     /// Wide window: the sidebar sits beside the covers (user can hide it); narrow: it overlays on demand.
     @State private var isDocked = true
@@ -41,6 +45,11 @@ struct LibraryScreen: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
             content
+                // One presentation per view: the import sheet sits on the content, the new-notebook sheet on the screen.
+                .pdfImport($pdfImport, folder: folder, library: library) { notebook in
+                    query = ""
+                    open(EditorRoute(id: notebook.id, source: .cover))
+                }
         }
         .overlay(alignment: .leading) {
             if !isDocked, showsOverlaySidebar, !isCompactLayout {
@@ -258,9 +267,11 @@ extension LibraryScreen {
                 HStack(spacing: Tokens.Spacing.m) {
                     LibrarySearchField(query: $query)
                     settingsButton
-                    NewNotebookButton { showsNewNotebook = true }
                 }
             }
+            // Outside the glass container: its menu morphs out of the pill, and inside the container
+            // the pill's glass kept taps from the menu's first row.
+            newButton
         }
         .padding(.leading, margin - 4)
         .padding(.trailing, margin - 4)
@@ -271,12 +282,14 @@ extension LibraryScreen {
     /// Sidebar · search · + in glass, the title below.
     private var compactHeader: some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.m) {
-            GlassChrome(spacing: Tokens.Spacing.s) {
-                HStack(spacing: Tokens.Spacing.m) {
-                    sidebarButton
-                    LibrarySearchField(query: $query)
-                    NewNotebookButton { showsNewNotebook = true }
+            HStack(spacing: Tokens.Spacing.m) {
+                GlassChrome(spacing: Tokens.Spacing.s) {
+                    HStack(spacing: Tokens.Spacing.m) {
+                        sidebarButton
+                        LibrarySearchField(query: $query)
+                    }
                 }
+                newButton
             }
             title
                 .padding(.leading, 4)
@@ -337,6 +350,14 @@ extension LibraryScreen {
             }
     }
 
+    /// "+" menu: New Notebook, Import PDF… (#119, the Files picker feeds the import sheet).
+    private var newButton: some View {
+        NewNotebookButton { showsNewNotebook = true } onImportPDF: { showsPDFPicker = true }
+            .fileImporter(isPresented: $showsPDFPicker, allowedContentTypes: [.pdf]) { result in
+                pdfImport = PDFInbox.stage(result)
+            }
+    }
+
     /// Search spans the whole library; otherwise the selected folder's own notebooks.
     private var shownNotebooks: [NotebookSummary] {
         let notebooks = query.isEmpty ? library.notebooks(in: folder, matching: "") : library.notebooks(in: nil, matching: query)
@@ -374,5 +395,6 @@ extension LibraryScreen {
 #Preview("Library") {
     @Previewable @Namespace var zoom
     @Previewable @State var showsNew = false
-    LibraryScreen(library: SampleLibrary(), zoom: zoom, showsNewNotebook: $showsNew, showsGallery: nil) { _ in }
+    @Previewable @State var pdfImport: PDFImportRequest?
+    LibraryScreen(library: SampleLibrary(), zoom: zoom, showsNewNotebook: $showsNew, pdfImport: $pdfImport, showsGallery: nil) { _ in }
 }
