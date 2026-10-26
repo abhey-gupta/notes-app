@@ -49,7 +49,7 @@ public struct GlassCapsule<Content: View>: View {
         .frame(width: horizontal ? nil : thickness, height: horizontal ? thickness : nil)
         // Keeps content inside the glass while the capsule resizes (expanded ⇄ compact, axis re-flow).
         .clipShape(.capsule)
-        .glassEffect(.regular, in: .capsule)
+        .chromeGlassEffect(in: .capsule)
     }
 
     private var thickness: CGFloat {

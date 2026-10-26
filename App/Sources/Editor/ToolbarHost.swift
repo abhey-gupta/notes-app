@@ -86,7 +86,7 @@ struct ToolbarHost: View {
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
                             .accessibilitySortPriority(ChromeOrder.nav)
                         Spacer(minLength: Tokens.Spacing.m)
-                        PagesCapsule(tools: tools, state: state, page: page, isNight: paper == .night)
+                        PagesCapsule(tools: tools, state: state, page: page, paper: paper)
                             .chromeID(.pages, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
                             .accessibilitySortPriority(ChromeOrder.pages)
@@ -110,6 +110,7 @@ struct ToolbarHost: View {
         }
         .animation(morphAnimation, value: isCompact)
         .animation(dockAnimation, value: tools.dock)
+        .chromeGlass(for: paper)
     }
 
     private var ink: Color {

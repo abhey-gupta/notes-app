@@ -49,6 +49,15 @@ public struct RGBA: Hashable, Sendable {
         return byte(red) << 16 | byte(green) << 8 | byte(blue)
     }
 
+    /// Source-over onto an opaque `backdrop`: what a translucent fill looks like on a page.
+    public func composited(over backdrop: RGBA) -> RGBA {
+        RGBA(
+            red: red * alpha + backdrop.red * (1 - alpha),
+            green: green * alpha + backdrop.green * (1 - alpha),
+            blue: blue * alpha + backdrop.blue * (1 - alpha)
+        )
+    }
+
     /// WCAG 2.x relative luminance (alpha ignored).
     public var relativeLuminance: Double {
         func linear(_ c: Double) -> Double {

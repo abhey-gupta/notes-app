@@ -20,7 +20,7 @@ public struct GlassPill: View {
             .foregroundStyle(Tokens.Colors.pillText)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .glassEffect(.regular, in: .capsule)
+            .chromeGlassEffect(in: .capsule)
             .contentTransition(.numericText())
     }
 }
