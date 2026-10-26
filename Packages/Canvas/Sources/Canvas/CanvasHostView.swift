@@ -18,8 +18,9 @@
     /// direct touches (and the pointer), so a Pencil never scrolls. With "draw with finger" on and no
     /// Pencil seen yet, one finger inks and scrolling takes two (``InkEngine/InputPolicy``).
     ///
-    /// The host is first responder with its own `UndoManager`, so ⌘Z and the system three-finger
-    /// undo/redo gestures reach the notebook's history (`UndoManagerBridge` attaches to ``editUndoManager``).
+    /// The host is first responder with its own `UndoManager`, so ⌘Z reaches the notebook's history
+    /// (`UndoManagerBridge` attaches to ``editUndoManager``). The system's three-finger editing gestures are
+    /// off: the editor's two- and three-finger taps undo and redo (``MultiFingerTaps``).
     @MainActor
     public final class CanvasHostView: UIView {
         /// Zoom range (scale of page points).
@@ -34,7 +35,7 @@
         public let state = CanvasViewportState()
         /// Callbacks.
         public weak var delegate: (any CanvasHostViewDelegate)?
-        /// Undo manager for ⌘Z and the three-finger gestures while the canvas is first responder.
+        /// Undo manager for ⌘Z while the canvas is first responder.
         public let editUndoManager = UndoManager()
 
         /// Page frames. Set it when pages are added, removed or moved; the scroll offset is kept.

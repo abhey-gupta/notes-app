@@ -5,7 +5,8 @@ import SwiftUI
 enum LibraryPrompt: Hashable {
     case renameNotebook(NotebookSummary)
     case deleteNotebook(NotebookSummary)
-    case newFolder
+    /// New folder inside `parent` (`nil` = top level).
+    case newFolder(parent: FolderID?)
     case renameFolder(LibraryFolder)
 }
 
@@ -20,7 +21,7 @@ struct NotebookMenu: View {
         Menu("Move to Folder", systemImage: "folder") {
             folderButton("None", id: nil)
             ForEach(library.folders) { folder in
-                folderButton(folder.name, id: folder.id)
+                folderButton(library.folderPath(id: folder.id) ?? folder.name, id: folder.id)
             }
         }
         Button("Duplicate", systemImage: "plus.square.on.square") { library.duplicate(notebook.id) }
@@ -63,8 +64,8 @@ private struct LibraryPrompts: ViewModifier {
                     Button("Delete", role: .destructive) { library.delete(notebook.id) }
                 case let .renameNotebook(notebook):
                     nameField("Title", confirm: "Rename") { library.rename(notebook.id, to: text) }
-                case .newFolder:
-                    nameField("Folder name", confirm: "Create") { library.createFolder(named: text) }
+                case let .newFolder(parent):
+                    nameField("Folder name", confirm: "Create") { library.createFolder(named: text, in: parent) }
                 case let .renameFolder(folder):
                     nameField("Folder name", confirm: "Rename") { library.renameFolder(folder.id, to: text) }
                 case nil:

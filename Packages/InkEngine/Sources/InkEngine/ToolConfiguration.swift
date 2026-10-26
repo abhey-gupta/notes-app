@@ -18,14 +18,17 @@ public struct ToolConfiguration: Hashable, Sendable {
     public var color: InkColor
     /// Pen base width (pt, before profile modulation), or eraser diameter.
     public var width: Float
+    /// Pen pressure varies the width; off draws every stroke at neutral force (#123).
+    public var pressure: Bool
     /// "Draw with finger" setting (off by default, ARCHITECTURE.md §15.4). See ``InputPolicy``.
     public var allowsFingerDrawing: Bool
 
     /// Creates a configuration.
-    public init(tool: Tool, color: InkColor = .primary, width: Float = 2, allowsFingerDrawing: Bool = false) {
+    public init(tool: Tool, color: InkColor = .primary, width: Float = 2, pressure: Bool = true, allowsFingerDrawing: Bool = false) {
         self.tool = tool
         self.color = color
         self.width = width
+        self.pressure = pressure
         self.allowsFingerDrawing = allowsFingerDrawing
     }
 

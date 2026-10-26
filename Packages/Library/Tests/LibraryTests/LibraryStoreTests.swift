@@ -96,6 +96,34 @@ struct LibraryStoreTests {
         #expect(snapshot.notebook(entry.id)?.folderID == nil, "notebooks survive their folder, unfiled")
     }
 
+    @Test func nestedFoldersPersistAndDeleteMovesContentsUp() async throws {
+        let lib = try TempLibrary()
+        let store = lib.store()
+        let school = try await store.createFolder(named: "School")
+        let physics = try await store.createFolder(named: "Physics", in: school.id)
+        let labs = try await store.createFolder(named: "Labs", in: physics.id)
+        let entry = try await store.create(notebook("Optics"), in: physics.id)
+        await #expect(throws: LibraryError.self) {
+            try await store.createFolder(named: "Orphan", in: FolderID())
+        }
+
+        let reopened = await lib.store().snapshot().folders
+        #expect(reopened.children(of: nil).map(\.name) == ["School"])
+        #expect(reopened.children(of: school.id).map(\.name) == ["Physics"])
+        #expect(reopened.path(to: labs.id).map(\.name) == ["School", "Physics", "Labs"])
+        #expect(reopened.subtree(of: school.id) == [school.id, physics.id, labs.id])
+
+        try await store.deleteFolder(physics.id)
+        let snapshot = await lib.store().snapshot()
+        #expect(snapshot.folders.children(of: school.id).map(\.name) == ["Labs"], "subfolders move up")
+        #expect(snapshot.notebook(entry.id)?.folderID == school.id, "notebooks move up")
+    }
+
+    @Test func folderWithMissingParentIsTopLevel() {
+        let folders = [LibraryFolder(name: "Lost", parentID: FolderID()), LibraryFolder(name: "Top")]
+        #expect(folders.children(of: nil).map(\.name) == ["Lost", "Top"])
+    }
+
     @Test func duplicateCopiesPackageUnderNewID() async throws {
         let lib = try TempLibrary()
         let store = lib.store()

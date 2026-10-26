@@ -304,9 +304,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             }
             return
         }
-        let kind = tool.penKind ?? .ballpoint
-        for pk in strokes[canvas.ids.count...] {
-            let stroke = PencilKitConversion.stroke(from: pk, tool: kind, color: tool.color, width: tool.width)
+        for drawn in strokes[canvas.ids.count...] {
+            let (stroke, pk) = capture(drawn, on: canvas)
             canvas.ids.append(stroke.id)
             pending[page, default: []].append((stroke.id, pk))
             delegate?.engine(self, didCommit: stroke, to: page)
@@ -319,11 +318,11 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             canvas.needsRebuild = true
             return
         }
-        canvas.needsRebuild = false
         rebuildCount += 1
         if canvas.view.drawing.strokes.count > canvas.ids.count {
             absorbCanvasStrokes(canvas)
         }
+        canvas.needsRebuild = false
         var entries: [(id: StrokeID, pk: PKStroke)] = []
         if let page = canvas.page, let snapshot = snapshots[page] {
             let shown = snapshot.strokes.filter { !selection.strokes.contains($0.id) }
@@ -364,6 +363,9 @@ extension PencilKitInkEngine: PKCanvasViewDelegate {
     public func canvasViewDrawingDidChange(_ view: PKCanvasView) {
         guard !isSettingDrawing, let canvas = canvas(of: view) else { return }
         absorbCanvasStrokes(canvas)
+        if canvas.needsRebuild, !canvas.isUsingTool {
+            rebuildCanvas(canvas)
+        }
     }
 
     public func canvasViewDidFinishRendering(_ view: PKCanvasView) {

@@ -221,6 +221,16 @@ struct ToolStateTests {
         #expect(state.active == .lasso)
     }
 
+    /// The pen's pressure toggle reaches the engine (#123); the highlighter keeps pressure on.
+    @Test func activeInkCarriesPenPressure() throws {
+        let state = try makeState(makeDefaults())
+        #expect(state.active == .ink(.ballpoint, color: .primary, width: state.pen.width, pressure: true))
+        state.pen.pressure = false
+        #expect(state.active == .ink(.ballpoint, color: .primary, width: state.pen.width, pressure: false))
+        state.select(.highlighter)
+        #expect(state.active == .ink(.highlighter, color: state.highlighter.color, width: state.highlighter.width, pressure: true))
+    }
+
     /// Settings of other tools, quick colors and toolbar placement don't touch the active tool, so the
     /// editor isn't re-told (and a lasso selection isn't cleared) when they change.
     @Test func otherSettingsLeaveTheActiveToolAlone() throws {

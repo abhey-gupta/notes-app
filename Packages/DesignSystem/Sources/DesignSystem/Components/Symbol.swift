@@ -18,6 +18,10 @@ public enum Symbol: String, CaseIterable, Sendable {
     case palette = "paintpalette"
     case duplicate = "plus.square.on.square"
     case delete = "trash"
+    case sidebar = "sidebar.leading"
+    case folder = "folder.fill"
+    case allNotebooks = "books.vertical"
+    case expand = "chevron.forward"
 
     public var name: String {
         rawValue

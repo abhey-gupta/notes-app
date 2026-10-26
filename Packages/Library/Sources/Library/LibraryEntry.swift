@@ -144,17 +144,55 @@ extension LibraryEntry: Codable {
     }
 }
 
-/// A folder (one level; a notebook is in at most one).
+/// A folder; folders nest (`parentID`), a notebook is in at most one.
 public struct LibraryFolder: Hashable, Sendable, Codable, Identifiable {
     /// Stable identity.
     public let id: FolderID
     /// Display name.
     public var name: String
+    /// Enclosing folder; `nil` (or a folder no longer in the library) = top level. Absent in older indexes.
+    public var parentID: FolderID?
 
     /// Creates a folder.
-    public init(id: FolderID = FolderID(), name: String) {
+    public init(id: FolderID = FolderID(), name: String, parentID: FolderID? = nil) {
         self.id = id
         self.name = name
+        self.parentID = parentID
+    }
+}
+
+public extension [LibraryFolder] {
+    /// Folders directly inside `parent` (`nil` = top level), in display order. A folder whose parent is
+    /// missing counts as top level.
+    func children(of parent: FolderID?) -> [LibraryFolder] {
+        let ids = Set(map(\.id))
+        return filter { folder in
+            let effective = folder.parentID.flatMap { ids.contains($0) ? $0 : nil }
+            return effective == parent
+        }
+    }
+
+    /// `id`'s ancestors then `id` itself, outermost first (breadcrumb). Empty if `id` is unknown.
+    func path(to id: FolderID) -> [LibraryFolder] {
+        var path: [LibraryFolder] = []
+        var next: FolderID? = id
+        while let current = next, let folder = first(where: { $0.id == current }), !path.contains(folder) {
+            path.insert(folder, at: 0)
+            next = folder.parentID
+        }
+        return path
+    }
+
+    /// `id` and every folder nested under it.
+    func subtree(of id: FolderID) -> Set<FolderID> {
+        var result: Set<FolderID> = [id]
+        var frontier = [id]
+        while let parent = frontier.popLast() {
+            for child in children(of: parent) where result.insert(child.id).inserted {
+                frontier.append(child.id)
+            }
+        }
+        return result
     }
 }
 

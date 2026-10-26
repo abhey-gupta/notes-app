@@ -16,6 +16,7 @@ struct EditorScreen: View {
     @State private var notebook: NotebookSummary
     @State private var session: NotebookSession
     @State private var pencil: PencilGestures
+    @State private var touchUndo: TouchUndoGestures
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -27,6 +28,7 @@ struct EditorScreen: View {
         let session = NotebookSession(notebook: notebook, library: library, startsFocused: startsFocused)
         _session = State(initialValue: session)
         _pencil = State(initialValue: PencilGestures(tools: tools, state: session.state))
+        _touchUndo = State(initialValue: TouchUndoGestures(state: session.state))
     }
 
     var body: some View {
@@ -66,7 +68,10 @@ struct EditorScreen: View {
                 }
             #endif
         }
-        .onAppear { pencil.install(on: session.host) }
+        .onAppear {
+            pencil.install(on: session.host)
+            touchUndo.install(on: session.host)
+        }
         .onChange(of: tools.active, initial: true) { _, tool in
             session.setTool(tool, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing)
         }
