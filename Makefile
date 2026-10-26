@@ -3,7 +3,7 @@ DEST := platform=iOS Simulator,name=$(SIM)
 HEADLESS := InkModel InkGeometry Document Library Tools Editing Export Fixtures Canvas
 XCB := $(shell command -v xcbeautify >/dev/null && echo "| xcbeautify" )
 
-.PHONY: gen lint format test-packages build ipa test perf perf-device perf-gate perf-baseline fixtures open clean
+.PHONY: gen lint format test-packages build device ipa test perf perf-device perf-gate perf-baseline fixtures open clean
 
 gen:
 	xcodegen generate --quiet
@@ -21,6 +21,15 @@ test-packages:
 
 build: gen
 	set -o pipefail; xcodebuild build -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(XCB)
+
+# Release test build onto a connected iPad (DEVICE=<udid>) with the DEV-badged icon (AppIconDev.icon).
+DEVICE ?= 00008103-0011486002D1001E
+device: gen
+	set -o pipefail; xcodebuild build -project Notespace.xcodeproj -scheme Notespace -configuration Release \
+		-destination 'id=$(DEVICE)' -derivedDataPath build/device -allowProvisioningUpdates DEVELOPMENT_TEAM=YXJ29YJZ96 \
+		ASSETCATALOG_COMPILER_APPICON_NAME=AppIconDev $(XCB)
+	xcrun devicectl device install app --device $(DEVICE) build/device/Build/Products/Release-iphoneos/Notespace.app
+	xcrun devicectl device process launch --device $(DEVICE) com.abhey.notespace
 
 # Unsigned Release .ipa + dSYM zip for sideloading (AltStore/SideStore re-sign it with your Apple ID).
 # VERSION/BUILD override MARKETING_VERSION/CURRENT_PROJECT_VERSION (release.yml: tag, run number).
