@@ -91,6 +91,8 @@
         private var addPageButtonSize: CGSize?
         /// Zoom gesture tracking (`CanvasHostView+Zoom.swift`).
         var isPinching = false, engineIsZooming = false
+        /// The fit-width zoom a pinch is snapping to (`snapToFitWidth()`), until the animation lands.
+        var zoomSnapTarget: CGFloat?
         private let dismissGestures = DismissGestureClaim()
 
         /// Creates a host around `engine`.
