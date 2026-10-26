@@ -14,6 +14,8 @@ extension PencilKitInkEngine: InkInputViewDelegate {
     public func inkInputView(_: InkInputView, didProduce event: InkInputTracker.Event) {
         if tool.tool == .lasso {
             drawLasso(event)
+        } else if tool.tool == .eraser {
+            trackEraserCursor(event)
         }
         switch event {
         case let .began(stroke):

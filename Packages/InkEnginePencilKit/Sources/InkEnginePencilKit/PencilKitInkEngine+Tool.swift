@@ -10,6 +10,9 @@ extension PencilKitInkEngine {
     func applyTool() {
         input.allowsFingerDrawing = tool.allowsFingerDrawing
         input.isHidden = tool.penKind != nil
+        if tool.tool != .eraser {
+            hideEraserCursor()
+        }
         for canvas in canvases {
             applyTool(to: canvas)
         }

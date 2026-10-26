@@ -35,6 +35,7 @@ extension PencilKitInkEngine {
         selection.lasso.lineJoin = .round
         selection.lasso.lineDashPattern = [5, 4]
         selection.view.layer.addSublayer(selection.lasso)
+        setUpEraserCursor()
     }
 
     public func setSelectionPreview(_ preview: SelectionPreview?) {
@@ -184,6 +185,8 @@ final class SelectionLayers {
     let lifted = CALayer()
     /// Live lasso path.
     let lasso = CAShapeLayer()
+    /// Eraser reach under the tip (`+EraserCursor`).
+    let eraser = CAShapeLayer()
     /// The preview `lifted` shows (kept after it ends until the canvas has redrawn the strokes).
     var preview: SelectionPreview?
     /// Strokes left out of the canvas while the preview draws them.
