@@ -31,7 +31,7 @@
         }
 
         public func scrollViewDidEndZooming(_: UIScrollView, with _: UIView?, atScale _: CGFloat) {
-            settleZoom() // after a bounce back into range
+            zoomDidEnd() // after a bounce back into range, or a snap to fit width
         }
     }
 #endif

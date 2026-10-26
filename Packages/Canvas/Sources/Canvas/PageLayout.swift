@@ -155,4 +155,11 @@ extension PageLayout {
         let maxX = max(contentWidth + rightInset - viewWidth, minX)
         return min(max(x, minX), maxX)
     }
+
+    /// Where a pinch that ended at `zoom` settles (#130): within `tolerance` (a fraction) of `fit`, the zoom
+    /// that fits the page width to the view, it snaps to exactly `fit`; otherwise (or already there) nil.
+    static func snappedZoom(_ zoom: CGFloat, fit: CGFloat, tolerance: CGFloat = 0.1) -> CGFloat? {
+        guard fit > 0, abs(zoom - fit) > 0.0001, abs(zoom / fit - 1) <= tolerance else { return nil }
+        return fit
+    }
 }

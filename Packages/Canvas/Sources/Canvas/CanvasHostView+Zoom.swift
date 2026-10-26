@@ -5,16 +5,47 @@
     /// and gets one settled viewport when it ends, so it can leave its canvases to the scroll view's
     /// transform until then and re-tile once (ARCHITECTURE.md §3, Zoom).
     extension CanvasHostView {
-        /// A pinch, or the bounce back into the zoom range after one, is under way: the engine leaves its
-        /// canvases alone (UIKit's zoom transform scales them with the paper) and re-tiles them once at the
-        /// end. Pinching comes from the pinch recognizer (`CanvasScrollView.applyPinch` zooms when UIKit
-        /// doesn't).
+        /// A pinch, the bounce back into the zoom range after one, or the snap to fit width is under way:
+        /// the engine leaves its canvases alone (UIKit's zoom transform scales them with the paper) and
+        /// re-tiles them once at the end. Pinching comes from the pinch recognizer
+        /// (`CanvasScrollView.applyPinch` zooms when UIKit doesn't).
         var isZooming: Bool {
-            isPinching || canvasScrollView.isZoomBouncing
+            isPinching || canvasScrollView.isZoomBouncing || zoomSnapTarget != nil
         }
 
         @objc func pinchChanged(_ pinch: UIPinchGestureRecognizer) {
             isPinching = pinch.state == .began || pinch.state == .changed
+            if pinch.state == .began {
+                zoomSnapTarget = nil
+            } else if pinch.state == .ended {
+                snapToFitWidth()
+            }
+            settleZoom()
+        }
+
+        /// The zoom at which the page is as wide as the view less its side margins.
+        var fitWidthZoom: CGFloat {
+            let width = bounds.width - margins.left - margins.right
+            guard layout.pageSize.width > 0, width > 0 else { return canvasScrollView.zoomScale }
+            return min(max(width / layout.pageSize.width, Self.minimumZoom), Self.maximumZoom)
+        }
+
+        /// A pinch that ends near fit width eases the rest of the way there with a light tap (#130). The
+        /// engine treats the animation as part of the zoom (`isZooming`) and settles when it lands.
+        func snapToFitWidth() {
+            let scrollView = canvasScrollView
+            guard !scrollView.isZoomBouncing,
+                  let target = PageLayout.snappedZoom(scrollView.zoomScale, fit: fitWidthZoom) else { return }
+            zoomSnapTarget = target
+            UIImpactFeedbackGenerator(style: .light, view: self).impactOccurred()
+            scrollView.setZoomScale(target, animated: true)
+        }
+
+        /// The snap landed (UIKit also reports the pinch's own end, before the animation): stop zooming.
+        func zoomDidEnd() {
+            if let target = zoomSnapTarget, abs(canvasScrollView.zoomScale - target) < 0.0001 {
+                zoomSnapTarget = nil
+            }
             settleZoom()
         }
 

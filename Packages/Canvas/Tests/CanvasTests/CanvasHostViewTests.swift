@@ -60,6 +60,25 @@
             #expect(engine.view.bounds.size == host.layout.contentSize)
         }
 
+        /// A pinch ending near fit width animates there as part of the zoom, then settles the engine once (#130).
+        @Test func snapToFitWidthAnimatesThenSettles() async throws {
+            let window = UIWindow(frame: host.frame)
+            window.addSubview(host)
+            window.isHidden = false
+            let fit = host.fitWidthZoom
+            host.canvasScrollView.zoomScale = fit * 0.94
+            host.snapToFitWidth()
+            #expect(host.isZooming)
+            for _ in 0 ..< 400 where host.zoomSnapTarget != nil {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            #expect(host.zoomSnapTarget == nil)
+            #expect(abs(host.canvasScrollView.zoomScale - fit) < 0.0001)
+            let viewport = try #require(engine.viewports.last)
+            #expect(!viewport.isZooming)
+            #expect(abs(viewport.zoomScale - fit) < 0.0001)
+        }
+
         /// Residency on iOS feeds the engine: page snapshots for the engine window, accepted edits as edits.
         @Test func residencyFeedsTheEngine() async throws {
             let h = try ResidencyHarness()

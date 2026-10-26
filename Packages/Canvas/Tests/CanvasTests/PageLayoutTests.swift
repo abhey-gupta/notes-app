@@ -181,6 +181,16 @@ struct PageWindowTests {
         #expect(pin(700) == 616)
     }
 
+    /// A pinch ending within 10 % of fit width snaps to it (#130); farther out, or already there, it stays.
+    @Test func zoomSnapsToFitWidthWithinTenPercent() {
+        #expect(PageLayout.snappedZoom(1.08, fit: 1.2) == 1.2)
+        #expect(PageLayout.snappedZoom(1.31, fit: 1.2) == 1.2)
+        #expect(PageLayout.snappedZoom(1.07, fit: 1.2) == nil)
+        #expect(PageLayout.snappedZoom(1.33, fit: 1.2) == nil)
+        #expect(PageLayout.snappedZoom(1.2, fit: 1.2) == nil)
+        #expect(PageLayout.snappedZoom(1, fit: 0) == nil)
+    }
+
     /// The scroll view's bounds (zoomed points, origin = content offset) map to the content rect the engine
     /// and page window use; the pages it shows are the same at any zoom, and rubber-banding past the top
     /// (negative offset) just shows less of page 1.
