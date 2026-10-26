@@ -17,6 +17,8 @@ struct EditorScreen: View {
     @State private var session: NotebookSession
     @State private var pencil: PencilGestures
     @State private var touchUndo: TouchUndoGestures
+    /// Rename / delete from the title menu (#126).
+    @State private var prompt: LibraryPrompt?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -48,6 +50,10 @@ struct EditorScreen: View {
                     tools: tools,
                     state: session.state,
                     title: notebook.title,
+                    notebookMenu: NotebookMenu(
+                        notebook: library.notebook(id: notebook.id) ?? notebook, library: library, prompt: $prompt,
+                        deleteTitle: "Delete Notebook", onDuplicate: session.duplicate
+                    ),
                     paper: paperBinding,
                     pattern: patternBinding,
                     page: (min(viewport.currentPage + 1, max(viewport.pageCount, 1)), viewport.pageCount),
@@ -57,6 +63,13 @@ struct EditorScreen: View {
             }
         }
         .animation(Tokens.Motion.reducedMorph, value: session.state.pages.isPresented)
+        .libraryPrompts($prompt, library: library) { _, title in
+            notebook.title = session.rename(to: title)
+        } onDelete: { _ in
+            // Leave first: the store closes and checkpoints, then the package goes to the trash.
+            session.closeAndDelete()
+            dismiss()
+        }
         .toolbar(.hidden, for: .navigationBar)
         .persistentSystemOverlays(session.state.isFocused ? .hidden : .automatic)
         .task {

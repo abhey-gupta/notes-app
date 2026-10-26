@@ -2,13 +2,10 @@ import DesignSystem
 import SwiftUI
 import Tools
 
-/// Back, notebook title and paper/template menu (mock §02, left).
+/// Back and notebook title; the title opens the notebook menu: Rename, Move to Folder, Duplicate, Delete (#126).
 struct NavCapsule: View {
     let title: String
-    @Binding var paper: PaperTheme
-    @Binding var pattern: PaperPattern
-    /// "Keep exact colors", offered on Night paper.
-    @Binding var keepsExactColors: Bool
+    let menu: NotebookMenu
     let onBack: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -18,19 +15,7 @@ struct NavCapsule: View {
         GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
             ToolButton(.back, "Library", action: onBack)
             Menu {
-                Picker("Paper", selection: $paper) {
-                    ForEach(PaperTheme.allCases) { theme in
-                        Text(theme.displayName).tag(theme)
-                    }
-                }
-                Picker("Template", selection: $pattern) {
-                    ForEach(PaperPattern.allCases) { pattern in
-                        Text(pattern.displayName).tag(pattern)
-                    }
-                }
-                if paper == .night {
-                    Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
-                }
+                menu
             } label: {
                 HStack(spacing: 6) {
                     Text(title)
@@ -49,32 +34,31 @@ struct NavCapsule: View {
             .menuIndicator(.hidden)
             .buttonStyle(.plain)
             .accessibilityLabel("\(title), notebook options")
-            .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
         }
     }
 }
 
-/// Pages, share, more (mock §02, right). DEBUG adds a dock picker to the menu.
+/// Pages, share, more (mock §02, right). More opens ``PagePopover``: paper, template, focus mode.
 struct PagesCapsule: View {
     let tools: ToolState
     let state: EditorState
     /// Current page (1-based) and page count, for export.
     let page: (current: Int, total: Int)
-    let isNight: Bool
+    @Binding var paper: PaperTheme
+    @Binding var pattern: PaperPattern
 
     @State private var showsShare = false
+    @State private var showsMore = false
     @State private var presenter = ActivityPresenter()
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let scale = typeSize.chromeScale
         GlassCapsule {
             ToolButton(.pages, "Pages") { state.pages.present() }
                 .accessibilityHint("Shows all pages")
             ToolButton(.share, "Share") { showsShare.toggle() }
                 .background(ActivityAnchor(presenter: presenter))
                 .popover(isPresented: $showsShare) {
-                    SharePopover(state: state, page: page, isNight: isNight) { url in
+                    SharePopover(state: state, page: page, isNight: paper == .night) { url in
                         showsShare = false
                         // Present once SwiftUI has started dismissing the popover.
                         Task {
@@ -83,31 +67,20 @@ struct PagesCapsule: View {
                         }
                     }
                 }
-            Menu {
-                Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
-                #if DEBUG
-                    Picker("Toolbar dock (debug)", selection: dockBinding) {
-                        ForEach(ToolbarDock.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            ToolButton(.more, "More") { showsMore.toggle() }
+                .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
+                .popover(isPresented: $showsMore) {
+                    PagePopover(tools: tools, paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding) {
+                        showsMore = false
+                        state.enterFocus()
                     }
-                #endif
-            } label: {
-                Image(systemName: Symbol.more.name)
-                    .font(.system(size: Tokens.Size.toolIcon * scale))
-                    .foregroundStyle(Tokens.Colors.icon)
-                    .frame(width: Tokens.Size.toolButton.width * scale, height: Tokens.Size.toolButton.height * scale)
-                    .contentShape(.capsule)
-            }
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .accessibilityLabel("More")
+                }
         }
     }
 
-    #if DEBUG
-        private var dockBinding: Binding<ToolbarDock> {
-            Binding { tools.dock } set: { tools.dock = $0 }
-        }
-    #endif
+    private var exactColorsBinding: Binding<Bool> {
+        Binding { state.keepsExactColors } set: { state.onKeepsExactColors($0) }
+    }
 }
 
 /// Tools, quick colors, undo/redo, laid out along `axis` so the same content docks on any edge.
