@@ -78,13 +78,13 @@
             scrollView
         }
 
-        private let scrollView = CanvasScrollView()
+        let scrollView = CanvasScrollView()
         let contentView = UIView()
         private let addPageButton: UIButton
         private let touchObserver = TouchObserver()
         private var hasSeenPencil = false
-        private var lastBoundsSize: CGSize = .zero
-        private var fitZoom: CGFloat = 1
+        var lastBoundsSize: CGSize = .zero
+        var fitZoom: CGFloat = 1
         private var isUpdatingInsets = false
         /// `addPageButton`'s size: `intrinsicContentSize` re-resolves its configuration (≈30 % of a scroll
         /// frame, #44), so measure once per text size.
@@ -94,6 +94,8 @@
         /// The fit-width zoom a pinch is snapping to (`snapToFitWidth()`), until the animation lands.
         var zoomSnapTarget: CGFloat?
         private let dismissGestures = DismissGestureClaim()
+        /// The page-width handles (#129).
+        private lazy var pageWidthControls = PageWidthControls(host: self)
 
         /// Creates a host around `engine`.
         public init(engine: any InkEngine) {
@@ -150,6 +152,7 @@
             scrollView.pinchGestureRecognizer?.addTarget(scrollView, action: #selector(CanvasScrollView.applyPinch(_:)))
             scrollView.pinchGestureRecognizer?.addTarget(self, action: #selector(pinchChanged(_:)))
             updateNavigationGestures()
+            _ = pageWidthControls
         }
 
         @available(*, unavailable)
@@ -254,22 +257,14 @@
             return min(max(width / pageWidth, minimumZoom), maximumZoom)
         }
 
-        private func setZoom(_ zoom: CGFloat) {
+        func setZoom(_ zoom: CGFloat) {
             scrollView.zoomScale = zoom
             sizeContent()
             state.zoomScale = scrollView.zoomScale
         }
 
-        private func layoutDidChange(from old: PageLayout) {
-            state.pageCount = layout.pageCount
-            guard layout != old else { return }
-            sizeContent()
-            updateInsets()
-            viewportDidChange()
-        }
-
         /// Content view bounds = layout size (unzoomed); its frame and the content size scale with zoom.
-        private func sizeContent() {
+        func sizeContent() {
             let size = layout.contentSize
             let z = scrollView.zoomScale
             contentView.bounds = CGRect(origin: .zero, size: size)
@@ -295,7 +290,7 @@
             }
         }
 
-        private func centeredOffsetX() -> CGFloat {
+        func centeredOffsetX() -> CGFloat {
             let width = layout.contentSize.width * scrollView.zoomScale
             return (width - bounds.width) / 2
         }
@@ -349,6 +344,7 @@
                 pageWindow = next
                 delegate?.canvasHost(self, didChange: next)
             }
+            pageWidthControls.update()
         }
 
         private func requestNewPage() {

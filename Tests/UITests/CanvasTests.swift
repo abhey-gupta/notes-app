@@ -233,3 +233,78 @@ final class CanvasTests: XCTestCase {
         }
     }
 }
+
+/// Widening pages (#129): drag an edge handle out, every page widens by a 25 % step (persisted); the
+/// left handle moves the ink with the paper.
+final class PageWidthTests: XCTestCase {
+    override func setUp() {
+        continueAfterFailure = false
+    }
+
+    @MainActor
+    private func waitFor(_ element: XCUIElement, value: String, timeout: TimeInterval = 10) -> Bool {
+        let predicate = NSPredicate(format: "value == %@", value)
+        return XCTWaiter.wait(for: [expectation(for: predicate, evaluatedWith: element)], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func drag(_ handle: XCUIElement, by dx: CGFloat) {
+        let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.2, thenDragTo: start.withOffset(CGVector(dx: dx, dy: 0)), withVelocity: .slow, thenHoldForDuration: 1.5)
+    }
+
+    @MainActor
+    func testDraggingEdgeHandlesWidensEveryPage() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-resetLibrary", "YES", "-resetToolState", "YES", "-allowFingerDrawing", "YES"]
+        app.launch()
+        let new = app.buttons["newNotebook"]
+        XCTAssertTrue(new.waitForExistence(timeout: 10))
+        new.tap()
+        let title = app.textFields["notebookTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.typeText("Wide")
+        app.buttons["createNotebook"].tap()
+
+        let canvas = app.scrollViews["canvas"]
+        XCTAssertTrue(waitFor(canvas, value: "0 strokes"))
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.45))
+            .press(
+                forDuration: 0.05,
+                thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.47)),
+                withVelocity: .slow,
+                thenHoldForDuration: 0.1
+            )
+        XCTAssertTrue(waitFor(canvas, value: "1 stroke"))
+        RunLoop.current.run(until: Date().addingTimeInterval(2.5))
+        if app.buttons["Show toolbar"].exists {
+            app.buttons["Show toolbar"].tap()
+        }
+
+        let right = app.buttons["pageWidth.right"]
+        XCTAssertTrue(right.waitForExistence(timeout: 5), "handles show at fit zoom")
+        XCTAssertEqual(right.value as? String, "+0%")
+        let before = right.frame.midX
+        drag(right, by: 50)
+        XCTAssertTrue(waitFor(right, value: "+25%"), "one step out")
+        XCTAssertLessThan(right.frame.midX, before + 30, "refitted to the wider page")
+
+        let left = app.buttons["pageWidth.left"]
+        drag(left, by: -50)
+        XCTAssertTrue(waitFor(left, value: "+25%"))
+        XCTAssertTrue(waitFor(canvas, value: "1 stroke"), "ink moved with the paper, none lost")
+
+        // Dragging in past the original edge stops there.
+        drag(right, by: -400)
+        XCTAssertTrue(waitFor(right, value: "+0%"))
+
+        app.buttons["Library"].tap()
+        let cover = app.buttons["cover-Wide"]
+        XCTAssertTrue(cover.waitForExistence(timeout: 5))
+        cover.tap()
+        XCTAssertTrue(app.buttons["pageWidth.left"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitFor(app.buttons["pageWidth.left"], value: "+25%"), "width persisted")
+        XCTAssertTrue(waitFor(canvas, value: "1 stroke"))
+    }
+}

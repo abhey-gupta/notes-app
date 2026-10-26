@@ -41,7 +41,8 @@ public enum PDFExportError: Error, Hashable, Sendable {
 
 /// What to export and how it should look (ARCHITECTURE.md §9).
 public struct PDFExportOptions: Hashable, Sendable {
-    /// PDF page size in points (the notebook page size; one PDF page per notebook page).
+    /// PDF page size in points (the notebook's actual, possibly widened, page size; one PDF page per
+    /// notebook page).
     public var pageSize: CGSize
     /// The notebook's paper theme.
     public var theme: PaperTheme
@@ -72,10 +73,10 @@ public struct PDFExportOptions: Hashable, Sendable {
         self.title = title
     }
 
-    /// Options for `notebook`: its page size, theme, color setting and title.
+    /// Options for `notebook`: its page size (widened pages export at their full width, #129), theme, color setting and title.
     public init(notebook: Notebook, pages: PageSelection = .all, exportsAsShown: Bool = false) {
         self.init(
-            pageSize: notebook.pageSize,
+            pageSize: notebook.extendedPageSize,
             theme: notebook.theme,
             keepsExactColors: notebook.keepsExactColors,
             exportsAsShown: exportsAsShown,

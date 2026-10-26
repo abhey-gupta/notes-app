@@ -1,5 +1,6 @@
 #if canImport(UIKit)
     import InkEngine
+    import InkModel
     import Observation
     import UIKit
 
@@ -14,6 +15,18 @@
         func canvasHostDidRequestNewPage(_ host: CanvasHostView)
         /// The last touch on the canvas lifted (end of a Pencil gesture: eraser undo grouping, focus mode).
         func canvasHostDidLiftAllTouches(_ host: CanvasHostView)
+        /// A page-width handle was released (#129): widen or narrow every page to `pageExtension`.
+        func canvasHost(_ host: CanvasHostView, didRequestPageExtension pageExtension: PageExtension)
+        /// Left and right edges of the ink on every page (page space), `nil` if there is none: a page-width
+        /// drag never narrows past it.
+        func canvasHostInkSpan(_ host: CanvasHostView) async -> ClosedRange<CGFloat>?
+    }
+
+    public extension CanvasHostViewDelegate {
+        func canvasHost(_: CanvasHostView, didRequestPageExtension _: PageExtension) {}
+        func canvasHostInkSpan(_: CanvasHostView) async -> ClosedRange<CGFloat>? {
+            nil
+        }
     }
 
     /// A view the host keeps above the ink engine (``CanvasHostView/overlay``), pinned to the visible rect

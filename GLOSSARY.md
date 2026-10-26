@@ -20,6 +20,10 @@ _Avoid_: Line, path, drawing
 The printed pattern on a page (blank, lined, dotted, grid, Cornell).
 _Avoid_: Background, paper pattern
 
+**Page extension**:
+Paper added beside every page of a notebook, left and/or right of the original page, in 25 % steps up to 200 % per side. Widening on the left moves the ink with the paper.
+_Avoid_: Margin, canvas size
+
 ## Changes
 
 **Page edit**:

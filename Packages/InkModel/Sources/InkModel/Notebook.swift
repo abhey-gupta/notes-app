@@ -92,8 +92,10 @@ public struct Notebook: Hashable, Sendable, Codable, Identifiable {
     public var theme: PaperTheme
     /// When `true`, custom ink colors are not lightness-remapped on Night paper (§10).
     public var keepsExactColors: Bool
-    /// Page size in points (all pages).
+    /// Original page size in points (all pages); ``extendedPageSize`` adds ``pageExtension``.
     public var pageSize: CGSize
+    /// Paper added beside every page (#129).
+    public var pageExtension: PageExtension
     /// Page order.
     public var pages: [PageID]
     /// Creation time.
@@ -112,6 +114,7 @@ public struct Notebook: Hashable, Sendable, Codable, Identifiable {
         theme: PaperTheme = .white,
         keepsExactColors: Bool = false,
         pageSize: CGSize = Notebook.a4Portrait,
+        pageExtension: PageExtension = .none,
         pages: [PageID] = [],
         createdAt: Date = Date(),
         modifiedAt: Date? = nil,
@@ -124,6 +127,7 @@ public struct Notebook: Hashable, Sendable, Codable, Identifiable {
         self.theme = theme
         self.keepsExactColors = keepsExactColors
         self.pageSize = pageSize
+        self.pageExtension = pageExtension
         self.pages = pages
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt ?? createdAt

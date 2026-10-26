@@ -56,10 +56,12 @@ final class PageLayerView: UIView {
         var strokeCount: Int
         /// Strokes drawn on the canvas but not yet echoed into the snapshot.
         var pendingCount: Int
+        /// Page size: widening a page (#129) keeps its rev but needs a new raster.
+        var size: CGSize
 
         /// What the raster shows, bucket aside.
         var content: ContentKey {
-            ContentKey(rev: rev, theme: theme, strokeCount: strokeCount, pendingCount: pendingCount)
+            ContentKey(rev: rev, theme: theme, strokeCount: strokeCount, pendingCount: pendingCount, size: size)
         }
     }
 
@@ -69,6 +71,7 @@ final class PageLayerView: UIView {
         var theme: PaperTheme
         var strokeCount: Int
         var pendingCount: Int
+        var size: CGSize
     }
 
     /// Something (raster, stale raster or thumbnail) is on screen.
@@ -109,6 +112,15 @@ final class PageLayerView: UIView {
     func layout(frame: CGRect, template: PageTemplate, markScale: CGFloat?, colors: Colors) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        if bounds.size != .zero, bounds.size != frame.size {
+            // The page was widened (#129): its image would show stretched, so the paper waits for a raster.
+            inkLayer.image = nil
+            shownKey = nil
+            requestedKey = nil
+            thumbnailLayer.image = nil
+            thumbnailLayer.isHidden = true
+            showsThumbnail = false
+        }
         self.frame = frame
         layer.backgroundColor = colors.paper
         linesLayer.strokeColor = colors.line

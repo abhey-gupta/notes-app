@@ -77,5 +77,41 @@
                 }
             }
         }
+
+        /// New page frames (pages added, removed, moved, widened); the scroll offset is kept.
+        func layoutDidChange(from old: PageLayout) {
+            state.pageCount = layout.pageCount
+            guard layout != old else { return }
+            if layout.pageSize.width != old.pageSize.width, lastBoundsSize != .zero {
+                pageWidthDidChange(from: old)
+            } else {
+                sizeContent()
+            }
+            updateInsets()
+            viewportDidChange()
+        }
+
+        /// Pages were widened or narrowed (#129): at fit zoom the new width is fitted (and centred);
+        /// zoomed in, the ink stays put on screen (a left change moved every stroke by the difference).
+        func pageWidthDidChange(from old: PageLayout) {
+            let oldFit = fitZoom
+            fitZoom = Self.fitZoom(pageWidth: layout.pageSize.width, viewWidth: bounds.width)
+            let z = scrollView.zoomScale
+            let anchorY = (scrollView.contentOffset.y + scrollView.contentInset.top) / z
+            if abs(z - oldFit) < 0.001 {
+                setZoom(fitZoom)
+                updateInsets()
+                let y = anchorY * scrollView.zoomScale - scrollView.contentInset.top
+                scrollView.contentOffset = CGPoint(x: centeredOffsetX(), y: y)
+            } else {
+                sizeContent()
+                updateInsets()
+                let x = scrollView.contentOffset.x + (layout.pageExtension.left - old.pageExtension.left) * z
+                scrollView.contentOffset.x = PageLayout.pinnedOffsetX(
+                    x, contentWidth: scrollView.contentSize.width, viewWidth: bounds.width,
+                    leftInset: scrollView.contentInset.left, rightInset: scrollView.contentInset.right
+                )
+            }
+        }
     }
 #endif

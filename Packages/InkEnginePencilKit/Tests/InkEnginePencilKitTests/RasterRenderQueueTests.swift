@@ -16,7 +16,7 @@ struct RasterRenderQueueTests {
     }
 
     private func key(_ page: UInt8) -> PageLayerView.InkKey {
-        PageLayerView.InkKey(rev: 1, theme: .white, pixelScale: 1, strokeCount: 1, pendingCount: 0)
+        PageLayerView.InkKey(rev: 1, theme: .white, pixelScale: 1, strokeCount: 1, pendingCount: 0, size: .zero)
     }
 
     /// With one render at a time, the queued pages start nearest the viewport first, and the depth gauge

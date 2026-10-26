@@ -86,7 +86,8 @@ extension PageEntry: Codable {
 ///
 /// Page order is ``Notebook/pages`` on ``notebook``; per-page metadata is looked up by ID (pages without
 /// an explicit entry get the notebook paper's default template, rev 0). JSON layout: a flat object with
-/// `formatVersion`, the ``Notebook`` fields, and `pages: [PageEntry]`; keys sorted, dates as Unix
+/// `formatVersion`, the ``Notebook`` fields (`pageExtension: {left, right}` only once a page was widened,
+/// #129), and `pages: [PageEntry]`; keys sorted, dates as Unix
 /// milliseconds. Unknown keys at either level survive decode → encode.
 public struct Manifest: Hashable, Sendable {
     /// Format version written by, and the newest readable by, this build (§4.5). 2: stroke files and
@@ -196,7 +197,7 @@ public struct Manifest: Hashable, Sendable {
     private static func roundingDates(_ n: Notebook) -> Notebook {
         Notebook(
             id: n.id, title: n.title, cover: n.cover, paper: n.paper, theme: n.theme, keepsExactColors: n.keepsExactColors,
-            pageSize: n.pageSize, pages: n.pages, createdAt: n.createdAt.roundedToMilliseconds,
+            pageSize: n.pageSize, pageExtension: n.pageExtension, pages: n.pages, createdAt: n.createdAt.roundedToMilliseconds,
             modifiedAt: n.modifiedAt.roundedToMilliseconds, rev: n.rev
         )
     }
@@ -204,7 +205,7 @@ public struct Manifest: Hashable, Sendable {
 
 extension Manifest: Codable {
     private enum Key: String, CaseIterable {
-        case formatVersion, id, title, cover, paper, theme, keepsExactColors, pageSize, createdAt, modifiedAt, rev, pages
+        case formatVersion, id, title, cover, paper, theme, keepsExactColors, pageSize, pageExtension, createdAt, modifiedAt, rev, pages
 
         var key: AnyCodingKey {
             AnyCodingKey(rawValue)
@@ -214,6 +215,11 @@ extension Manifest: Codable {
     private struct Size: Codable {
         var width: Double
         var height: Double
+    }
+
+    private struct Extension: Codable {
+        var left: Double
+        var right: Double
     }
 
     private static let known = Set(Key.allCases.map(\.rawValue))
@@ -239,6 +245,8 @@ extension Manifest: Codable {
             theme: c.decode(PaperTheme.self, forKey: Key.theme.key),
             keepsExactColors: c.decode(Bool.self, forKey: Key.keepsExactColors.key),
             pageSize: CGSize(width: size.width, height: size.height),
+            pageExtension: c.decodeIfPresent(Extension.self, forKey: Key.pageExtension.key)
+                .map { PageExtension(left: $0.left, right: $0.right) } ?? .none,
             pages: pages.map(\.id),
             createdAt: Date(unixMilliseconds: c.decode(Int64.self, forKey: Key.createdAt.key)),
             modifiedAt: Date(unixMilliseconds: c.decode(Int64.self, forKey: Key.modifiedAt.key)),
@@ -259,6 +267,10 @@ extension Manifest: Codable {
         try c.encode(n.theme, forKey: Key.theme.key)
         try c.encode(n.keepsExactColors, forKey: Key.keepsExactColors.key)
         try c.encode(Size(width: Double(n.pageSize.width), height: Double(n.pageSize.height)), forKey: Key.pageSize.key)
+        if !n.pageExtension.isNone {
+            let e = n.pageExtension
+            try c.encode(Extension(left: Double(e.left), right: Double(e.right)), forKey: Key.pageExtension.key)
+        }
         try c.encode(n.createdAt.unixMilliseconds, forKey: Key.createdAt.key)
         try c.encode(n.modifiedAt.unixMilliseconds, forKey: Key.modifiedAt.key)
         try c.encode(n.rev, forKey: Key.rev.key)

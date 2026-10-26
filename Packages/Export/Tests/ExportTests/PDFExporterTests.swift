@@ -235,3 +235,17 @@ final class ProgressLog: @unchecked Sendable {
         lock.withLock { log.append(value) }
     }
 }
+
+/// Widened pages (#129) export at their actual size.
+struct WidenedPageExportTests {
+    @Test func pdfPageIsTheWidenedPage() async throws {
+        let notebook = Notebook(title: "Wide", pageExtension: PageExtension(left: 148.75, right: 595))
+        let options = PDFExportOptions(notebook: notebook)
+        #expect(options.pageSize == CGSize(width: 595 + 148.75 + 595, height: 842))
+        let page = Page(strokes: [Fixtures.line(from: CGPoint(x: 1200, y: 400), to: CGPoint(x: 1300, y: 400))])
+        let pdf = try await PDF(PDFExporter(palette: TestPalette()).pdfData(pages: [page], options: options))
+        #expect(try pdf.page(0).getBoxRect(.mediaBox) == CGRect(x: 0, y: 0, width: 1338.75, height: 842))
+        let bitmap = try pdf.bitmap(0)
+        #expect(bitmap.minLuma(x: 1210 ... 1290, y: 398 ... 402) < 128, "ink in the extension is on the page")
+    }
+}

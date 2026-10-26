@@ -26,6 +26,8 @@ On-disk layout of a Notespace notebook and what we promise about it. Details: AR
 | `*.strokes` | u16 after `INKS` | 2 |
 | `*.wal` | u16 after `INKW` | 2 |
 
+`pageSize` is the original page; `pageExtension: {left, right}` (points, written only once pages were widened, #129) is paper added beside every page. Stroke coordinates start at the widened page's left edge. Absent = not widened, so older packages read unchanged.
+
 Stroke files and journals are little-endian, CRC-32 checked; damage is a typed error, never garbage ink. Thumbnails and the index are derived data: safe to delete.
 
 ## Identity

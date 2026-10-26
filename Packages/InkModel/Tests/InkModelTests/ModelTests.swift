@@ -122,3 +122,16 @@ struct NotebookTests {
         #expect(try roundTrip(page) == page)
     }
 }
+
+struct PageExtensionTests {
+    @Test func widensBySteps() {
+        let e = PageExtension(leftSteps: 1, rightSteps: 3, of: 400)
+        #expect(e == PageExtension(left: 100, right: 300))
+        #expect(e.pageSize(for: CGSize(width: 400, height: 500)) == CGSize(width: 800, height: 500))
+        #expect(e.steps(.left, of: 400) == 1)
+        #expect(e.steps(.right, of: 400) == 3)
+        #expect(PageExtension.maximumSteps == 8)
+        #expect(PageExtension(left: -5).isNone)
+        #expect(Notebook(title: "n", pageExtension: e).extendedPageSize == CGSize(width: 995, height: 842))
+    }
+}

@@ -274,3 +274,52 @@ struct EditPipelineTests {
         #expect(h.undoManager?.canUndo == false)
     }
 }
+
+/// Widening pages (#129): a left change moves every stroke on every page and clears the history.
+@MainActor
+@Suite(.timeLimit(.minutes(1)))
+struct PageExtensionPipelineTests {
+    private func xs(_ h: Harness, _ page: PageID) async throws -> [CGFloat] {
+        try await h.store.page(page).strokes.map(\.bounds.minX)
+    }
+
+    @Test func widenLeftShiftsInkOnEveryPage() async throws {
+        let h = try Harness()
+        h.pipeline.commitStroke(line(y: 100), to: h.first)
+        h.pipeline.commitStroke(line(y: 200), to: h.second)
+        await h.pipeline.drain()
+        let before = try await xs(h, h.first) + xs(h, h.second)
+        h.pipeline.setPageExtension(PageExtension(left: 150))
+        await h.pipeline.drain()
+        let after = try await xs(h, h.first) + xs(h, h.second)
+        #expect(zip(before, after).allSatisfy { abs($1 - $0 - 150) < 0.01 })
+        #expect(h.mirror.page(h.first)?.strokes.first?.bounds.minX == after.first)
+        #expect(await h.store.manifest.notebook.pageExtension == PageExtension(left: 150))
+        #expect(h.mirror.pageChanges == 1)
+        #expect(!h.pipeline.history.canUndo, "earlier steps would put strokes back where they were")
+    }
+
+    @Test func widenRightKeepsInkAndHistory() async throws {
+        let h = try Harness()
+        h.pipeline.commitStroke(line(y: 100), to: h.first)
+        await h.pipeline.drain()
+        let before = try await xs(h, h.first)
+        h.pipeline.setPageExtension(PageExtension(right: 300))
+        await h.pipeline.drain()
+        #expect(try await xs(h, h.first) == before)
+        #expect(await h.store.manifest.notebook.extendedPageSize.width == 895)
+        #expect(h.pipeline.history.canUndo)
+    }
+
+    @Test func narrowingLeftShiftsBack() async throws {
+        let h = try Harness()
+        h.pipeline.setPageExtension(PageExtension(left: 300))
+        h.pipeline.commitStroke(line(y: 100, from: 320, to: 600), to: h.first)
+        await h.pipeline.drain()
+        let before = try await xs(h, h.first)
+        h.pipeline.setPageExtension(PageExtension(left: 100))
+        await h.pipeline.drain()
+        #expect(try await abs(xs(h, h.first)[0] - (before[0] - 200)) < 0.01)
+        #expect(await h.store.manifest.notebook.pageExtension == PageExtension(left: 100))
+    }
+}

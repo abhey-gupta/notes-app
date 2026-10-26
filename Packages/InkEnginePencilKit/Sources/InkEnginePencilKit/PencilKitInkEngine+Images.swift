@@ -19,7 +19,7 @@ extension PencilKitInkEngine {
         let pendingStrokes = (pending[snapshot.id] ?? []).map(\.pk)
         let key = PageLayerView.InkKey(
             rev: snapshot.rev, theme: theme, pixelScale: pixelScale,
-            strokeCount: snapshot.strokes.count, pendingCount: pendingStrokes.count
+            strokeCount: snapshot.strokes.count, pendingCount: pendingStrokes.count, size: snapshot.size
         )
         guard view.shownKey != key, view.requestedKey != key else { return }
         view.requestedKey = key
@@ -38,7 +38,10 @@ extension PencilKitInkEngine {
             return
         }
         if !view.hasImage {
-            if let near = rasters.nearest(for: id, content: key.content, pixelScale: pixelScale) ?? rasters.latestImage(for: id) {
+            if let near = rasters.nearest(for: id, content: key.content, pixelScale: pixelScale) ?? rasters.latestImage(
+                for: id,
+                size: snapshot.size
+            ) {
                 view.setStaleInk(near)
             } else {
                 showThumbnail(view, for: id)

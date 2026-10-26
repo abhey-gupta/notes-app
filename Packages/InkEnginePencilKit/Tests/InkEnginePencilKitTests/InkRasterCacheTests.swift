@@ -16,7 +16,7 @@ struct InkRasterCacheTests {
     }
 
     private func key(rev: UInt64 = 1, scale: CGFloat = 2) -> PageLayerView.InkKey {
-        PageLayerView.InkKey(rev: rev, theme: .white, pixelScale: scale, strokeCount: 1, pendingCount: 0)
+        PageLayerView.InkKey(rev: rev, theme: .white, pixelScale: scale, strokeCount: 1, pendingCount: 0, size: .zero)
     }
 
     @Test func hitsOnlyForTheSameKey() throws {
@@ -50,7 +50,7 @@ struct InkRasterCacheTests {
         #expect(cache.nearest(for: page, content: key().content, pixelScale: 2) === one, "ties go to the lower bucket")
         #expect(cache.nearest(for: page, content: key().content, pixelScale: 3) === four)
         #expect(cache.nearest(for: page, content: key(rev: 2).content, pixelScale: 2) == nil, "other content is not the same ink")
-        #expect(cache.latestImage(for: page) === four, "any content: the newest raster")
+        #expect(cache.latestImage(for: page, size: .zero) === four, "any content: the newest raster")
     }
 
     @Test func thumbnailsShareTheBudget() throws {
@@ -60,7 +60,7 @@ struct InkRasterCacheTests {
         cache.insertThumbnail(thumb, for: page)
         try cache.insert(image(), for: page, key: key())
         #expect(cache.thumbnail(for: page) === thumb)
-        #expect(cache.latestImage(for: page) !== thumb, "a thumbnail is not a raster")
+        #expect(cache.latestImage(for: page, size: .zero) !== thumb, "a thumbnail is not a raster")
         try cache.insert(image(), for: PageID(), key: key())
         #expect(cache.thumbnail(for: page) != nil, "touched: still the most recently used")
         #expect(cache.image(for: page, key: key()) == nil, "the page's raster was the oldest")
