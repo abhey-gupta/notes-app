@@ -21,6 +21,11 @@ public enum ChromeAppearance: Sendable {
         self == .clear ? .clear.tint(Tokens.Colors.chromeSmoke.color) : .regular.tint(Tokens.Colors.chromeFrost.color)
     }
 
+    /// Glass card backing (#126): Night's clear glass needs smoke under text; frosted glass has its own fill.
+    public var cardBacking: Color {
+        self == .clear ? Tokens.Colors.chromeCardSmoke.color : .clear
+    }
+
     /// Popover background behind the system glass.
     public var popoverBackground: Color {
         (self == .clear ? Tokens.Colors.chromeSmoke : Tokens.Colors.chromeFrost).color

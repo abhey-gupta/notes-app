@@ -40,21 +40,15 @@ struct NavCapsule: View {
     }
 }
 
-/// Pages, share, more (mock §02, right). More opens ``PagePopover``: paper, template, focus mode.
-/// Compact chrome (#118): pages and more; share is a row in ⋯ and its popover hangs off ⋯.
+/// Pages, share, more (mock §02, right). More opens the ``PagePopover`` card: paper, template, focus mode;
+/// Share the ``SharePopover`` card. ``ToolbarHost`` draws both below this capsule (#126).
+/// Compact chrome (#118): pages and more; share is a row in ⋯ and its card hangs off ⋯.
 struct PagesCapsule: View {
-    let tools: ToolState
     let state: EditorState
-    /// Current page (1-based) and page count, for export.
-    let page: (current: Int, total: Int)
-    @Binding var paper: PaperTheme
-    @Binding var pattern: PaperPattern
+    let paper: PaperTheme
+    let pattern: PaperPattern
 
-    @State private var showsShare = false
-    @State private var showsMore = false
-    /// ⋯ → Share: the export popover follows once ⋯ has gone.
-    @State private var sharesAfterMore = false
-    @State private var presenter = ActivityPresenter()
+    @Environment(ChromeCards.self) private var cards
     @Environment(\.isCompactLayout) private var isCompactLayout
 
     var body: some View {
@@ -64,59 +58,23 @@ struct PagesCapsule: View {
             if isCompactLayout {
                 sharing(moreButton)
             } else {
-                sharing(ToolButton(.share, "Share") { showsShare.toggle() })
+                sharing(ToolButton(.share, "Share") { cards.toggle(.share) })
                 moreButton
             }
         }
     }
 
     private var moreButton: some View {
-        let onShare: (() -> Void)? = isCompactLayout ? { shareFromMore() } : nil
-        return ToolButton(.more, "More") { showsMore.toggle() }
+        ToolButton(.more, "More") { cards.toggle(.more) }
             .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
-            .popover(isPresented: $showsMore, attachmentAnchor: Self.moreAnchor, arrowEdge: .top) {
-                PagePopover(
-                    tools: tools, paper: $paper, pattern: $pattern,
-                    onShare: onShare
-                ) {
-                    showsMore = false
-                    state.enterFocus()
-                }
-                .chromePopover(paper)
-                .onDisappear {
-                    if sharesAfterMore {
-                        sharesAfterMore = false
-                        showsShare = true
-                    }
-                }
-            }
+            .chromeCardSource(.more, in: cards)
     }
 
-    /// The export popover and share sheet, anchored to `button`.
+    /// `button` opens the export card and anchors the share sheet.
     private func sharing(_ button: some View) -> some View {
         button
-            .background(ActivityAnchor(presenter: presenter))
-            .popover(isPresented: $showsShare, arrowEdge: .top) {
-                SharePopover(state: state, page: page, isNight: paper == .night) { url in
-                    showsShare = false
-                    // Present once SwiftUI has started dismissing the popover.
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(50))
-                        presenter.share(url)
-                    }
-                }
-                .chromePopover(paper)
-            }
-    }
-
-    /// ⋯ sits at the screen edge, so its popover is pushed against it and an arrow at ⋯'s center lands on the
-    /// popover's rounded corner, which the system squares off into a glass bump. Aiming left of center keeps
-    /// the arrow clear of the corner.
-    private static let moreAnchor = PopoverAttachmentAnchor.point(UnitPoint(x: 0.1, y: 1))
-
-    private func shareFromMore() {
-        sharesAfterMore = true
-        showsMore = false
+            .background(ActivityAnchor(presenter: cards.presenter))
+            .chromeCardSource(.share, in: cards)
     }
 }
 
@@ -130,8 +88,6 @@ struct EditorToolbarContent: View {
     let state: EditorState
     let paper: PaperTheme
     let axis: Axis
-    /// Quick colors editor arrow: toward the toolbar.
-    let arrowEdge: Edge
     /// Tap on the already-current tool.
     let onReselect: (Tool) -> Void
     /// Each tool button's frame in ``ToolbarHost/capsuleSpace`` (popover anchors).
@@ -171,7 +127,7 @@ struct EditorToolbarContent: View {
         } else {
             swatches
         }
-        QuickColorsButton(tools: tools, paper: paper, arrowEdge: arrowEdge)
+        QuickColorsButton()
         ChromeSeparator(axis: axis)
         ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
             .disabled(!state.canUndo)

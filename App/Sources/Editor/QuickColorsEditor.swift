@@ -3,19 +3,15 @@ import InkModel
 import SwiftUI
 import Tools
 
-/// Small ⌄ right after the toolbar's quick colors: opens ``QuickColorsEditor`` (#125).
+/// Small ⌄ right after the toolbar's quick colors: opens the ``QuickColorsEditor`` card (#125, #126).
 struct QuickColorsButton: View {
-    let tools: ToolState
-    let paper: DesignSystem.PaperTheme
-    let arrowEdge: Edge
-
-    @State private var isPresented = false
+    @Environment(ChromeCards.self) private var cards
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let scale = typeSize.chromeScale
         Button {
-            isPresented.toggle()
+            cards.toggle(.quickColors)
         } label: {
             Image(systemName: Symbol.disclosure.name)
                 .scaledFont(size: 11, weight: .semibold)
@@ -24,14 +20,9 @@ struct QuickColorsButton: View {
                 .contentShape(.rect)
         }
         .buttonStyle(PressScaleStyle())
+        .chromeCardSource(.quickColors, in: cards)
         .accessibilityLabel("Edit quick colors")
         .accessibilityIdentifier("quickColorsButton")
-        .popover(isPresented: $isPresented, arrowEdge: arrowEdge) {
-            QuickColorsEditor(tools: tools, paper: paper)
-                .chromePopover(paper)
-                .presentationCompactAdaptation(.popover)
-                .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
-        }
     }
 }
 

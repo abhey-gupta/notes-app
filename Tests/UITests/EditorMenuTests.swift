@@ -28,6 +28,25 @@ final class EditorMenuTests: XCTestCase {
         XCTAssertTrue(app.buttons["Focus mode"].exists)
     }
 
+    /// #126: ⋯ opens an arrowless card just below the pages capsule, trailing edges aligned; a tap outside
+    /// closes it.
+    @MainActor
+    func testMoreCardHangsBelowPagesCapsule() {
+        let app = launchEditor()
+        let more = app.buttons["More"]
+        let value = more.value as? String
+        more.tap()
+        let white = app.buttons["paper.white"]
+        let cornell = app.buttons["template.cornell"]
+        XCTAssertTrue(white.waitForExistence(timeout: 3))
+        XCTAssertGreaterThan(white.frame.minY, more.frame.maxY + 8, "below the capsule")
+        XCTAssertLessThan(white.frame.minY, more.frame.maxY + 80, "just below it")
+        XCTAssertGreaterThan(cornell.frame.maxX, more.frame.minX, "trailing edge with the capsule's")
+        XCTAssertLessThan(cornell.frame.maxX, app.windows.firstMatch.frame.maxX - 18, "inside the screen margin")
+        dismiss(app, "pagePopover")
+        XCTAssertEqual(more.value as? String, value, "the outside tap only closed the card")
+    }
+
     /// #122: chrome and popovers stay usable as the paper flips between light and Night. Set
     /// `TEST_RUNNER_CHROME_SHOTS=<dir>` to save screenshots for a visual check.
     @MainActor

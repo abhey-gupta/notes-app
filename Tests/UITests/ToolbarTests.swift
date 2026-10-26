@@ -186,6 +186,20 @@ final class ToolbarTests: XCTestCase {
         XCTAssertFalse(bar.buttons["Black"].exists)
     }
 
+    /// #126: on a side dock the card opens beside the toolbar, away from the edge.
+    @MainActor
+    func testQuickColorsCardOpensBesideSideDock() {
+        let app = launch(["-toolbarDock", "right"])
+        let bar = toolbar(app)
+        XCTAssertTrue(waitUntil(bar, isAt: .right, in: app))
+        app.buttons["quickColorsButton"].tap()
+        let add = app.buttons["addQuickColor"]
+        let remove = app.buttons["removeQuickColor"]
+        XCTAssertTrue(add.waitForExistence(timeout: 3))
+        XCTAssertLessThan(remove.frame.maxX, bar.frame.minX, "beside a right-docked toolbar")
+        XCTAssertGreaterThan(add.frame.minX, app.windows.firstMatch.frame.midX, "next to it")
+    }
+
     // MARK: Tool options popover (#27)
 
     @MainActor

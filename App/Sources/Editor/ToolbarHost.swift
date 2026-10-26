@@ -13,7 +13,8 @@ import Tools
 ///
 /// Tapping the active tool on the expanded toolbar opens its options popover (``ToolPopover``, #27),
 /// anchored to that button with the arrow toward the toolbar on every dock. Any tap on the compact pill
-/// expands; the pill has no popover.
+/// expands; the pill has no popover. ⋯, Share and quick colors open arrowless glass cards instead
+/// (``ChromeCards``, #126): below the pages capsule, or beside ⌄ away from the dock.
 /// Compact chrome (#118, iPhone, narrow iPad windows): a bottom bar that stays put (no drag, pinch or auto
 /// focus); share moves into ⋯, redo to the three-finger tap.
 struct ToolbarHost: View {
@@ -32,11 +33,12 @@ struct ToolbarHost: View {
     @Namespace private var glass
     @State private var drag: Drag?
     @State private var pinch: CGFloat = 1
-    @State private var metrics = Metrics()
+    @State private var metrics = ChromeMetrics()
     /// Tool whose options popover is open.
     @State private var options: Tool?
     /// Expanded tool buttons, in the capsule's coordinate space (popover anchors).
     @State private var toolFrames: [Tool: CGRect] = [:]
+    @State private var cards = ChromeCards()
 
     enum ChromeID: Hashable {
         case nav, tools, pages
@@ -47,20 +49,8 @@ struct ToolbarHost: View {
         var target: ToolbarDock
     }
 
-    /// Measured chrome geometry, in the chrome's own coordinate space (inside the horizontal inset).
-    private struct Metrics: Equatable {
-        var container: CGSize = .zero
-        /// Toolbar frame at rest (not updated mid-drag).
-        var tools: CGRect = .zero
-        var nav: CGFloat = 0
-        var pages: CGFloat = 0
-        var pill: CGSize = .zero
-        /// Expanded toolbar length along each axis, cached as each is seen (hint size, top-row fitting).
-        var horizontalLength: CGFloat?
-        var verticalLength: CGFloat?
-    }
-
-    private nonisolated static let space = "chrome"
+    /// The chrome's coordinate space (glass card anchors).
+    nonisolated static let space = "chrome"
     /// The tools capsule's own coordinate space.
     nonisolated static let capsuleSpace = "toolsCapsule"
     /// Fallback toolbar length before it has been measured on an axis.
@@ -86,9 +76,9 @@ struct ToolbarHost: View {
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
                             .accessibilitySortPriority(ChromeOrder.nav)
                         Spacer(minLength: Tokens.Spacing.m)
-                        PagesCapsule(tools: tools, state: state, page: page, paper: $paper, pattern: $pattern)
+                        PagesCapsule(state: state, paper: paper, pattern: pattern)
                             .chromeID(.pages, in: glass, transition: glassTransition)
-                            .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
+                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { metrics.pages = $0 }
                             .accessibilitySortPriority(ChromeOrder.pages)
                     }
                     .padding(.top, Tokens.Spacing.s)
@@ -103,6 +93,10 @@ struct ToolbarHost: View {
                     pagePill
                         .accessibilitySortPriority(ChromeOrder.pagePill)
                 }
+                ChromeCardLayer(cards: cards, placement: cardPlacement) { kind in
+                    EditorCard(kind: kind, tools: tools, state: state, paper: $paper, pattern: $pattern, page: page)
+                }
+                .accessibilitySortPriority(ChromeOrder.card)
             }
             // VoiceOver order, whatever the dock: nav, tools, pages, page pill (#45).
             .accessibilityElement(children: .contain)
@@ -114,6 +108,8 @@ struct ToolbarHost: View {
         .animation(dockAnimation, value: dock)
         .chromeAppearance(paper)
         .onChange(of: isCompactLayout, initial: true) { state.autoFocuses = !$1 }
+        // One floating thing at a time: a card closes for tool options, a drag, collapse or focus.
+        .chromeCards(cards, closingOn: options != nil || isCompact || drag != nil) { options = nil }
     }
 
     private var ink: Color {
@@ -171,7 +167,6 @@ struct ToolbarHost: View {
                     state: state,
                     paper: paper,
                     axis: axis,
-                    arrowEdge: dock.popoverArrowEdge,
                     onReselect: toggleOptions,
                     onToolFrame: { toolFrames[$0] = $1 }
                 )
@@ -367,11 +362,15 @@ extension ToolbarHost {
         return measured ?? metrics.horizontalLength ?? metrics.verticalLength ?? Self.estimatedLength
     }
 
+    private var cardPlacement: ChromeCardPlacement {
+        ChromeCardPlacement(cards.shown, pages: metrics.pages, toolbar: metrics.tools, button: cards.sources[.quickColors], dock: dock)
+    }
+
     private var layout: DockLayout {
         DockLayout(
             containerWidth: metrics.container.width,
             nav: state.isFocused ? 0 : metrics.nav,
-            pages: state.isFocused ? 0 : metrics.pages,
+            pages: state.isFocused ? 0 : metrics.pages.width,
             pagePill: isCompactLayout ? .zero : metrics.pill,
             isCompact: isCompact,
             isFocused: state.isFocused,

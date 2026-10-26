@@ -32,6 +32,8 @@ public enum Tokens {
         public static let chromeBorder = DynamicColor(RGBA(0x1E2129, alpha: 0.08))
         /// Night paper's tint under clear glass, so light text still reads where the glass crosses the light desk.
         public static let chromeSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.55))
+        /// Night glass cards (#126): denser smoke, so their text reads over ink.
+        public static let chromeCardSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.8))
 
         /// Toolbar glyphs at rest / active.
         public static let icon = chromeTextSecondary
@@ -109,6 +111,8 @@ public enum Tokens {
         public static let chromeInset: CGFloat = 18
         /// Gap between glass capsules before they blend (GlassEffectContainer spacing).
         public static let glassBlend: CGFloat = 24
+        /// Glass card to the chrome it opens from (#126).
+        public static let cardGap: CGFloat = 8
     }
 
     // MARK: Radii
@@ -199,6 +203,10 @@ public enum Tokens {
         public static let morph: Animation = .spring(duration: 0.25, bounce: 0.12)
         /// Morph replacement under Reduce Motion: a short crossfade.
         public static let reducedMorph: Animation = .easeInOut(duration: 0.15)
+        /// Editor glass card (⋯, Share, quick colors) growing out of its button and back (#126).
+        public static let card: Animation = .spring(duration: 0.32, bounce: 0.14)
+        /// A closed card's glass leaving its button.
+        public static let cardFade: Animation = .easeOut(duration: 0.1)
         /// Toolbar tracking the finger while dragged: near-critically damped, so it trails by a frame or two.
         public static let dragFollow: Animation = .interactiveSpring(response: 0.16, dampingFraction: 0.86)
         /// Toolbar released: flies to its dock (position + axis re-flow) with a little settle.

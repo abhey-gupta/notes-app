@@ -2,7 +2,7 @@ import DesignSystem
 import SwiftUI
 import Tools
 
-/// The ⋯ popover (#126): Paper swatches, Template thumbnails, then Share (compact
+/// The ⋯ card (#126): Paper swatches, Template thumbnails, then Share (compact
 /// chrome, #118) and Focus mode. DEBUG adds the toolbar dock picker.
 struct PagePopover: View {
     let tools: ToolState
@@ -54,8 +54,6 @@ struct PagePopover: View {
         }
         .padding(Tokens.Size.popoverPadding)
         .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
-        .presentationCompactAdaptation(.popover)
-        .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pagePopover")
     }

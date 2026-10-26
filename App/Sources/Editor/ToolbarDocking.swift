@@ -192,8 +192,24 @@ extension CGSize {
     }
 }
 
+/// Measured chrome geometry, in the chrome's own coordinate space (inside the horizontal inset).
+struct ChromeMetrics: Equatable {
+    var container: CGSize = .zero
+    /// Toolbar frame at rest (not updated mid-drag).
+    var tools: CGRect = .zero
+    var nav: CGFloat = 0
+    /// Pages capsule frame: ⋯ and Share cards hang below it.
+    var pages: CGRect = .zero
+    var pill: CGSize = .zero
+    /// Expanded toolbar length along each axis, cached as each is seen (hint size, top-row fitting).
+    var horizontalLength: CGFloat?
+    var verticalLength: CGFloat?
+}
+
 /// VoiceOver order of the editor chrome (higher first), whatever the dock (#45).
 enum ChromeOrder {
+    /// An open glass card comes first (#126).
+    static let card: Double = 5
     static let nav: Double = 4
     static let tools: Double = 3
     static let pages: Double = 2

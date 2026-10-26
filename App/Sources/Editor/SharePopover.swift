@@ -3,7 +3,7 @@ import Export
 import SwiftUI
 import UIKit
 
-/// Export PDF (§9, #42), opened from the Share button: all / current page / range, "Export as shown" on
+/// Export PDF (§9, #42), the card the Share button opens (#126): all / current page / range, "Export as shown" on
 /// Night, then a determinate progress bar. The finished file goes to the share sheet (``ActivityAnchor``).
 struct SharePopover: View {
     let state: EditorState
@@ -66,8 +66,6 @@ struct SharePopover: View {
         }
         .padding(Tokens.Size.popoverPadding)
         .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
-        .presentationCompactAdaptation(.popover)
-        .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         .onAppear {
             from = page.current
             to = page.total
@@ -153,7 +151,7 @@ struct SharePopover: View {
 }
 
 /// Presents the share sheet for an exported file as a popover from the view it backs (the Share button),
-/// after any popover still on screen has gone. Deletes the file's temp directory when the sheet closes.
+/// after any presentation still on screen has gone. Deletes the file's temp directory when the sheet closes.
 struct ActivityAnchor: UIViewRepresentable {
     let presenter: ActivityPresenter
 
