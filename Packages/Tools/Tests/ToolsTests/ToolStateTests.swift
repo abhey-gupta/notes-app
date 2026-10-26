@@ -157,7 +157,9 @@ struct ToolStateTests {
         #expect(eraser.width == 32)
         eraser.widthIndex = -1
         #expect(eraser.widthIndex == 0)
-        #expect(ToolSettings(quickColors: [.primary]).quickColors.count == ToolSettings.quickColorCount)
+        #expect(ToolSettings(quickColors: [.primary]).quickColors == [.primary])
+        #expect(ToolSettings(quickColors: []).quickColors == ToolSettings.defaultQuickColors)
+        #expect(ToolSettings(highlighterQuickColors: Array(repeating: .primary, count: 7)).highlighterQuickColors.count == 5)
     }
 
     // MARK: Quick colors
@@ -171,7 +173,7 @@ struct ToolStateTests {
         #expect(state.tool == .pen)
     }
 
-    @Test(arguments: [Tool.highlighter, .eraser, .lasso])
+    @Test(arguments: [Tool.eraser, .lasso])
     func quickColorSwitchesToPen(from tool: Tool) throws {
         let state = try makeState(makeDefaults())
         state.select(tool)
@@ -245,5 +247,66 @@ struct ToolStateTests {
         #expect(state.active == eraser)
         state.eraser.mode = .partial
         #expect(state.active != eraser, "the eraser's own mode does")
+    }
+}
+
+/// Per-tool quick-color palettes (#125).
+extension ToolStateTests {
+    @Test func highlighterHasItsOwnQuickColors() throws {
+        let state = try makeState(makeDefaults())
+        state.select(.highlighter)
+        #expect(state.paletteTool == .highlighter)
+        #expect(state.currentQuickColors == ToolSettings.defaultHighlighterQuickColors)
+        #expect(state.activeQuickColor == 0)
+        state.selectQuickColor(2)
+        #expect(state.tool == .highlighter && state.highlighter.color == ToolSettings.defaultHighlighterQuickColors[2])
+        #expect(state.pen.color == .primary, "the pen keeps its color")
+        state.setQuickColor(.semantic(.accent), at: 0)
+        #expect(state.quickColors == ToolSettings.defaultQuickColors, "pen palette untouched")
+        state.select(.eraser)
+        #expect(state.paletteTool == .pen && state.currentQuickColors == ToolSettings.defaultQuickColors)
+    }
+
+    @Test func addRemoveAndReorderQuickColors() throws {
+        let state = try makeState(makeDefaults())
+        let purple = InkColor.custom(RGBA8(r: 0x7E, g: 0x4F, b: 0xD8))
+        #expect(state.addQuickColor(purple) == 3)
+        #expect(state.addQuickColor(.semantic(.accent)) == 4)
+        #expect(state.addQuickColor(.primary) == nil, "five at most")
+        #expect(state.quickColors == [.primary, .semantic(.blue), .semantic(.red), purple, .semantic(.accent)])
+
+        state.moveQuickColor(from: 3, to: 0)
+        #expect(state.quickColors == [purple, .primary, .semantic(.blue), .semantic(.red), .semantic(.accent)])
+        #expect(state.activeQuickColor == 1, "the pen's slot follows the move")
+        state.moveQuickColor(from: 0, to: 9)
+        #expect(state.quickColors.first == purple, "out of range is ignored")
+
+        for _ in 0 ..< 6 {
+            state.removeQuickColor(at: 0)
+        }
+        #expect(state.quickColors == [.semantic(.accent)], "one always stays")
+        #expect(state.pen.color == .primary, "removing a slot leaves the pen's color")
+    }
+
+    @Test func quickColorPalettesSurviveRelaunch() throws {
+        let defaults = try makeDefaults()
+        let state = makeState(defaults)
+        state.addQuickColor(.semantic(.accent))
+        state.select(.highlighter)
+        state.removeQuickColor(at: 1)
+        state.flush()
+
+        let relaunched = makeState(defaults)
+        #expect(relaunched.quickColors == ToolSettings.defaultQuickColors + [.semantic(.accent)])
+        #expect(relaunched.highlighterQuickColors.count == 2)
+    }
+
+    @Test func settingsWithoutHighlighterQuickColorsKeepTheRest() throws {
+        let defaults = try makeDefaults()
+        let legacy = #"{"quickColors":["red"],"dock":"left"}"#
+        defaults.set(Data(legacy.utf8), forKey: "tools")
+        let state = makeState(defaults)
+        #expect(state.dock == .left && state.quickColors == [.semantic(.red)])
+        #expect(state.highlighterQuickColors == ToolSettings.defaultHighlighterQuickColors)
     }
 }

@@ -124,10 +124,11 @@ struct CustomColorWell: View {
     @Binding var selection: InkColor
     let isSelected: Bool
     let paper: DesignSystem.PaperTheme
+    var diameter = Tokens.Size.paletteSwatch
 
     var body: some View {
-        let scale = Tokens.Size.paletteSwatch / Tokens.Size.swatch
-        let frame = Tokens.Size.paletteSwatch + 2 * Tokens.Size.swatchRingOuter * scale
+        let scale = diameter / Tokens.Size.swatch
+        let frame = diameter + 2 * Tokens.Size.swatchRingOuter * scale
         ColorPicker("Custom color", selection: color, supportsOpacity: false)
             .labelsHidden()
             .frame(width: frame, height: frame)
@@ -199,6 +200,16 @@ struct PaletteEntry: Hashable {
     /// Highlighter colors (`Tokens.highlighterPalette`).
     static let highlighter: [PaletteEntry] = zip(Tokens.highlighterPalette, [
         "Yellow", "Orange", "Pink", "Purple", "Teal", "Green",
+    ]).map { PaletteEntry(color: .custom(RGBA8($0)), name: $1) }
+
+    /// Quick-colors editor presets (#125): the pen colors plus `Tokens.penPresetExtras`.
+    static let penPresets: [PaletteEntry] = pen + zip(Tokens.penPresetExtras, [
+        "Navy", "Sage", "Dusty blue", "Rose",
+    ]).map { PaletteEntry(color: .custom(RGBA8($0)), name: $1) }
+
+    /// Highlighter presets: the highlighter colors plus `Tokens.highlighterPresetExtras`.
+    static let highlighterPresets: [PaletteEntry] = highlighter + zip(Tokens.highlighterPresetExtras, [
+        "Lime", "Mint", "Sky", "Blue", "Lavender", "Rose", "Coral", "Peach", "Gray",
     ]).map { PaletteEntry(color: .custom(RGBA8($0)), name: $1) }
 }
 

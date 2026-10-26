@@ -11,7 +11,7 @@ Handwritten notes for iPad. Headline: ultra-fast, minimal, beautiful.
 
 ## In
 - Library: recents w/ live previews, notebook covers, 1-level folders, title search
-- Canvas: pen (fountain/ballpoint/brush), highlighter, eraser (stroke + partial), lasso (move/resize/recolor), 3 quick colors, undo/redo
+- Canvas: pen (fountain/ballpoint/brush), highlighter, eraser (stroke + partial), lasso (move/resize/recolor), 1–5 quick colors per tool (editable), undo/redo
 - Pencil: palm rejection, double-tap/squeeze → eraser, pressure/tilt
 - Pages: vertical continuous scroll, pinch zoom, templates (blank/lined/dotted/grid/Cornell), overview w/ reorder/add/delete
 - Dark mode (night paper), focus mode (chrome collapses)

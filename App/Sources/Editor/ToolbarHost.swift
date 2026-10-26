@@ -179,7 +179,7 @@ struct ToolbarHost: View {
         .popover(
             isPresented: optionsPresented,
             attachmentAnchor: .rect(.rect(toolFrames[tools.tool] ?? .zero)),
-            arrowEdge: optionsArrowEdge
+            arrowEdge: tools.dock.popoverArrowEdge
         ) {
             ToolPopover(tools: tools, tool: options ?? tools.tool, paper: paper)
                 .presentationCompactAdaptation(.popover)
@@ -336,17 +336,6 @@ extension ToolbarHost {
     private func toggleOptions(_ tool: Tool) {
         guard tool != .lasso else { return }
         options = options == tool ? nil : tool
-    }
-
-    /// `arrowEdge` is the popover's own edge carrying the arrow: the one facing the dock, so it opens away
-    /// from the toolbar (below a top dock, beside a side dock).
-    private var optionsArrowEdge: Edge {
-        switch tools.dock {
-        case .top: .top
-        case .bottom: .bottom
-        case .left: .leading
-        case .right: .trailing
-        }
     }
 }
 
