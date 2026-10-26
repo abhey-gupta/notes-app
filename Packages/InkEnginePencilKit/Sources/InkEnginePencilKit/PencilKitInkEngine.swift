@@ -13,8 +13,8 @@ import UIKit
 /// `PKDrawing.image`, rendered off main a few at a time nearest the viewport first (``RasterRenderQueue``),
 /// kept per zoom bucket in an ``InkRasterCache`` that empties on memory warnings; while one renders the
 /// page shows its nearest cached raster, its thumbnail or just paper (`+Images`, #70). Pens draw through
-/// PencilKit; eraser and lasso input goes through the shared ``InkEngine/InkInputView`` pipeline and is
-/// reported, never applied.
+/// PencilKit (pens with pressure off through `+FlatPen`, #123); eraser and lasso input goes through the
+/// shared ``InkEngine/InkInputView`` pipeline and is reported, never applied.
 ///
 /// A canvas starts its page from the document snapshot. A finished PencilKit stroke is reported via
 /// `didCommit` and kept on the canvas as pending until the document echoes it back through
@@ -71,11 +71,11 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// The canvases' strokes as PencilKit strokes, converted off main by ``prepare(_:)`` or on first use.
     let strokeCache = PKStrokeCache()
     /// Strokes reported via `didCommit` but not yet in the page snapshot, per page, in draw order.
-    private(set) var pending: [PageID: [(id: StrokeID, pk: PKStroke)]] = [:]
+    var pending: [PageID: [(id: StrokeID, pk: PKStroke)]] = [:]
     var hasSeenPencil = false
 
     var pageViews: [PageID: PageLayerView] = [:]
-    private var isSettingDrawing = false
+    var isSettingDrawing = false
     var eraserProgress: (touch: TouchID, emitted: Int)?
     /// Full canvas rebuilds so far (tests check the commit echo path doesn't rebuild).
     private(set) var rebuildCount = 0

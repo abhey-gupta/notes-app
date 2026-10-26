@@ -42,6 +42,12 @@ public final class InkInputView: UIView {
         set { tracker.policy.allowsFingerDrawing = newValue }
     }
 
+    /// Pressure toggle (#123): off records every sample at neutral force. Applies from the next stroke.
+    public var recordsForce: Bool {
+        get { tracker.recordsForce }
+        set { tracker.recordsForce = newValue }
+    }
+
     /// Cancels the live stroke (e.g. tool switched mid-gesture).
     public func cancelActiveStroke() {
         guard let stroke = tracker.active else { return }

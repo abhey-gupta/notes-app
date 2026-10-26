@@ -63,6 +63,31 @@ struct SampleConversion {
         #expect(stroke.samples.map(\.force) == [1, 0])
     }
 
+    /// Pressure toggle off (#123): every sample lands at neutral force, estimate updates included.
+    @Test func pressureOffRecordsNeutralForce() {
+        var stroke = LiveStroke(touch: pen(0, 0, t: 0), page: page, viewToPage: .identity, recordsForce: false)
+        stroke.append(
+            coalesced: [pen(0, 0, t: 0, force: 4, update: 1, expecting: .force), pen(1, 0, t: 0.01, force: 0)],
+            predicted: [pen(2, 0, t: 0.02, force: 3)]
+        )
+        #expect(stroke.displaySamples.map(\.force) == [0.5, 0.5, 0.5])
+        stroke.applyEstimatedUpdate(pen(0, 0, t: 0, force: 3.5, update: 1))
+        #expect(stroke.samples[0].force == 0.5)
+        #expect(stroke.samples[0].altitude == 1) // tilt still recorded
+    }
+
+    @Test func trackerPassesRecordsForceToNewStrokes() {
+        var tracker = InkInputTracker()
+        tracker.recordsForce = false
+        let events = tracker.began(pen(0, 0, t: 0, force: 4)) { _ in InkInputTarget(page: page, viewToPage: .identity) }
+        guard case let .began(stroke)? = events.first else {
+            Issue.record("no stroke")
+            return
+        }
+        #expect(stroke.recordsForce == false)
+        #expect(stroke.samples.map(\.force) == [0.5])
+    }
+
     @Test func fingerSamplesUseNeutralPressureAndUprightAltitude() {
         let finger = TouchRecord(
             id: TouchID(2), kind: .direct, location: .zero, timestamp: 0,

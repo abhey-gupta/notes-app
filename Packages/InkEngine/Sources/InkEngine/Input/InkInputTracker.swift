@@ -40,6 +40,8 @@ public struct InkInputTracker: Sendable {
     public var policy: InputPolicy
     /// Longest wait after pen-up for estimated property updates (s).
     public var estimateDeadline: TimeInterval = 0.1
+    /// New strokes keep the Pencil's force (``LiveStroke/recordsForce``); off for the pressure toggle (#123).
+    public var recordsForce = true
     /// The stroke under the Pencil, if any.
     public private(set) var active: LiveStroke?
     private var finishing: [(stroke: LiveStroke, endedAt: TimeInterval)] = []
@@ -73,7 +75,7 @@ public struct InkInputTracker: Sendable {
         }
         guard let hit = target(touch.location) else { return events }
         let records = coalesced.isEmpty ? [touch] : coalesced
-        var stroke = LiveStroke(touch: records[0], page: hit.page, viewToPage: hit.viewToPage)
+        var stroke = LiveStroke(touch: records[0], page: hit.page, viewToPage: hit.viewToPage, recordsForce: recordsForce)
         stroke.append(coalesced: records, predicted: predicted)
         active = stroke
         events.append(.began(stroke))
