@@ -20,9 +20,6 @@ enum SelectionAction: Equatable {
 @Observable
 final class EditorState {
     private(set) var isFocused = false
-    /// The notebook's "Keep exact colors" (§10): custom colors aren't remapped on Night paper.
-    var keepsExactColors = false
-    @ObservationIgnored var onKeepsExactColors: (Bool) -> Void = { _ in }
     /// Continuous inking collapses the chrome; off in compact chrome, whose bottom bar stays put (#118).
     @ObservationIgnored var autoFocuses = true
     /// The notebook's undo history (§6).

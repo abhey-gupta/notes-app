@@ -73,7 +73,6 @@ final class NotebookSession {
         initialTheme = notebook.theme
         state = EditorState(startsFocused: startsFocused)
         state.onSelectionAction = { [weak self] in self?.performSelectionAction($0) }
-        state.onKeepsExactColors = { [weak self] in self?.setKeepsExactColors($0) }
         state.onExportPDF = { [weak self] selection, asShown, progress in
             guard let self else { throw CancellationError() }
             return try await exportPDF(selection, asShown: asShown, progress: progress)
@@ -112,10 +111,6 @@ final class NotebookSession {
             thumbnails = makeThumbnailService(package: url)
             syncPagesModel(pages)
             engine.setTheme(manifest.notebook.theme)
-            if manifest.notebook.keepsExactColors {
-                state.keepsExactColors = true
-                applyPalette(keepsExactColors: true)
-            }
             host.layout = pageLayout(manifest)
             if let window = host.pageWindow {
                 residency.update(window)
