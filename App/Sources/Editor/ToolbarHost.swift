@@ -14,6 +14,8 @@ import Tools
 /// Tapping the active tool on the expanded toolbar opens its options popover (``ToolPopover``, #27),
 /// anchored to that button with the arrow toward the toolbar on every dock. Any tap on the compact pill
 /// expands; the pill has no popover.
+/// Compact chrome (#118, iPhone, narrow iPad windows): a bottom bar that stays put (no drag, pinch or auto
+/// focus); share moves into ⋯, redo to the three-finger tap.
 struct ToolbarHost: View {
     let tools: ToolState
     let state: EditorState
@@ -26,6 +28,7 @@ struct ToolbarHost: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.isCompactLayout) private var isCompactLayout
     @Namespace private var glass
     @State private var drag: Drag?
     @State private var pinch: CGFloat = 1
@@ -73,10 +76,6 @@ struct ToolbarHost: View {
         Rectangle().inset(by: -2)
     }
 
-    private var isCompact: Bool {
-        state.isFocused || tools.isCompact
-    }
-
     var body: some View {
         GlassChrome {
             ZStack {
@@ -100,8 +99,10 @@ struct ToolbarHost: View {
                 }
                 toolbar
                     .accessibilitySortPriority(ChromeOrder.tools)
-                pagePill
-                    .accessibilitySortPriority(ChromeOrder.pagePill)
+                if !isCompactLayout {
+                    pagePill
+                        .accessibilitySortPriority(ChromeOrder.pagePill)
+                }
             }
             // VoiceOver order, whatever the dock: nav, tools, pages, page pill (#45).
             .accessibilityElement(children: .contain)
@@ -110,8 +111,9 @@ struct ToolbarHost: View {
             .padding(.horizontal, Tokens.Spacing.chromeInset)
         }
         .animation(morphAnimation, value: isCompact)
-        .animation(dockAnimation, value: tools.dock)
+        .animation(dockAnimation, value: dock)
         .chromeAppearance(paper)
+        .onChange(of: isCompactLayout, initial: true) { state.autoFocuses = !$1 }
     }
 
     private var ink: Color {
@@ -134,7 +136,6 @@ struct ToolbarHost: View {
     // MARK: Toolbar
 
     private var toolbar: some View {
-        let dock = tools.dock
         let placement = layout.placement(for: dock, length: restingLength(dock.axis))
         return toolbarBody(axis: dock.axis)
             // Reduce Motion: a dock change swaps identity, so it crossfades instead of flying.
@@ -170,6 +171,7 @@ struct ToolbarHost: View {
                     state: state,
                     paper: paper,
                     axis: axis,
+                    arrowEdge: dock.popoverArrowEdge,
                     onReselect: toggleOptions,
                     onToolFrame: { toolFrames[$0] = $1 }
                 )
@@ -180,7 +182,7 @@ struct ToolbarHost: View {
         .popover(
             isPresented: optionsPresented,
             attachmentAnchor: .rect(.rect(toolFrames[tools.tool] ?? .zero)),
-            arrowEdge: tools.dock.popoverArrowEdge
+            arrowEdge: dock.popoverArrowEdge
         ) {
             ToolPopover(tools: tools, tool: options ?? tools.tool, paper: paper)
                 .presentationCompactAdaptation(.popover)
@@ -197,11 +199,7 @@ struct ToolbarHost: View {
         .chromeID(.tools, in: glass, transition: glassTransition)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(compact ? "focusPill" : "toolbar")
-        .accessibilityAction(named: compact ? "Show toolbar" : "Compact toolbar") {
-            compact ? expand() : collapse()
-        }
-        .gesture(FingerPan(onBegan: dragBegan, onChanged: dragChanged, onEnded: dragEnded))
-        .gesture(FingerPinch(onChanged: pinchChanged, onEnded: pinchEnded))
+        .modifier(dockGestures(compact: compact))
     }
 
     private var contentTransition: AnyTransition {
@@ -212,7 +210,7 @@ struct ToolbarHost: View {
         guard drag == nil else { return }
         metrics.tools = frame
         guard !isCompact else { return }
-        if tools.dock.isVertical {
+        if dock.isVertical {
             metrics.verticalLength = frame.height
         } else {
             metrics.horizontalLength = frame.width
@@ -343,6 +341,23 @@ extension ToolbarHost {
 extension ToolbarHost {
     // MARK: Placement
 
+    private var isCompact: Bool {
+        state.isFocused || (tools.isCompact && !isCompactLayout)
+    }
+
+    /// The user's dock; compact chrome always docks at the bottom, without changing it.
+    private var dock: ToolbarDock {
+        isCompactLayout ? .bottom : tools.dock
+    }
+
+    private func dockGestures(compact: Bool) -> DockGestures {
+        DockGestures(
+            isEnabled: !isCompactLayout, compact: compact, toggle: { compact ? expand() : collapse() },
+            pan: FingerPan(onBegan: dragBegan, onChanged: dragChanged, onEnded: dragEnded),
+            pinch: FingerPinch(onChanged: pinchChanged, onEnded: pinchEnded)
+        )
+    }
+
     /// Length of the toolbar at rest on `axis` (compact or expanded).
     private func restingLength(_ axis: Axis) -> CGFloat {
         if isCompact {
@@ -357,7 +372,7 @@ extension ToolbarHost {
             containerWidth: metrics.container.width,
             nav: state.isFocused ? 0 : metrics.nav,
             pages: state.isFocused ? 0 : metrics.pages,
-            pagePill: metrics.pill,
+            pagePill: isCompactLayout ? .zero : metrics.pill,
             isCompact: isCompact,
             isFocused: state.isFocused,
             scale: typeSize.chromeScale

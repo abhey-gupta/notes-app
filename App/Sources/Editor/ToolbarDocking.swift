@@ -84,6 +84,28 @@ private final class UnpreventablePinch: UIPinchGestureRecognizer {
     }
 }
 
+/// Drag to dock, pinch to compact, and their VoiceOver action. Absent from the compact bottom bar (#118),
+/// where the pan would also steal the swatches' scroll.
+struct DockGestures: ViewModifier {
+    let isEnabled: Bool
+    /// The toolbar is the compact pill.
+    let compact: Bool
+    let toggle: () -> Void
+    let pan: FingerPan
+    let pinch: FingerPinch
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .accessibilityAction(named: compact ? "Show toolbar" : "Compact toolbar", toggle)
+                .gesture(pan)
+                .gesture(pinch)
+        } else {
+            content
+        }
+    }
+}
+
 /// Pure geometry for the dynamic toolbar (§7): nearest dock, edge rubber-banding, top-row fitting.
 enum DockGeometry {
     /// Release velocity is projected this far ahead (s) so a flick toward an edge docks there.

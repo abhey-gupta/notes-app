@@ -7,6 +7,7 @@ import Tools
 struct QuickColorsButton: View {
     let tools: ToolState
     let paper: DesignSystem.PaperTheme
+    let arrowEdge: Edge
 
     @State private var isPresented = false
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -25,7 +26,7 @@ struct QuickColorsButton: View {
         .buttonStyle(PressScaleStyle())
         .accessibilityLabel("Edit quick colors")
         .accessibilityIdentifier("quickColorsButton")
-        .popover(isPresented: $isPresented, arrowEdge: tools.dock.popoverArrowEdge) {
+        .popover(isPresented: $isPresented, arrowEdge: arrowEdge) {
             QuickColorsEditor(tools: tools, paper: paper)
                 .chromePopover(paper)
                 .presentationCompactAdaptation(.popover)

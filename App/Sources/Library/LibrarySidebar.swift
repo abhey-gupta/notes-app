@@ -209,3 +209,44 @@ private struct SidebarRow: View {
         }
     }
 }
+
+/// Compact library (#118): the sidebar's tree as a full-screen sheet. Picking a row closes it; ✕ closes it too.
+/// Settings lives here, since the compact header has no room for it.
+struct FoldersSheet: View {
+    let library: any LibraryModel
+    @Binding var selection: FolderID?
+    let showsGallery: Binding<Bool>?
+    let close: () -> Void
+
+    @State private var prompt: LibraryPrompt?
+    @State private var showsSettings = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: Tokens.Spacing.m) {
+                Text("Folders")
+                    .font(.libraryTitle)
+                    .tracking(-0.5)
+                    .foregroundStyle(Tokens.Colors.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: Tokens.Spacing.m)
+                GlassChrome(spacing: Tokens.Spacing.s) {
+                    HStack(spacing: Tokens.Spacing.m) {
+                        GlassCircleButton(symbol: Symbol.settings.name, label: "Settings") { showsSettings = true }
+                            .popover(isPresented: $showsSettings) {
+                                SettingsView(showsGallery: showsGallery)
+                                    .presentationCompactAdaptation(.popover)
+                            }
+                        GlassCircleButton(symbol: "xmark", label: "Close", action: close)
+                            .accessibilityIdentifier("closeFolders")
+                    }
+                }
+            }
+            .padding(.horizontal, CompactLayout.libraryMargin)
+            .padding(.top, Tokens.Spacing.l)
+            LibrarySidebar(library: library, selection: $selection, prompt: $prompt, didSelect: close)
+        }
+        .background { Rectangle().fill(Tokens.Colors.libraryBackground).ignoresSafeArea() }
+        .libraryPrompts($prompt, library: library)
+    }
+}

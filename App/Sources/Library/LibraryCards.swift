@@ -125,12 +125,14 @@ struct CoverTile: View {
     let notebook: NotebookSummary
     let folder: String?
     let zoom: Namespace.ID
+    /// Compact chrome's three columns shrink it (#118).
+    var width = Tokens.Size.cover.width
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
-                NotebookCover(title: notebook.title, caption: folder, color: notebook.cover.style)
+                NotebookCover(title: notebook.title, caption: folder, color: notebook.cover.style, width: width)
                     .matchedTransitionSource(id: EditorRoute.TransitionID(id: notebook.id, source: .cover), in: zoom) {
                         $0.clipShape(.rect(cornerRadius: Tokens.Radius.coverEdge))
                     }
@@ -144,7 +146,7 @@ struct CoverTile: View {
                     .foregroundStyle(Tokens.Colors.textSecondary)
                     .padding(.top, 3)
             }
-            .frame(width: Tokens.Size.cover.width, alignment: .leading)
+            .frame(width: width, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(PressableStyle())

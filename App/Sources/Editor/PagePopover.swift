@@ -2,17 +2,20 @@ import DesignSystem
 import SwiftUI
 import Tools
 
-/// The ⋯ popover (#126): Paper swatches, Template thumbnails, "Keep exact colors" on Night, then Focus mode.
-/// DEBUG adds the toolbar dock picker.
+/// The ⋯ popover (#126): Paper swatches, Template thumbnails, "Keep exact colors" on Night, then Share (compact
+/// chrome, #118) and Focus mode. DEBUG adds the toolbar dock picker.
 struct PagePopover: View {
     let tools: ToolState
     @Binding var paper: PaperTheme
     @Binding var pattern: PaperPattern
     /// "Keep exact colors", offered on Night paper.
     @Binding var keepsExactColors: Bool
+    /// Compact chrome's share row; `nil` hides it.
+    var onShare: (() -> Void)?
     let onFocus: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.isCompactLayout) private var isCompactLayout
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -45,22 +48,22 @@ struct PagePopover: View {
             }
             Divider()
                 .padding(.vertical, 12)
-            Button(action: onFocus) {
-                Label("Focus mode", systemImage: Symbol.focus.name)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(.rect)
+            if let onShare {
+                row("Share", symbol: .share, action: onShare)
+                    .accessibilityIdentifier("shareRow")
+                    .padding(.bottom, 14)
             }
-            .buttonStyle(.plain)
-            .scaledFont(size: 14, weight: .medium)
-            .foregroundStyle(Tokens.Colors.chromeText)
-            .padding(.horizontal, Tokens.Spacing.xs)
+            row("Focus mode", symbol: .focus, action: onFocus)
             #if DEBUG
-                Picker("Toolbar dock (debug)", selection: dockBinding) {
-                    ForEach(ToolbarDock.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                // Compact chrome always docks at the bottom.
+                if !isCompactLayout {
+                    Picker("Toolbar dock (debug)", selection: dockBinding) {
+                        ForEach(ToolbarDock.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .scaledFont(size: 14, weight: .medium)
+                    .padding(.top, 8)
                 }
-                .pickerStyle(.menu)
-                .scaledFont(size: 14, weight: .medium)
-                .padding(.top, 8)
             #endif
         }
         .padding(Tokens.Size.popoverPadding)
@@ -70,6 +73,18 @@ struct PagePopover: View {
         .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pagePopover")
+    }
+
+    private func row(_ title: String, symbol: Symbol, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol.name)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .scaledFont(size: 14, weight: .medium)
+        .foregroundStyle(Tokens.Colors.chromeText)
+        .padding(.horizontal, Tokens.Spacing.xs)
     }
 
     private func label(_ text: String) -> some View {
