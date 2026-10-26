@@ -163,6 +163,29 @@ final class ToolbarTests: XCTestCase {
         XCTAssertTrue(app.buttons["Red"].isSelected)
     }
 
+    // MARK: Quick colors editor (#125)
+
+    @MainActor
+    func testQuickColorsEditorAddsAndRemovesPerTool() {
+        let app = launch()
+        let bar = toolbar(app)
+        let editor = app.descendants(matching: .any).matching(identifier: "quickColorsEditor").firstMatch
+        app.buttons["quickColorsButton"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 3))
+
+        editor.buttons["addQuickColor"].tap()
+        editor.buttons["Sage"].tap()
+        XCTAssertTrue(bar.buttons["Sage"].waitForExistence(timeout: 2), "new slot shows in the toolbar")
+        editor.buttons["removeQuickColor"].tap()
+        XCTAssertTrue(bar.buttons["Sage"].waitForNonExistence(timeout: 2))
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)).tap()
+        XCTAssertTrue(editor.waitForNonExistence(timeout: 3))
+
+        app.buttons["Highlighter"].tap()
+        XCTAssertTrue(bar.buttons["Yellow"].isSelected, "the highlighter has its own quick colors")
+        XCTAssertFalse(bar.buttons["Black"].exists)
+    }
+
     // MARK: Tool options popover (#27)
 
     @MainActor

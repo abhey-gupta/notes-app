@@ -41,9 +41,14 @@ public final class ToolState {
         didSet { changed(eraser != oldValue) }
     }
 
-    /// Quick-color slots (always ``ToolSettings/quickColorCount``). Change with ``setQuickColor(_:at:)``.
+    /// Pen quick colors (1–5, ``ToolSettings/quickColorCounts``). Edit through the quick-color methods.
     public private(set) var quickColors: [InkColor] {
         didSet { changed(quickColors != oldValue) }
+    }
+
+    /// Highlighter quick colors (1–5): the toolbar shows these while the highlighter is current (#125).
+    public private(set) var highlighterQuickColors: [InkColor] {
+        didSet { changed(highlighterQuickColors != oldValue) }
     }
 
     /// Toolbar dock.
@@ -80,6 +85,7 @@ public final class ToolState {
         highlighter = settings.highlighter
         eraser = settings.eraser
         quickColors = settings.quickColors
+        highlighterQuickColors = settings.highlighterQuickColors
         dock = settings.dock
         isCompact = settings.isCompact
     }
@@ -92,6 +98,7 @@ public final class ToolState {
             highlighter: highlighter,
             eraser: eraser,
             quickColors: quickColors,
+            highlighterQuickColors: highlighterQuickColors,
             dock: dock,
             isCompact: isCompact
         )
@@ -126,25 +133,85 @@ public final class ToolState {
 
     // MARK: Quick colors
 
-    /// Slot whose color the pen currently uses, if any.
+    /// Whose quick colors the toolbar shows and edits: the highlighter's while it is current, else the pen's.
+    public var paletteTool: Tool {
+        tool == .highlighter ? .highlighter : .pen
+    }
+
+    /// Quick colors of ``paletteTool``.
+    public var currentQuickColors: [InkColor] {
+        paletteTool == .highlighter ? highlighterQuickColors : quickColors
+    }
+
+    /// Slot whose color ``paletteTool`` currently uses, if any.
     public var activeQuickColor: Int? {
-        quickColors.firstIndex(of: pen.color)
+        currentQuickColors.firstIndex(of: paletteColor)
     }
 
-    /// Quick-color tap: the pen takes the slot's color immediately and becomes the current tool.
+    /// Quick-color tap: that tool takes the slot's color immediately; a pen slot also makes the pen current.
     public func selectQuickColor(_ index: Int) {
-        guard quickColors.indices.contains(index) else { return }
-        pen.color = quickColors[index]
-        tool = .pen
+        guard currentQuickColors.indices.contains(index) else { return }
+        let color = currentQuickColors[index]
+        if paletteTool == .pen {
+            tool = .pen
+        }
+        paletteColor = color
     }
 
-    /// Replaces a slot (palette long-press, #27). If the pen was using that slot it follows the new color.
+    /// Replaces a slot (long-press, quick-colors editor). If the tool was using that slot it follows the new color.
     public func setQuickColor(_ color: InkColor, at index: Int) {
-        guard quickColors.indices.contains(index) else { return }
-        let penFollows = pen.color == quickColors[index]
-        quickColors[index] = color
-        if penFollows {
-            pen.color = color
+        guard currentQuickColors.indices.contains(index) else { return }
+        let follows = paletteColor == currentQuickColors[index]
+        currentPalette[index] = color
+        if follows {
+            paletteColor = color
+        }
+    }
+
+    /// Appends a slot (max five). Returns its index, or `nil` when full.
+    @discardableResult
+    public func addQuickColor(_ color: InkColor) -> Int? {
+        guard currentQuickColors.count < ToolSettings.quickColorCounts.upperBound else { return nil }
+        currentPalette.append(color)
+        return currentQuickColors.count - 1
+    }
+
+    /// Removes a slot; the last one stays.
+    public func removeQuickColor(at index: Int) {
+        guard currentQuickColors.indices.contains(index),
+              currentQuickColors.count > ToolSettings.quickColorCounts.lowerBound else { return }
+        currentPalette.remove(at: index)
+    }
+
+    /// Moves a slot to `destination` (its index once moved).
+    public func moveQuickColor(from source: Int, to destination: Int) {
+        let colors = currentQuickColors
+        guard colors.indices.contains(source), colors.indices.contains(destination), source != destination else { return }
+        var moved = colors
+        moved.insert(moved.remove(at: source), at: destination)
+        currentPalette = moved
+    }
+
+    private var currentPalette: [InkColor] {
+        get { currentQuickColors }
+        set {
+            if paletteTool == .highlighter {
+                highlighterQuickColors = newValue
+            } else {
+                quickColors = newValue
+            }
+        }
+    }
+
+    /// Color of ``paletteTool``.
+    private var paletteColor: InkColor {
+        get { paletteTool == .highlighter ? highlighter.color : pen.color }
+        set {
+            if paletteTool == .highlighter {
+                highlighter.color = newValue
+            } else {
+                pen.color = newValue
+            }
         }
     }
 

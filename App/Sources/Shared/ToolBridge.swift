@@ -23,12 +23,14 @@ extension ActiveTool {
 
 /// Tools owns tool data and placement; DesignSystem owns their look. This is the seam.
 extension ToolSettings {
-    /// App defaults: quick colors from `Tokens.quickColors`, highlighter from `Tokens.highlighter`.
+    /// App defaults: quick colors from `Tokens.quickColors`, highlighter from `Tokens.highlighter`, highlighter
+    /// quick colors yellow, pink, teal from `Tokens.highlighterPalette`.
     static var notespace: ToolSettings {
         let yellow = Tokens.highlighter
         return ToolSettings(
             highlighter: HighlighterSettings(color: .custom(RGBA8(yellow.opacity(1)))),
-            quickColors: Tokens.quickColors.map { .semantic($0.semantic) }
+            quickColors: Tokens.quickColors.map { .semantic($0.semantic) },
+            highlighterQuickColors: [0, 2, 4].map { .custom(RGBA8(Tokens.highlighterPalette[$0])) }
         )
     }
 }
@@ -58,7 +60,7 @@ extension InkColor {
         if case .semantic = self {
             return label
         }
-        let entry = PaletteEntry.pen.first { $0.color == self } ?? PaletteEntry.highlighter.first { $0.color == self }
+        let entry = PaletteEntry.penPresets.first { $0.color == self } ?? PaletteEntry.highlighterPresets.first { $0.color == self }
         return entry?.name ?? "Custom color"
     }
 }
@@ -126,6 +128,17 @@ extension ToolState {
 }
 
 extension ToolbarDock {
+    /// The popover edge carrying the arrow: the one facing the dock, so popovers open away from the toolbar
+    /// (below a top dock, beside a side dock).
+    var popoverArrowEdge: Edge {
+        switch self {
+        case .top: .top
+        case .bottom: .bottom
+        case .left: .leading
+        case .right: .trailing
+        }
+    }
+
     var axis: Axis {
         isVertical ? .vertical : .horizontal
     }

@@ -66,6 +66,15 @@ public enum Tokens {
         RGBA(0xFFD633), RGBA(0xE07A1F), RGBA(0xC2457E), RGBA(0x7E4FD8), RGBA(0x0FA3B1), RGBA(0x1E8E6E),
     ]
 
+    /// Quick-colors editor presets (#125): the pen palette plus four muted inks, 15 in all.
+    public static let penPresetExtras: [RGBA] = [RGBA(0x2E3F7A), RGBA(0x6F9A7E), RGBA(0x6E8FBF), RGBA(0xB8707F)]
+
+    /// Highlighter presets: the highlighter colors plus nine soft tints, 15 in all.
+    public static let highlighterPresetExtras: [RGBA] = [
+        RGBA(0xC5E35A), RGBA(0x7FDDB8), RGBA(0x6EC3F2), RGBA(0x5A8DEE), RGBA(0xB8A2F5),
+        RGBA(0xF59BBE), RGBA(0xFF8C78), RGBA(0xFFBC85), RGBA(0xA3A8B0),
+    ]
+
     // MARK: Spacing
 
     public enum Spacing {

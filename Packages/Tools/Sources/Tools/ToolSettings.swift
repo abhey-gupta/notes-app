@@ -124,8 +124,8 @@ public struct EraserSettings: Hashable, Sendable, Codable {
 /// Decoding is lenient: missing or invalid fields fall back to the defaults passed to ``ToolState``, so
 /// adding a field never wipes a user's settings.
 public struct ToolSettings: Hashable, Sendable, Codable {
-    /// Number of quick-color slots.
-    public static let quickColorCount = 3
+    /// Allowed number of quick colors per palette (#125): at least one, at most five.
+    public static let quickColorCounts = 1 ... 5
 
     /// Current tool.
     public var tool: Tool
@@ -135,9 +135,14 @@ public struct ToolSettings: Hashable, Sendable, Codable {
     public var highlighter: HighlighterSettings
     /// Eraser settings.
     public var eraser: EraserSettings
-    /// Quick-color slots, always ``quickColorCount`` long.
+    /// Pen quick colors, ``quickColorCounts`` long.
     public var quickColors: [InkColor] {
-        didSet { quickColors = Self.normalized(quickColors) }
+        didSet { quickColors = Self.normalized(quickColors, defaults: Self.defaultQuickColors) }
+    }
+
+    /// Highlighter quick colors, ``quickColorCounts`` long.
+    public var highlighterQuickColors: [InkColor] {
+        didSet { highlighterQuickColors = Self.normalized(highlighterQuickColors, defaults: Self.defaultHighlighterQuickColors) }
     }
 
     /// Toolbar dock.
@@ -145,13 +150,14 @@ public struct ToolSettings: Hashable, Sendable, Codable {
     /// Toolbar pinched to the compact pill.
     public var isCompact: Bool
 
-    /// Creates settings. `quickColors` is padded/truncated to ``quickColorCount``.
+    /// Creates settings. Empty quick colors fall back to the defaults; more than five are truncated.
     public init(
         tool: Tool = .pen,
         pen: PenSettings = PenSettings(),
         highlighter: HighlighterSettings = HighlighterSettings(),
         eraser: EraserSettings = EraserSettings(),
-        quickColors: [InkColor] = [.semantic(.primary), .semantic(.blue), .semantic(.red)],
+        quickColors: [InkColor] = ToolSettings.defaultQuickColors,
+        highlighterQuickColors: [InkColor] = ToolSettings.defaultHighlighterQuickColors,
         dock: ToolbarDock = .top,
         isCompact: Bool = false
     ) {
@@ -160,17 +166,21 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         self.pen = PenSettings(kind: pen.kind, widthIndex: pen.widthIndex, color: pen.color, pressure: pen.pressure)
         self.highlighter = HighlighterSettings(widthIndex: highlighter.widthIndex, color: highlighter.color)
         self.eraser = EraserSettings(mode: eraser.mode, widthIndex: eraser.widthIndex)
-        self.quickColors = Self.normalized(quickColors)
+        self.quickColors = Self.normalized(quickColors, defaults: Self.defaultQuickColors)
+        self.highlighterQuickColors = Self.normalized(highlighterQuickColors, defaults: Self.defaultHighlighterQuickColors)
         self.dock = dock
         self.isCompact = isCompact
     }
 
-    private static func normalized(_ colors: [InkColor]) -> [InkColor] {
-        let defaults = ToolSettings.defaultQuickColors
-        return (0 ..< quickColorCount).map { $0 < colors.count ? colors[$0] : defaults[$0] }
+    private static func normalized(_ colors: [InkColor], defaults: [InkColor]) -> [InkColor] {
+        colors.isEmpty ? defaults : Array(colors.prefix(quickColorCounts.upperBound))
     }
 
-    private static let defaultQuickColors: [InkColor] = [.semantic(.primary), .semantic(.blue), .semantic(.red)]
+    /// Package defaults; the app passes its own from Tokens.
+    public static let defaultQuickColors: [InkColor] = [.semantic(.primary), .semantic(.blue), .semantic(.red)]
+    public static let defaultHighlighterQuickColors: [InkColor] = [
+        HighlighterSettings.yellow, .custom(RGBA8(r: 0xC2, g: 0x45, b: 0x7E)), .custom(RGBA8(r: 0x0F, g: 0xA3, b: 0xB1)),
+    ]
 }
 
 extension ToolSettings {
@@ -183,6 +193,7 @@ extension ToolSettings {
             highlighter: stored.highlighter ?? defaults.highlighter,
             eraser: stored.eraser ?? defaults.eraser,
             quickColors: stored.quickColors ?? defaults.quickColors,
+            highlighterQuickColors: stored.highlighterQuickColors ?? defaults.highlighterQuickColors,
             dock: stored.dock ?? defaults.dock,
             isCompact: stored.isCompact ?? defaults.isCompact
         )
@@ -196,12 +207,13 @@ private struct StoredToolSettings: Decodable {
     var highlighter: HighlighterSettings?
     var eraser: EraserSettings?
     var quickColors: [InkColor]?
+    var highlighterQuickColors: [InkColor]?
     var dock: ToolbarDock?
     // swiftlint:disable:next discouraged_optional_boolean
     var isCompact: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case tool, pen, highlighter, eraser, quickColors, dock, isCompact
+        case tool, pen, highlighter, eraser, quickColors, highlighterQuickColors, dock, isCompact
     }
 
     init(from decoder: any Decoder) throws {
@@ -214,6 +226,7 @@ private struct StoredToolSettings: Decodable {
         highlighter = field(.highlighter)
         eraser = field(.eraser)
         quickColors = field(.quickColors)
+        highlighterQuickColors = field(.highlighterQuickColors)
         dock = field(.dock)
         isCompact = field(.isCompact)
     }

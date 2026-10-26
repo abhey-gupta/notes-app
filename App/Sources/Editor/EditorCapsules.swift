@@ -113,7 +113,8 @@ struct PagesCapsule: View {
 /// Tools, quick colors, undo/redo, laid out along `axis` so the same content docks on any edge.
 /// ARCHITECTURE §7 calls this `ToolbarContent`; renamed so it doesn't shadow SwiftUI's protocol in App.
 ///
-/// Long-press a quick color to store the pen's current color in that slot (#27).
+/// Quick colors are the current inking tool's (pen, or highlighter while it is current; #125). Long-press one to
+/// store the tool's current color in that slot (#27); the ⌄ after them opens ``QuickColorsEditor``.
 struct EditorToolbarContent: View {
     let tools: ToolState
     let state: EditorState
@@ -125,7 +126,7 @@ struct EditorToolbarContent: View {
     let onToolFrame: (Tool, CGRect) -> Void
 
     /// Bumped per slot when a long-press assigns it: pops the swatch and plays a haptic.
-    @State private var assigned = [Int](repeating: 0, count: ToolSettings.quickColorCount)
+    @State private var assigned = [Int](repeating: 0, count: ToolSettings.quickColorCounts.upperBound)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -141,7 +142,7 @@ struct EditorToolbarContent: View {
             .accessibilityHint(tools.tool == tool && tool != .lasso ? "Shows \(tool.label.lowercased()) options" : "")
         }
         ChromeSeparator(axis: axis)
-        ForEach(Array(tools.quickColors.enumerated()), id: \.offset) { index, color in
+        ForEach(Array(tools.currentQuickColors.enumerated()), id: \.offset) { index, color in
             ColorSwatch(color.color(on: paper), label: color.label, isSelected: tools.activeQuickColor == index) {
                 tools.selectQuickColor(index)
             }
@@ -152,10 +153,11 @@ struct EditorToolbarContent: View {
                 SpringKeyframe(1.0, duration: 0.4, spring: .bouncy)
             }
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in assign(index) })
-            .accessibilityHint("Quick color. Touch and hold to store the current pen color here.")
-            .accessibilityAction(named: "Set to current pen color") { assign(index) }
+            .accessibilityHint("Quick color. Touch and hold to store the current color here.")
+            .accessibilityAction(named: "Set to current color") { assign(index) }
             .sensoryFeedback(.success, trigger: assigned[index])
         }
+        QuickColorsButton(tools: tools, paper: paper)
         ChromeSeparator(axis: axis)
         ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
             .disabled(!state.canUndo)
@@ -164,7 +166,7 @@ struct EditorToolbarContent: View {
     }
 
     private func assign(_ index: Int) {
-        tools.setQuickColor(tools.pen.color, at: index)
+        tools.setQuickColor(tools.currentColor, at: index)
         assigned[index] += 1
     }
 }
