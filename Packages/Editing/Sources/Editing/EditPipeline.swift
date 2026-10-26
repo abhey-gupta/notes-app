@@ -181,6 +181,46 @@ public final class EditPipeline {
         }
     }
 
+    // MARK: Page width
+
+    /// Widens or narrows every page to `pageExtension` (#129), then the mirror follows the manifest.
+    ///
+    /// Page space starts at the widened page's left edge, so a change on the left moves every stroke on
+    /// every page by the difference. That isn't an undo step, and it clears the history: the strokes
+    /// earlier steps would put back sit where they were before the move. A right-side change keeps it.
+    public func setPageExtension(_ pageExtension: PageExtension) {
+        enqueue("page width") { [self] in
+            let old = await store.manifest.notebook.pageExtension
+            guard old != pageExtension else { return }
+            let dx = pageExtension.left - old.left
+            var shifted: [(PageEdit, PageID)] = []
+            if dx != 0 {
+                finishGesture()
+                let shift = CGAffineTransform(translationX: dx, y: 0)
+                for id in mirror.pageIDs {
+                    let page = try await mirror.ensureLoaded(id)
+                    guard !page.strokes.isEmpty else { continue }
+                    let edit = try page.transformEdit(page.strokes.map(\.id), by: shift)
+                    do {
+                        try await store.apply(edit, to: id)
+                    } catch {
+                        await mirror.reload(id)
+                        throw error
+                    }
+                    shifted.append((edit, id))
+                }
+                history.removeAll()
+            }
+            try await store.updateNotebook { $0.pageExtension = pageExtension }
+            await mirror.pagesDidChange()
+            // The moved ink lands in the same frame as the wider pages, never on the old ones.
+            for (edit, id) in shifted {
+                mirror.didApply(edit, to: id)
+                onPageEdited(id)
+            }
+        }
+    }
+
     // MARK: History
 
     /// Undoes the last change, after every change already asked for.

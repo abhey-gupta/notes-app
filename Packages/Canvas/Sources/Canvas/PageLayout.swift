@@ -12,8 +12,12 @@ public struct PageLayout: Hashable, Sendable {
     /// Gap between pages (pt).
     public static let defaultGap: CGFloat = 24
 
-    /// Page size (pt), the same for every page (A4 portrait on Day 0).
+    /// Page size (pt), the same for every page: ``basePageSize`` widened by ``pageExtension``.
     public let pageSize: CGSize
+    /// The original page size (A4 portrait on Day 0).
+    public let basePageSize: CGSize
+    /// Paper added beside every page (#129).
+    public let pageExtension: PageExtension
     /// Vertical gap between consecutive pages (pt).
     public let gap: CGFloat
     /// Space below the last page (pt).
@@ -23,10 +27,18 @@ public struct PageLayout: Hashable, Sendable {
     /// Frame of each page, parallel to ``pageIDs``.
     public private(set) var frames: [CGRect] = []
 
-    /// Creates a layout.
-    public init(pageIDs: [PageID], pageSize: CGSize = Notebook.a4Portrait, gap: CGFloat = PageLayout.defaultGap, footer: CGFloat = 0) {
+    /// Creates a layout of `pageSize` pages widened by `pageExtension`.
+    public init(
+        pageIDs: [PageID],
+        pageSize: CGSize = Notebook.a4Portrait,
+        pageExtension: PageExtension = .none,
+        gap: CGFloat = PageLayout.defaultGap,
+        footer: CGFloat = 0
+    ) {
         self.pageIDs = pageIDs
-        self.pageSize = pageSize
+        basePageSize = pageSize
+        self.pageExtension = pageExtension
+        self.pageSize = pageExtension.pageSize(for: pageSize)
         self.gap = max(gap, 0)
         self.footer = max(footer, 0)
         recompute()

@@ -235,7 +235,8 @@ public actor LibraryStore {
         let date = now()
         let copy = Notebook(
             id: NotebookID(), title: Self.copyTitle(n.title, taken: Set(next.notebooks.map(\.title))), cover: n.cover,
-            paper: n.paper, theme: n.theme, keepsExactColors: n.keepsExactColors, pageSize: n.pageSize, pages: n.pages,
+            paper: n.paper, theme: n.theme, keepsExactColors: n.keepsExactColors, pageSize: n.pageSize,
+            pageExtension: n.pageExtension, pages: n.pages,
             createdAt: date, modifiedAt: date
         )
         let copyManifest = Manifest(notebook: copy, entries: manifest.pages, extra: manifest.extra)

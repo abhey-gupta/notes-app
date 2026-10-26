@@ -98,7 +98,7 @@ final class NotebookSession {
             let manifest = await store.manifest
             self.store = store
             let pages = manifest.pages.map { (id: $0.id, template: $0.template) }
-            let residency = PageResidency(store: store, engine: engine, pageSize: manifest.notebook.pageSize, pages: pages)
+            let residency = PageResidency(store: store, engine: engine, pageSize: manifest.notebook.extendedPageSize, pages: pages)
             residency.onPageLoaded = { [weak self] id in self?.pageLoaded(id) }
             residency.onPageEvicted = { [weak self] id in self?.flushThumbnail(id) }
             self.residency = residency
@@ -109,7 +109,10 @@ final class NotebookSession {
                 state.keepsExactColors = true
                 applyPalette(keepsExactColors: true)
             }
-            host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
+            host.layout = PageLayout(
+                pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, pageExtension: manifest.notebook.pageExtension,
+                footer: CanvasHostView.footerHeight
+            )
             if let window = host.pageWindow {
                 residency.update(window)
             }
@@ -310,5 +313,13 @@ extension NotebookSession: CanvasHostViewDelegate {
     func canvasHostDidLiftAllTouches(_: CanvasHostView) {
         state.strokeEnded()
         edits?.endGesture()
+    }
+
+    func canvasHost(_: CanvasHostView, didRequestPageExtension pageExtension: PageExtension) {
+        setPageExtension(pageExtension)
+    }
+
+    func canvasHostInkSpan(_: CanvasHostView) async -> ClosedRange<CGFloat>? {
+        await inkSpan()
     }
 }

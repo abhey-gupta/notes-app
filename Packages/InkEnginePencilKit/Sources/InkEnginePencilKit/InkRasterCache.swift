@@ -77,9 +77,11 @@ final class InkRasterCache {
         return entries[k]?.image
     }
 
-    /// Whatever raster `page` has (any content, newest first): a stand-in while the current one renders.
-    func latestImage(for page: PageID) -> CGImage? {
-        entries.filter { $0.key.page == page && $0.key.content != nil }.max { $0.value.insertedAt < $1.value.insertedAt }?.value.image
+    /// Whatever raster `page` has at `size` (any content, newest first): a stand-in while the current one
+    /// renders. A raster of another page size (before widening, #129) would show stretched.
+    func latestImage(for page: PageID, size: CGSize) -> CGImage? {
+        entries.filter { $0.key.page == page && $0.key.content?.size == size }.max { $0.value.insertedAt < $1.value.insertedAt }?.value
+            .image
     }
 
     /// Inserts a raster; rasters of the page's other content are dropped (invalidated by the edit).

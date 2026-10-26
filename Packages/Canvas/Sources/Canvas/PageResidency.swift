@@ -36,8 +36,8 @@ public final class PageResidency {
 
     /// The notebook's store.
     public let store: DocumentStore
-    /// Page size for snapshots.
-    public let pageSize: CGSize
+    /// Page size for snapshots (``setPageSize(_:)`` when pages are widened).
+    public private(set) var pageSize: CGSize
     /// Pages in order.
     public private(set) var pageIDs: [PageID]
     /// Current window, if the host reported one.
@@ -60,6 +60,7 @@ public final class PageResidency {
         var id: PageID
         var rev: UInt64?
         var template: PageTemplate
+        var size: CGSize
     }
 
     /// Creates residency for `pages` (order and templates from the manifest).
@@ -179,6 +180,13 @@ public final class PageResidency {
         pushPages()
     }
 
+    /// Pages were widened or narrowed (#129): the sink gets every snapshot again at `size`.
+    public func setPageSize(_ size: CGSize) {
+        guard size != pageSize else { return }
+        pageSize = size
+        pushPages()
+    }
+
     /// Stops loading; pages stay in the store until it is flushed.
     public func close() {
         isClosed = true
@@ -268,7 +276,7 @@ public final class PageResidency {
     private func pushPages() {
         guard !isClosed, let window else { return }
         let ids = window.engine.compactMap { pageIDs.indices.contains($0) ? pageIDs[$0] : nil }
-        let next = ids.map { PushedPage(id: $0, rev: resident[$0]?.rev, template: templates[$0] ?? .blank) }
+        let next = ids.map { PushedPage(id: $0, rev: resident[$0]?.rev, template: templates[$0] ?? .blank, size: pageSize) }
         guard next != pushed else { return }
         pushed = next
         sink.setPages(ids.compactMap(snapshot))

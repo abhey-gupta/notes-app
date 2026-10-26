@@ -1,4 +1,5 @@
 import Canvas
+import CoreGraphics
 import Document
 import Editing
 import InkModel
@@ -57,6 +58,31 @@ extension NotebookSession {
         return false
     }
 
+    // MARK: Page width
+
+    /// A page-width handle was released (#129): every page widens or narrows; thumbnails follow.
+    func setPageExtension(_ pageExtension: PageExtension) {
+        clearSelection()
+        guard let edits else { return }
+        edits.setPageExtension(pageExtension)
+        edits.run("page width thumbnails") { [weak self] in self?.regenerateThumbnails() }
+    }
+
+    /// Left and right edges of the ink on every page (page space), `nil` if none. Pages not in memory are
+    /// read and released again.
+    func inkSpan() async -> ClosedRange<CGFloat>? {
+        guard let residency else { return nil }
+        var span: ClosedRange<CGFloat>?
+        for id in residency.pageIDs {
+            guard let page = try? await residency.peek(id) else { continue }
+            for stroke in page.strokes where !stroke.bounds.isNull {
+                let lower = min(span?.lowerBound ?? stroke.bounds.minX, stroke.bounds.minX)
+                span = lower ... max(span?.upperBound ?? stroke.bounds.maxX, stroke.bounds.maxX)
+            }
+        }
+        return span
+    }
+
     // MARK: Following the manifest
 
     /// Layout, residency, overview entries and the library follow the manifest's page order.
@@ -65,7 +91,11 @@ extension NotebookSession {
         let manifest = await store.manifest
         let pages = manifest.pages.map { (id: $0.id, template: $0.template) }
         residency.setPages(pages)
-        host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
+        residency.setPageSize(manifest.notebook.extendedPageSize)
+        host.layout = PageLayout(
+            pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, pageExtension: manifest.notebook.pageExtension,
+            footer: CanvasHostView.footerHeight
+        )
         if let window = host.pageWindow {
             residency.update(window)
         }

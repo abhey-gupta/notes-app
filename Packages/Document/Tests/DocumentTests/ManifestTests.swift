@@ -174,3 +174,44 @@ struct ManifestTests {
         #expect(throws: DocumentError.duplicatePage(id)) { try manifest.encoded() }
     }
 }
+
+/// Widened pages (#129): `pageExtension` is additive and optional, so older packages read unchanged.
+struct PageExtensionManifestTests {
+    @Test func widenedPagesRoundTrip() throws {
+        var manifest = sampleManifest()
+        manifest.notebook.pageExtension = PageExtension(left: 148.75, right: 297.5)
+        let decoded = try Manifest.decode(manifest.encoded())
+        #expect(decoded.notebook.pageExtension == PageExtension(left: 148.75, right: 297.5))
+        #expect(decoded.notebook.extendedPageSize == CGSize(width: 595 + 148.75 + 297.5, height: 842))
+        let object = try json(manifest)
+        let stored = try #require(object["pageExtension"] as? [String: Double])
+        #expect(stored == ["left": 148.75, "right": 297.5])
+        #expect((object["pageSize"] as? [String: Double])?["width"] == 595, "pageSize stays the original page")
+    }
+
+    @Test func unwidenedNotebooksWriteNoKey() throws {
+        let object = try json(sampleManifest())
+        #expect(object["pageExtension"] == nil)
+    }
+
+    @Test func manifestsWithoutTheKeyReadAsUnwidened() throws {
+        var object = try json(sampleManifest())
+        object["pageExtension"] = nil
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try Manifest.decode(data)
+        #expect(decoded.notebook.pageExtension == .none)
+        #expect(decoded.notebook.extendedPageSize == Notebook.a4Portrait)
+        #expect(decoded.extra["pageExtension"] == nil, "a known key, not an unknown one")
+    }
+
+    @Test func survivesPackageReopen() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "PageExtension-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appending(path: "n.nb")
+        var package = try NotebookPackage.create(at: url, notebook: Notebook(title: "Wide"))
+        try package.updateNotebook { $0.pageExtension = PageExtension(right: 595) }
+        let reopened = try NotebookPackage.open(at: url)
+        #expect(reopened.manifest.notebook.pageExtension == PageExtension(right: 595))
+    }
+}
