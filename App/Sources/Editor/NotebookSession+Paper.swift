@@ -1,7 +1,7 @@
 import Editing
 
 extension NotebookSession {
-    /// "Keep exact colors" from the title menu: the engine redraws at once, the manifest follows.
+    /// "Keep exact colors" from the ⋯ popover: the engine redraws at once, the manifest follows.
     func setKeepsExactColors(_ keep: Bool) {
         state.keepsExactColors = keep
         applyPalette(keepsExactColors: keep)

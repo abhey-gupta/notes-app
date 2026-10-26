@@ -57,7 +57,7 @@ final class NotebookSession {
     private(set) var selection: SelectionMachine?
     let selectionOverlay = SelectionOverlayView()
 
-    private static var closing: [NotebookID: Task<Void, Never>] = [:]
+    private(set) static var closing: [NotebookID: Task<Void, Never>] = [:]
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "editor")
 
     init(notebook: NotebookSummary, library: any LibraryModel, startsFocused: Bool = false) {
@@ -183,7 +183,7 @@ final class NotebookSession {
         host.allowsFingerDrawing = allowsFingerDrawing
     }
 
-    /// Paper color and pattern from the title menu: the engine re-themes at once; the pattern becomes the
+    /// Paper color and pattern from the ⋯ popover: the engine re-themes at once; the pattern becomes the
     /// template of every page and of new pages.
     func setPaper(theme: PaperTheme, style: PaperStyle) {
         engine.setTheme(theme)

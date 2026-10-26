@@ -18,6 +18,7 @@ struct ToolbarHost: View {
     let tools: ToolState
     let state: EditorState
     let title: String
+    let notebookMenu: NotebookMenu
     @Binding var paper: PaperTheme
     @Binding var pattern: PaperPattern
     let page: (current: Int, total: Int)
@@ -81,12 +82,12 @@ struct ToolbarHost: View {
             ZStack {
                 if !state.isFocused {
                     HStack(alignment: .top) {
-                        NavCapsule(title: title, paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, onBack: onBack)
+                        NavCapsule(title: title, menu: notebookMenu, onBack: onBack)
                             .chromeID(.nav, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
                             .accessibilitySortPriority(ChromeOrder.nav)
                         Spacer(minLength: Tokens.Spacing.m)
-                        PagesCapsule(tools: tools, state: state, page: page, isNight: paper == .night)
+                        PagesCapsule(tools: tools, state: state, page: page, paper: $paper, pattern: $pattern)
                             .chromeID(.pages, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
                             .accessibilitySortPriority(ChromeOrder.pages)
@@ -320,10 +321,6 @@ extension ToolbarHost {
                 options = nil
             }
         }
-    }
-
-    private var exactColorsBinding: Binding<Bool> {
-        Binding { state.keepsExactColors } set: { state.onKeepsExactColors($0) }
     }
 
     /// The compact pill: current tool and color (named for VoiceOver), expand.

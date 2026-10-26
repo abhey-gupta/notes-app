@@ -1,3 +1,4 @@
+import InkModel
 import Library
 import SwiftUI
 
@@ -10,11 +11,14 @@ enum LibraryPrompt: Hashable {
     case renameFolder(LibraryFolder)
 }
 
-/// Cover / recent-card context menu: Rename, Move to Folder, Duplicate, Delete.
+/// Cover / recent-card context menu: Rename, Move to Folder, Duplicate, Delete. The editor's title menu
+/// reuses it (#126) with its own duplicate, since the open notebook's store must checkpoint first.
 struct NotebookMenu: View {
     let notebook: NotebookSummary
     let library: any LibraryModel
     @Binding var prompt: LibraryPrompt?
+    var deleteTitle = "Delete"
+    var onDuplicate: (() -> Void)?
 
     var body: some View {
         Button("Rename", systemImage: "pencil") { prompt = .renameNotebook(notebook) }
@@ -24,9 +28,15 @@ struct NotebookMenu: View {
                 folderButton(library.folderPath(id: folder.id) ?? folder.name, id: folder.id)
             }
         }
-        Button("Duplicate", systemImage: "plus.square.on.square") { library.duplicate(notebook.id) }
+        Button("Duplicate", systemImage: "plus.square.on.square") {
+            if let onDuplicate {
+                onDuplicate()
+            } else {
+                library.duplicate(notebook.id)
+            }
+        }
         Divider()
-        Button("Delete", systemImage: "trash", role: .destructive) { prompt = .deleteNotebook(notebook) }
+        Button(deleteTitle, systemImage: "trash", role: .destructive) { prompt = .deleteNotebook(notebook) }
     }
 
     private func folderButton(_ name: String, id: FolderID?) -> some View {
@@ -43,15 +53,23 @@ struct NotebookMenu: View {
 }
 
 extension View {
-    /// Presents `prompt` as an alert and applies the answer to `library`.
-    func libraryPrompts(_ prompt: Binding<LibraryPrompt?>, library: any LibraryModel) -> some View {
-        modifier(LibraryPrompts(prompt: prompt, library: library))
+    /// Presents `prompt` as an alert and applies the answer to `library`, or to `onRename` / `onDelete` when
+    /// given (the editor, whose open store owns the notebook's package).
+    func libraryPrompts(
+        _ prompt: Binding<LibraryPrompt?>,
+        library: any LibraryModel,
+        onRename: ((NotebookID, String) -> Void)? = nil,
+        onDelete: ((NotebookID) -> Void)? = nil
+    ) -> some View {
+        modifier(LibraryPrompts(prompt: prompt, library: library, onRename: onRename, onDelete: onDelete))
     }
 }
 
 private struct LibraryPrompts: ViewModifier {
     @Binding var prompt: LibraryPrompt?
     let library: any LibraryModel
+    let onRename: ((NotebookID, String) -> Void)?
+    let onDelete: ((NotebookID) -> Void)?
     @State private var text = ""
 
     func body(content: Content) -> some View {
@@ -61,9 +79,9 @@ private struct LibraryPrompts: ViewModifier {
                 switch current {
                 case let .deleteNotebook(notebook):
                     Button("Cancel", role: .cancel) {}
-                    Button("Delete", role: .destructive) { library.delete(notebook.id) }
+                    Button("Delete", role: .destructive) { (onDelete ?? library.delete)(notebook.id) }
                 case let .renameNotebook(notebook):
-                    nameField("Title", confirm: "Rename") { library.rename(notebook.id, to: text) }
+                    nameField("Title", confirm: "Rename") { (onRename ?? library.rename)(notebook.id, text) }
                 case let .newFolder(parent):
                     nameField("Folder name", confirm: "Create") { library.createFolder(named: text, in: parent) }
                 case let .renameFolder(folder):
