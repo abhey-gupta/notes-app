@@ -295,34 +295,40 @@ public actor LibraryStore {
             throw .io(locations.packageURL(for: entry), reason: "\(error)")
         }
     }
+}
 
-    // MARK: Folders
+// MARK: Folders
 
-    /// Adds a folder at the end. Blank names become "New Folder".
+public extension LibraryStore {
+    /// Adds a folder at the end, inside `parent` (`nil` = top level). Blank names become "New Folder".
     @discardableResult
-    public func createFolder(named name: String) async throws(LibraryError) -> LibraryFolder {
+    func createFolder(named name: String, in parent: FolderID? = nil) async throws(LibraryError) -> LibraryFolder {
         var next = await loadedIndex()
-        let folder = LibraryFolder(name: Self.cleaned(name, fallback: "New Folder"))
+        try Self.check(parent, in: next)
+        let folder = LibraryFolder(name: Self.cleaned(name, fallback: "New Folder"), parentID: parent)
         next.folders.append(folder)
         try commit(next)
         return folder
     }
 
     /// Renames a folder.
-    public func renameFolder(_ id: FolderID, to name: String) async throws(LibraryError) {
+    func renameFolder(_ id: FolderID, to name: String) async throws(LibraryError) {
         var next = await loadedIndex()
         guard let i = next.folders.firstIndex(where: { $0.id == id }) else { throw .unknownFolder(id) }
         next.folders[i].name = Self.cleaned(name, fallback: "New Folder")
         try commit(next)
     }
 
-    /// Removes a folder; its notebooks stay in the library, unfiled.
-    public func deleteFolder(_ id: FolderID) async throws(LibraryError) {
+    /// Removes a folder; its notebooks and subfolders move up to its parent (top level: unfiled).
+    func deleteFolder(_ id: FolderID) async throws(LibraryError) {
         var next = await loadedIndex()
         guard let i = next.folders.firstIndex(where: { $0.id == id }) else { throw .unknownFolder(id) }
-        next.folders.remove(at: i)
+        let parent = next.folders.remove(at: i).parentID
+        for f in next.folders.indices where next.folders[f].parentID == id {
+            next.folders[f].parentID = parent
+        }
         for n in next.notebooks.indices where next.notebooks[n].folderID == id {
-            next.notebooks[n].folderID = nil
+            next.notebooks[n].folderID = parent
         }
         try commit(next)
     }

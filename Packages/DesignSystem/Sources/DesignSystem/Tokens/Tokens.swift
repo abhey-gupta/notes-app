@@ -39,6 +39,8 @@ public enum Tokens {
         public static let chipText = DynamicColor(light: RGBA(0x5B5E66), dark: RGBA(0xA9ABB2))
         /// Subtle selected fill for chips / segmented rows (`rgba(30,33,41,.07)`).
         public static let subtleFill = DynamicColor(light: RGBA(0x1E2129, alpha: 0.07), dark: RGBA(0xFFFFFF, alpha: 0.10))
+        /// Library sidebar folder glyph: warm paper tone, quieter than cover cloth.
+        public static let folder = DynamicColor(light: RGBA(0xC2B7A3), dark: RGBA(0x8C8576))
         /// New-notebook sheet: cover preview panel and text field.
         public static let sheetPanel = DynamicColor(light: RGBA(0xEFECE6), dark: RGBA(0x1C1D21))
         public static let field = DynamicColor(light: RGBA(0xFFFFFF), dark: RGBA(0x2A2B30))
@@ -78,6 +80,9 @@ public enum Tokens {
 
         /// Library page margin.
         public static let libraryMargin: CGFloat = 44
+        /// Library sidebar: inset from the screen edges; nested folder indent.
+        public static let sidebarInset: CGFloat = 12
+        public static let sidebarIndent: CGFloat = 18
 
         /// Capsule inset from the screen edge.
         public static let chromeInset: CGFloat = 18
@@ -131,6 +136,9 @@ public enum Tokens {
         /// Library "Continue" card: 344 wide, 196 tall preview, r12.
         public static let recentCard = CGSize(width: 344, height: 196)
         public static let recentRadius: CGFloat = 12
+        /// Library sidebar panel width; window width from which it docks beside the covers (else overlays).
+        public static let sidebarWidth: CGFloat = 280
+        public static let sidebarDockWidth: CGFloat = 1000
         public static let popoverWidth: CGFloat = 328
         public static let popoverPadding: CGFloat = 16
         /// Tool popover stroke preview height.
