@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 44×40 r20 chrome button (grows with Dynamic Type, ``DynamicTypeSize/chromeScale``). Active = interactive glass tinted with the current
-/// ink + 4 pt ink dot.
+/// 44×40 r20 chrome button (grows with Dynamic Type, ``DynamicTypeSize/chromeScale``). Active = subtle fill pill
+/// (#122) + 4 pt ink dot.
 public struct ToolButton: View {
     private let symbol: Symbol
     private let label: String
@@ -16,7 +16,7 @@ public struct ToolButton: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     /// - Parameters:
-    ///   - ink: current ink; tints the active glass and fills the dot. Defaults to primary ink.
+    ///   - ink: current ink; fills the dot. Defaults to primary ink.
     ///   - showsDot: the compact focus pill shows the tint only.
     public init(
         _ symbol: Symbol,
@@ -55,10 +55,14 @@ public struct ToolButton: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
+                .background {
+                    if isActive {
+                        Capsule().fill(Tokens.Colors.chromeSelected)
+                    }
+                }
                 .contentShape(.capsule)
         }
         .buttonStyle(ToolButtonStyle())
-        .glassEffect(glass, in: .capsule)
         .opacity(isEnabled ? 1 : 0.35)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])
@@ -68,13 +72,9 @@ public struct ToolButton: View {
     private var inkColor: Color {
         ink ?? Tokens.Colors.inkPrimary.color
     }
-
-    private var glass: Glass {
-        isActive ? .regular.tint(inkColor.opacity(0.10)).interactive() : .identity
-    }
 }
 
-/// Press feedback for resting buttons (active ones get interactive glass instead).
+/// Press feedback.
 private struct ToolButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

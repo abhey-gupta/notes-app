@@ -20,13 +20,13 @@ struct NavCapsule: View {
                 HStack(spacing: 6) {
                     Text(title)
                         .font(.chromeTitle)
-                        .foregroundStyle(Tokens.Colors.textPrimary)
+                        .foregroundStyle(Tokens.Colors.chromeText)
                         .lineLimit(1)
                         .frame(maxWidth: 220 * scale, alignment: .leading)
                         .fixedSize(horizontal: true, vertical: false)
                     Image(systemName: Symbol.disclosure.name)
                         .scaledFont(size: 11, weight: .semibold)
-                        .foregroundStyle(Tokens.Colors.textTertiary)
+                        .foregroundStyle(Tokens.Colors.chromeHeader)
                 }
                 .frame(height: Tokens.Size.toolButton.height * scale)
                 .contentShape(.rect)
@@ -66,6 +66,7 @@ struct PagesCapsule: View {
                             presenter.share(url)
                         }
                     }
+                    .chromePopover(paper)
                 }
             ToolButton(.more, "More") { showsMore.toggle() }
                 .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
@@ -74,6 +75,7 @@ struct PagesCapsule: View {
                         showsMore = false
                         state.enterFocus()
                     }
+                    .chromePopover(paper)
                 }
         }
     }

@@ -111,6 +111,7 @@ struct ToolbarHost: View {
         }
         .animation(morphAnimation, value: isCompact)
         .animation(dockAnimation, value: tools.dock)
+        .chromeAppearance(paper)
     }
 
     private var ink: Color {

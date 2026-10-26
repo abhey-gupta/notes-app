@@ -28,7 +28,7 @@ struct PagePopover: View {
                     Label("Keep exact colors", systemImage: "eyedropper")
                 }
                 .scaledFont(size: 14, weight: .medium)
-                .foregroundStyle(Tokens.Colors.textPrimary)
+                .foregroundStyle(Tokens.Colors.chromeText)
                 .tint(Tokens.Colors.selection.color)
                 .padding(.horizontal, Tokens.Spacing.xs)
                 .padding(.top, 12)
@@ -52,7 +52,7 @@ struct PagePopover: View {
             }
             .buttonStyle(.plain)
             .scaledFont(size: 14, weight: .medium)
-            .foregroundStyle(Tokens.Colors.textPrimary)
+            .foregroundStyle(Tokens.Colors.chromeText)
             .padding(.horizontal, Tokens.Spacing.xs)
             #if DEBUG
                 Picker("Toolbar dock (debug)", selection: dockBinding) {
@@ -77,7 +77,7 @@ struct PagePopover: View {
             .scaledFont(size: 11.5, weight: .semibold)
             .textCase(.uppercase)
             .tracking(0.7)
-            .foregroundStyle(Tokens.Colors.textSecondary)
+            .foregroundStyle(Tokens.Colors.chromeHeader)
             .padding(.horizontal, Tokens.Spacing.xs)
             .padding(.bottom, 10)
             .accessibilityAddTraits(.isHeader)
@@ -104,7 +104,7 @@ struct PagePopover: View {
                     .padding(4)
                 Text(theme.displayName)
                     .scaledFont(size: 12, weight: selected ? .semibold : .medium)
-                    .foregroundStyle(selected ? Tokens.Colors.textPrimary : Tokens.Colors.textSecondary)
+                    .foregroundStyle(selected ? Tokens.Colors.chromeText : Tokens.Colors.chromeTextSecondary)
             }
         }
         .buttonStyle(PressableStyle())
@@ -139,7 +139,7 @@ struct PagePopover: View {
                     .padding(3)
                 Text(option.displayName)
                     .scaledFont(size: 11, weight: selected ? .semibold : .medium)
-                    .foregroundStyle(selected ? Tokens.Colors.textPrimary : Tokens.Colors.textSecondary)
+                    .foregroundStyle(selected ? Tokens.Colors.chromeText : Tokens.Colors.chromeTextSecondary)
                     .lineLimit(1)
             }
         }

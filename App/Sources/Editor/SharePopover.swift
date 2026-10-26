@@ -37,7 +37,7 @@ struct SharePopover: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Export PDF")
                 .scaledFont(size: 15, weight: .semibold)
-                .foregroundStyle(Tokens.Colors.textPrimary)
+                .foregroundStyle(Tokens.Colors.chromeText)
                 .padding(.horizontal, Tokens.Spacing.xs)
                 .padding(.bottom, 12)
             SegmentedChoice(Scope.allCases, selection: $scope, title: \.title)
@@ -49,7 +49,7 @@ struct SharePopover: View {
             if isNight {
                 Toggle("Export as shown", isOn: $asShown)
                     .scaledFont(size: 14, weight: .medium)
-                    .foregroundStyle(Tokens.Colors.textPrimary)
+                    .foregroundStyle(Tokens.Colors.chromeText)
                     .padding(.horizontal, Tokens.Spacing.xs)
                     .padding(.top, 14)
                     .disabled(progress != nil)
@@ -83,7 +83,7 @@ struct SharePopover: View {
             Stepper("To page \(to)", value: $to, in: from ... max(page.total, from))
         }
         .scaledFont(size: 14, weight: .medium)
-        .foregroundStyle(Tokens.Colors.textPrimary)
+        .foregroundStyle(Tokens.Colors.chromeText)
         .monospacedDigit()
         .padding(.horizontal, Tokens.Spacing.xs)
         .padding(.top, 14)
