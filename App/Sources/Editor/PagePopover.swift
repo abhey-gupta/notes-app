@@ -2,7 +2,7 @@ import DesignSystem
 import SwiftUI
 import Tools
 
-/// The ⋯ popover (#126): Paper swatches, Template thumbnails, "Keep exact colors" on Night, then Share (compact
+/// The ⋯ popover (#126): Paper swatches, Template thumbnails, "Keep exact colors" (Night only), then Share (compact
 /// chrome, #118) and Focus mode. DEBUG adds the toolbar dock picker.
 struct PagePopover: View {
     let tools: ToolState
@@ -26,18 +26,6 @@ struct PagePopover: View {
                 }
             }
             .padding(.horizontal, Tokens.Spacing.xs)
-            if paper == .night {
-                Toggle(isOn: $keepsExactColors) {
-                    Label("Keep exact colors", systemImage: "eyedropper")
-                }
-                .scaledFont(size: 14, weight: .medium)
-                .foregroundStyle(Tokens.Colors.chromeText)
-                .tint(Tokens.Colors.selection.color)
-                .padding(.horizontal, Tokens.Spacing.xs)
-                .padding(.top, 12)
-                .accessibilityIdentifier("keepExactColors")
-                .transition(.opacity)
-            }
             label("Template")
                 .padding(.top, 18)
             HStack(spacing: 0) {
@@ -46,6 +34,7 @@ struct PagePopover: View {
                         .frame(maxWidth: .infinity)
                 }
             }
+            exactColorsToggle
             Divider()
                 .padding(.vertical, 12)
             if let onShare {
@@ -68,11 +57,29 @@ struct PagePopover: View {
         }
         .padding(Tokens.Size.popoverPadding)
         .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
-        .animation(.snappy(duration: 0.2), value: paper)
         .presentationCompactAdaptation(.popover)
         .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pagePopover")
+    }
+
+    /// Always laid out, live only on Night: showing and hiding it resized the popover, which jumps rather than
+    /// animates, and shoved the rows around while the thumbnails recolored.
+    private var exactColorsToggle: some View {
+        let night = paper == .night
+        return Toggle(isOn: $keepsExactColors) {
+            Label("Keep exact colors", systemImage: "eyedropper")
+        }
+        .scaledFont(size: 14, weight: .medium)
+        .foregroundStyle(Tokens.Colors.chromeText)
+        .tint(Tokens.Colors.selection.color)
+        .padding(.horizontal, Tokens.Spacing.xs)
+        .padding(.top, 14)
+        .disabled(!night)
+        .opacity(night ? 1 : 0.35)
+        .animation(.easeInOut(duration: 0.2), value: night)
+        .accessibilityHint(night ? "" : "Available on Night paper")
+        .accessibilityIdentifier("keepExactColors")
     }
 
     private func row(_ title: String, symbol: Symbol, action: @escaping () -> Void) -> some View {
@@ -126,6 +133,7 @@ struct PagePopover: View {
         .accessibilityLabel("\(theme.displayName) paper")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("paper.\(theme.rawValue)")
+        .animation(.snappy(duration: 0.2), value: selected)
     }
 
     /// Mini page in the current paper color with the pattern drawn on it.
