@@ -18,7 +18,7 @@ struct QuickColorsButton: View {
         } label: {
             Image(systemName: Symbol.disclosure.name)
                 .scaledFont(size: 11, weight: .semibold)
-                .foregroundStyle(Tokens.Colors.textTertiary)
+                .foregroundStyle(Tokens.Colors.chromeHeader)
                 .frame(width: 20 * scale, height: 28 * scale)
                 .contentShape(.rect)
         }
@@ -27,6 +27,7 @@ struct QuickColorsButton: View {
         .accessibilityIdentifier("quickColorsButton")
         .popover(isPresented: $isPresented, arrowEdge: tools.dock.popoverArrowEdge) {
             QuickColorsEditor(tools: tools, paper: paper)
+                .chromePopover(paper)
                 .presentationCompactAdaptation(.popover)
                 .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         }
@@ -111,9 +112,9 @@ struct QuickColorsEditor: View {
         return Button(action: add) {
             Image(systemName: Symbol.add.name)
                 .scaledFont(size: 13, weight: .semibold)
-                .foregroundStyle(Tokens.Colors.textTertiary)
+                .foregroundStyle(Tokens.Colors.chromeHeader)
                 .frame(width: Tokens.Size.paletteSwatch, height: Tokens.Size.paletteSwatch)
-                .overlay(Circle().strokeBorder(Tokens.Colors.textTertiary, style: StrokeStyle(lineWidth: 1.2, dash: [3, 3])))
+                .overlay(Circle().strokeBorder(Tokens.Colors.chromeHeader, style: StrokeStyle(lineWidth: 1.2, dash: [3, 3])))
                 .frame(width: frame, height: frame)
                 .contentShape(.circle)
         }
@@ -153,7 +154,7 @@ struct QuickColorsEditor: View {
         HStack {
             Text("Drag to reorder")
                 .scaledFont(size: 13)
-                .foregroundStyle(Tokens.Colors.textSecondary)
+                .foregroundStyle(Tokens.Colors.chromeHeader)
             Spacer(minLength: Tokens.Spacing.m)
             Button("Remove", role: .destructive) {
                 let index = slot

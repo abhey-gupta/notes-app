@@ -20,7 +20,7 @@ public struct GlassPill: View {
             .foregroundStyle(Tokens.Colors.pillText)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .glassEffect(.regular, in: .capsule)
+            .chromeGlass(in: .capsule)
             .contentTransition(.numericText())
     }
 }
@@ -125,7 +125,7 @@ public struct FocusPillContent: View {
             Button(action: onExpand) {
                 Image(systemName: Symbol.disclosure.name)
                     .font(.system(size: 14 * scale, weight: .semibold))
-                    .foregroundStyle(Tokens.Colors.textSecondary)
+                    .foregroundStyle(Tokens.Colors.chromeTextSecondary)
                     .frame(width: 34 * scale, height: 34 * scale)
                     .contentShape(.circle)
             }

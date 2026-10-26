@@ -21,10 +21,22 @@ public enum Tokens {
         public static let textSecondary = DynamicColor(light: RGBA(0x666970), dark: RGBA(0xA9ABB2))
         public static let textTertiary = DynamicColor(light: RGBA(0x6A6D74), dark: RGBA(0x8D8F96))
 
+        /// Editor chrome on frosted (light paper) / clear (Night) glass (#122): primary, unselected, headers.
+        public static let chromeText = DynamicColor(light: RGBA(0x1E2129), dark: RGBA(0xEEF0F3))
+        public static let chromeTextSecondary = DynamicColor(light: RGBA(0x4A4D55), dark: RGBA(0xC8CBD1))
+        public static let chromeHeader = DynamicColor(light: RGBA(0x6B6E75), dark: RGBA(0xA6A9B0))
+        /// Selected item: a subtle fill pill.
+        public static let chromeSelected = DynamicColor(light: RGBA(0x1E2129, alpha: 0.08), dark: RGBA(0xFFFFFF, alpha: 0.12))
+        /// Frosted warm tint and hairline (light paper only).
+        public static let chromeFrost = DynamicColor(RGBA(0xF6F4EF, alpha: 0.9))
+        public static let chromeBorder = DynamicColor(RGBA(0x1E2129, alpha: 0.08))
+        /// Night paper's tint under clear glass, so light text still reads where the glass crosses the light desk.
+        public static let chromeSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.55))
+
         /// Toolbar glyphs at rest / active.
-        public static let icon = DynamicColor(light: RGBA(0x3A3D45), dark: RGBA(0xD6D7DB))
-        public static let iconActive = DynamicColor(light: RGBA(0x1E2129), dark: RGBA(0xE8E8EA))
-        public static let pillText = DynamicColor(light: RGBA(0x55585F), dark: RGBA(0xA9ABB2))
+        public static let icon = chromeTextSecondary
+        public static let iconActive = chromeText
+        public static let pillText = chromeTextSecondary
         public static let separator = DynamicColor(light: RGBA(0x000000, alpha: 0.10), dark: RGBA(0xFFFFFF, alpha: 0.14))
         /// Drop slot shown at the toolbar's target dock while it is dragged.
         public static let dockHint = DynamicColor(light: RGBA(0x1E2129, alpha: 0.05), dark: RGBA(0xFFFFFF, alpha: 0.06))
@@ -176,6 +188,8 @@ public enum Tokens {
         /// `0 14 28 -12 rgba(30,20,10,.35)`.
         public static let cover = ShadowToken(color: RGBA(0x1E140A, alpha: 0.30), radius: 10, y: 10)
         public static let thumb = ShadowToken(color: RGBA(0x1E140A, alpha: 0.25), radius: 9, y: 8)
+        /// Frosted chrome lifting off light paper.
+        public static let chrome = ShadowToken(color: RGBA(0x281E0A, alpha: 0.10), radius: 10, y: 4)
     }
 
     // MARK: Motion

@@ -26,6 +26,7 @@ struct ToolPopover: View {
         }
         .padding(Tokens.Size.popoverPadding)
         .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
+        .chromePopover(paper)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("toolPopover")
     }
@@ -50,7 +51,7 @@ struct ToolPopover: View {
         PaletteGrid(colors: PaletteEntry.pen, selection: $tools.pen.color, paper: paper)
         Toggle("Pressure sensitivity", isOn: $tools.pen.pressure)
             .scaledFont(size: 14, weight: .medium)
-            .foregroundStyle(Tokens.Colors.textPrimary)
+            .foregroundStyle(Tokens.Colors.chromeText)
             .padding(.top, 12)
             .padding(.horizontal, Tokens.Spacing.xs)
             .padding(.bottom, 2)
@@ -91,7 +92,7 @@ struct ToolPopover: View {
             .accessibilityIdentifier("eraserMode")
         Text(mode.caption)
             .scaledFont(size: 13)
-            .foregroundStyle(Tokens.Colors.textSecondary)
+            .foregroundStyle(Tokens.Colors.chromeTextSecondary)
             .contentTransition(.opacity)
             .animation(Tokens.Motion.inkCrossfade, value: mode)
             .padding(.top, Tokens.Spacing.m)

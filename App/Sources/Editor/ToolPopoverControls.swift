@@ -27,7 +27,7 @@ struct SegmentedChoice<Value: Hashable>: View {
                 } label: {
                     Text(title(option))
                         .scaledFont(size: 13, weight: selected ? .semibold : .medium)
-                        .foregroundStyle(selected ? Tokens.Colors.textPrimary : Tokens.Colors.chipText)
+                        .foregroundStyle(selected ? Tokens.Colors.chromeText : Tokens.Colors.chromeTextSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
                         .background {
@@ -76,7 +76,7 @@ struct OptionRow<Glyph: View>: View {
                         .background {
                             if selected {
                                 Circle()
-                                    .fill(Tokens.Colors.subtleFill)
+                                    .fill(Tokens.Colors.chromeSelected)
                                     .matchedGeometryEffect(id: "selection", in: namespace)
                             }
                         }
@@ -176,7 +176,7 @@ struct SectionLabel: View {
             .scaledFont(size: 11.5, weight: .semibold)
             .textCase(.uppercase)
             .tracking(11.5 * 0.06)
-            .foregroundStyle(Tokens.Colors.textSecondary)
+            .foregroundStyle(Tokens.Colors.chromeHeader)
             .padding(.horizontal, Tokens.Spacing.hairline)
             .padding(.top, 14)
             .padding(.bottom, Tokens.Spacing.m)

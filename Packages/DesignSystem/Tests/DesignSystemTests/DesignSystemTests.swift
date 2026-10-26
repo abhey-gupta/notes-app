@@ -24,6 +24,24 @@ struct TokenTests {
         #expect(PaperTheme.cream.paper.hex == 0xF6F0E1)
     }
 
+    /// #122: frosted + dark text on White/Cream, clear + light text on Night, whatever the system appearance.
+    @Test(arguments: PaperTheme.allCases)
+    func chromeFollowsPaper(theme: PaperTheme) {
+        let appearance = ChromeAppearance(theme)
+        #expect(appearance == (theme == .night ? .clear : .frosted))
+        #expect(appearance.colorScheme == (theme.isDark ? .dark : .light))
+    }
+
+    /// Chrome text reads on its glass: the frost over light paper, Night paper behind clear glass.
+    @Test func chromeTextReads() {
+        let frost = RGBA(0xF6F4EF)
+        let colors = Tokens.Colors.self
+        for (color, minimum) in [(colors.chromeText, 4.5), (colors.chromeTextSecondary, 4.5), (colors.chromeHeader, 4.5)] {
+            #expect(color.light.contrastRatio(against: frost) >= minimum)
+            #expect(color.dark.contrastRatio(against: PaperTheme.night.paper) >= minimum)
+        }
+    }
+
     @Test func counts() {
         #expect(Tokens.palette.count == 11)
         #expect(Set(Tokens.palette).count == 11)
