@@ -190,6 +190,8 @@ final class SelectionLayers {
     let eraser = CAShapeLayer()
     /// The live stroke of a pen with pressure off (`+FlatPen`, #123).
     let flatPen = CAShapeLayer()
+    /// Canvas whose next render lets `flatPen` go (it has the committed stroke).
+    weak var flatPenCanvas: PageCanvas?
     /// The preview `lifted` shows (kept after it ends until the canvas has redrawn the strokes).
     var preview: SelectionPreview?
     /// Strokes left out of the canvas while the preview draws them.

@@ -369,5 +369,6 @@ extension PencilKitInkEngine: PKCanvasViewDelegate {
         guard let canvas = canvas(of: view) else { return }
         canvasDidRender(canvas)
         canvasDidRenderSelection()
+        flatPenCanvasDidRender(canvas)
     }
 }
