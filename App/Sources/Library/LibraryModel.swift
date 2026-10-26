@@ -14,7 +14,7 @@ import Observation
 protocol LibraryModel: AnyObject, Observable {
     /// All notebooks, most recently modified first.
     var notebooks: [NotebookSummary] { get }
-    /// One level of folders, display order.
+    /// Folders (nested via `parentID`), display order.
     var folders: [LibraryFolder] { get }
     /// `false` only while the index is still being read or rebuilt off the main thread; the empty state
     /// waits for it so a slow load never flashes "No notebooks yet".
@@ -39,9 +39,10 @@ protocol LibraryModel: AnyObject, Observable {
     func duplicate(_ id: NotebookID)
     /// Moves to the trash (purged after 30 days).
     func delete(_ id: NotebookID)
-    func createFolder(named name: String)
+    /// New folder inside `parent` (`nil` = top level).
+    func createFolder(named name: String, in parent: FolderID?)
     func renameFolder(_ id: FolderID, to name: String)
-    /// Removes the folder; its notebooks stay, unfiled.
+    /// Removes the folder; its notebooks and subfolders move up to its parent.
     func deleteFolder(_ id: FolderID)
 }
 
@@ -60,6 +61,13 @@ extension LibraryModel {
 
     func folder(id: FolderID?) -> LibraryFolder? {
         id.flatMap { id in folders.first { $0.id == id } }
+    }
+
+    /// "School › Physics": the folder's path, for menus and captions.
+    func folderPath(id: FolderID?) -> String? {
+        guard let id else { return nil }
+        let path = folders.path(to: id)
+        return path.isEmpty ? nil : path.map(\.name).joined(separator: " › ")
     }
 
     /// Title search: case/diacritic-insensitive, in memory (§8).
