@@ -306,7 +306,7 @@ extension LibraryScreen {
                 .font(.libraryTitle)
                 .tracking(-0.5)
                 .foregroundStyle(Tokens.Colors.textPrimary)
-                .lineLimit(1)
+                .lineLimit(isCompactLayout ? 1 : nil) // a one-line limit reads as clipped to the audit on iPad
                 .accessibilityAddTraits(.isHeader)
         }
     }
