@@ -180,6 +180,8 @@ public enum Tokens {
         public static let dragFollow: Animation = .interactiveSpring(response: 0.16, dampingFraction: 0.86)
         /// Toolbar released: flies to its dock (position + axis re-flow) with a little settle.
         public static let dock: Animation = .spring(duration: 0.42, bounce: 0.18)
+        /// Pages overview open/close: the page zooms into its grid cell and back (#124).
+        public static let pageZoom: Animation = .spring(duration: 0.35, bounce: 0.08)
         /// Continuous inking before chrome collapses (§7).
         public static let focusDelay: Duration = .milliseconds(1500)
         /// A page's thumbnail giving way to its sharp raster (editor open, #43; page images, #70).

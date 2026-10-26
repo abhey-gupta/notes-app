@@ -20,6 +20,7 @@ struct EditorScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(notebook: NotebookSummary, library: any LibraryModel, tools: ToolState, startsFocused: Bool = false) {
         self.library = library
@@ -41,7 +42,8 @@ struct EditorScreen: View {
                 PagesOverview(
                     model: session.state.pages, state: session.state, viewport: viewport, title: notebook.title, paper: notebook.theme.style
                 )
-                .transition(.opacity)
+                // The overview zooms itself in and out (#124); Reduce Motion keeps the crossfade.
+                .transition(reduceMotion ? .opacity : .identity)
                 .zIndex(1)
             } else {
                 ToolbarHost(

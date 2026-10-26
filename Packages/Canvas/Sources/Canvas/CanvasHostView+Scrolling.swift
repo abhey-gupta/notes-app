@@ -34,4 +34,12 @@
             settleZoom() // after a bounce back into range
         }
     }
+
+    public extension CanvasHostView {
+        /// Page `index`'s frame on screen (window points, zoom applied); `nil` off-window or out of range.
+        func windowFrame(ofPage index: Int) -> CGRect? {
+            guard window != nil, layout.frames.indices.contains(index) else { return nil }
+            return contentView.convert(layout.frame(at: index), to: nil)
+        }
+    }
 #endif

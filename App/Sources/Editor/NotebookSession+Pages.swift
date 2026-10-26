@@ -14,6 +14,8 @@ extension NotebookSession {
     func installPages() {
         let pages = state.pages
         pages.onShow = { [weak self] in self?.showPage($0) }
+        pages.onScroll = { [weak self] in self?.host.scrollToPage($0, animated: false) }
+        pages.pageFrame = { [weak self] in self?.host.windowFrame(ofPage: $0) }
         pages.onInsert = { [weak self] index, style in self?.insertPage(after: index, template: style.defaultTemplate) }
         pages.onMove = { [weak self] from, to in self?.movePage(from: from, to: to) }
         pages.onDelete = { [weak self] in self?.deletePages($0) }
