@@ -23,6 +23,8 @@ final class EditorState {
     /// The notebook's "Keep exact colors" (§10): custom colors aren't remapped on Night paper.
     var keepsExactColors = false
     @ObservationIgnored var onKeepsExactColors: (Bool) -> Void = { _ in }
+    /// Continuous inking collapses the chrome; off in compact chrome, whose bottom bar stays put (#118).
+    @ObservationIgnored var autoFocuses = true
     /// The notebook's undo history (§6).
     let edits: EditStack
     /// Pages overview (§5.2, #32).
@@ -116,7 +118,7 @@ final class EditorState {
         let stillWriting = isInking || lastPenUp.map { clock.now - $0 < Self.continuityGap } ?? false
         sessionStart = nil
         // VoiceOver and Switch Control walk the chrome element by element: it doesn't hide itself under them (#45).
-        if stillWriting, !UIAccessibility.isVoiceOverRunning, !UIAccessibility.isSwitchControlRunning {
+        if stillWriting, autoFocuses, !UIAccessibility.isVoiceOverRunning, !UIAccessibility.isSwitchControlRunning {
             isFocused = true
         }
     }

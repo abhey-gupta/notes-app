@@ -12,6 +12,8 @@ struct RootView: View {
     /// App-wide tool choice and toolbar placement (§6); persisted, flushed when the scene backgrounds.
     @State private var tools = LaunchOptions.makeToolState()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var width: CGFloat?
     @Namespace private var zoom
 
     #if DEBUG
@@ -39,6 +41,8 @@ struct RootView: View {
                 }
             }
         }
+        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
+        .environment(\.isCompactLayout, CompactLayout.isCompact(width: width, sizeClass: sizeClass))
         // Library and editor chrome follow Dynamic Type up to AX1; capsules grow with it (#45).
         .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         // After the first frame: finish a slow/rebuilding index load, purge old trash, warm up the canvas.

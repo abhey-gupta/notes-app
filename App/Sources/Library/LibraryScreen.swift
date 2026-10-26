@@ -4,6 +4,8 @@ import os
 import SwiftUI
 
 /// Library (mock §01): folder sidebar (#117), serif title, glass search/settings/New, "Continue" recents, covers grid.
+/// Compact chrome (#118): sidebar · search · + on top, the title under them, one Continue card, three columns of
+/// covers; the sidebar becomes a full-screen Folders sheet.
 struct LibraryScreen: View {
     let library: any LibraryModel
     let zoom: Namespace.ID
@@ -23,20 +25,25 @@ struct LibraryScreen: View {
     @State private var isDocked = true
     @State private var showsDockedSidebar = true
     @State private var showsOverlaySidebar = false
-    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var showsFolders = false
+    /// Compact covers grid width: three columns fill it.
+    @State private var gridWidth: CGFloat = 0
+    @Environment(\.isCompactLayout) private var isCompactLayout
 
-    private let margin = Tokens.Spacing.libraryMargin
+    private var margin: CGFloat {
+        isCompactLayout ? CompactLayout.libraryMargin : Tokens.Spacing.libraryMargin
+    }
 
     var body: some View {
         HStack(spacing: 0) {
-            if isDocked, showsDockedSidebar {
+            if isDocked, showsDockedSidebar, !isCompactLayout {
                 sidebar
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
             content
         }
         .overlay(alignment: .leading) {
-            if !isDocked, showsOverlaySidebar {
+            if !isDocked, showsOverlaySidebar, !isCompactLayout {
                 Color.black.opacity(0.08)
                     .ignoresSafeArea()
                     .onTapGesture { setSidebar(visible: false) }
@@ -60,6 +67,12 @@ struct LibraryScreen: View {
         .sheet(isPresented: $showsNewNotebook) {
             NewNotebookSheet(folder: library.folder(id: folder)) { draft in
                 create(draft)
+            }
+        }
+        .fullScreenCover(isPresented: $showsFolders) {
+            FoldersSheet(library: library, selection: $folder, showsGallery: showsGallery) {
+                query = ""
+                showsFolders = false
             }
         }
         .libraryPrompts($prompt, library: library)
@@ -103,6 +116,10 @@ struct LibraryScreen: View {
     }
 
     private func setSidebar(visible: Bool) {
+        if isCompactLayout {
+            showsFolders = visible
+            return
+        }
         withAnimation(.snappy(duration: 0.3)) {
             if isDocked {
                 showsDockedSidebar = visible
@@ -116,14 +133,14 @@ struct LibraryScreen: View {
 
     private var recents: some View {
         ScrollView(.horizontal) {
-            LazyHStack(alignment: .top, spacing: 31) {
+            LazyHStack(alignment: .top, spacing: recentSpacing) {
                 ForEach(library.recents) { notebook in
                     RecentCard(notebook: notebook, zoom: zoom) {
                         open(EditorRoute(id: notebook.id, source: .recent))
                     }
                     .contextMenu { NotebookMenu(notebook: notebook, library: library, prompt: $prompt) }
                     .draggable(notebook.id.description) { NotebookCover(title: notebook.title, color: notebook.cover.style) }
-                    .containerRelativeFrame(.horizontal, count: 3, spacing: 31)
+                    .containerRelativeFrame(.horizontal, count: isCompactLayout ? 1 : 3, spacing: recentSpacing)
                 }
             }
             .scrollTargetLayout()
@@ -132,6 +149,10 @@ struct LibraryScreen: View {
         .scrollTargetBehavior(.viewAligned)
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
+    }
+
+    private var recentSpacing: CGFloat {
+        isCompactLayout ? CompactLayout.coverSpacing : 31
     }
 
     // MARK: Notebooks
@@ -178,20 +199,13 @@ struct LibraryScreen: View {
                     .padding(.vertical, Tokens.Spacing.xxxl)
             }
         } else {
-            LazyVGrid(
-                columns: [GridItem(
-                    .adaptive(minimum: Tokens.Size.cover.width, maximum: Tokens.Size.cover.width),
-                    spacing: 39,
-                    alignment: .leading
-                )],
-                alignment: .leading,
-                spacing: 30
-            ) {
+            LazyVGrid(columns: coverColumns, alignment: .leading, spacing: isCompactLayout ? 24 : 30) {
                 ForEach(notebooks) { notebook in
                     CoverTile(
                         notebook: notebook,
                         folder: folder == nil || !query.isEmpty ? library.folder(id: notebook.folderID)?.name : nil,
-                        zoom: zoom
+                        zoom: zoom,
+                        width: coverWidth
                     ) {
                         open(EditorRoute(id: notebook.id, source: .cover))
                     }
@@ -199,30 +213,52 @@ struct LibraryScreen: View {
                     .draggable(notebook.id.description) { NotebookCover(title: notebook.title, color: notebook.cover.style) }
                 }
             }
+            .onGeometryChange(for: CGFloat.self, of: \.size.width) { gridWidth = $0 }
         }
+    }
+
+    /// Wide: as many fixed-width covers as fit. Compact: three that share the width.
+    private var coverColumns: [GridItem] {
+        if isCompactLayout {
+            let column = GridItem(.flexible(), spacing: CompactLayout.coverSpacing, alignment: .topLeading)
+            return Array(repeating: column, count: CompactLayout.coverColumns)
+        }
+        return [GridItem(
+            .adaptive(minimum: Tokens.Size.cover.width, maximum: Tokens.Size.cover.width),
+            spacing: 39,
+            alignment: .leading
+        )]
+    }
+
+    private var coverWidth: CGFloat {
+        guard isCompactLayout, gridWidth > 0 else { return Tokens.Size.cover.width }
+        let columns = CGFloat(CompactLayout.coverColumns)
+        return min((gridWidth - CompactLayout.coverSpacing * (columns - 1)) / columns, Tokens.Size.cover.width)
     }
 }
 
 extension LibraryScreen {
     // MARK: Header
 
+    @ViewBuilder
     private var header: some View {
+        if isCompactLayout {
+            compactHeader
+        } else {
+            wideHeader
+        }
+    }
+
+    private var wideHeader: some View {
         HStack(spacing: Tokens.Spacing.m) {
             sidebarButton
-            VStack(alignment: .leading, spacing: 0) {
-                breadcrumb
-                Text(library.folder(id: folder)?.name ?? "Library")
-                    .font(.libraryTitle)
-                    .tracking(-0.5)
-                    .foregroundStyle(Tokens.Colors.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-            }
+            title
             Spacer(minLength: Tokens.Spacing.xxl)
             GlassChrome(spacing: Tokens.Spacing.s) {
                 HStack(spacing: Tokens.Spacing.m) {
-                    searchField
+                    LibrarySearchField(query: $query)
                     settingsButton
-                    newButton
+                    NewNotebookButton { showsNewNotebook = true }
                 }
             }
         }
@@ -232,20 +268,44 @@ extension LibraryScreen {
         .padding(.bottom, Tokens.Spacing.s)
     }
 
-    private var sidebarButton: some View {
-        let visible = isDocked ? showsDockedSidebar : showsOverlaySidebar
-        return Button {
-            setSidebar(visible: !visible)
-        } label: {
-            Image(systemName: Symbol.sidebar.name)
-                .scaledFont(size: 17, weight: .medium)
-                .foregroundStyle(Tokens.Colors.pillText)
-                .frame(width: 40, height: 40)
-                .contentShape(.circle)
+    /// Sidebar · search · + in glass, the title below.
+    private var compactHeader: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.m) {
+            GlassChrome(spacing: Tokens.Spacing.s) {
+                HStack(spacing: Tokens.Spacing.m) {
+                    sidebarButton
+                    LibrarySearchField(query: $query)
+                    NewNotebookButton { showsNewNotebook = true }
+                }
+            }
+            title
+                .padding(.leading, 4)
         }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
-        .accessibilityLabel(visible ? "Hide Sidebar" : "Show Sidebar")
+        .padding(.horizontal, margin - 4)
+        .padding(.top, Tokens.Spacing.s)
+        .padding(.bottom, Tokens.Spacing.s)
+    }
+
+    private var title: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            breadcrumb
+            Text(library.folder(id: folder)?.name ?? "Library")
+                .font(.libraryTitle)
+                .tracking(-0.5)
+                .foregroundStyle(Tokens.Colors.textPrimary)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private var sidebarButton: some View {
+        let visible = isCompactLayout ? showsFolders : isDocked ? showsDockedSidebar : showsOverlaySidebar
+        return GlassCircleButton(
+            symbol: Symbol.sidebar.name,
+            label: isCompactLayout ? "Folders" : visible ? "Hide Sidebar" : "Show Sidebar"
+        ) {
+            setSidebar(visible: !visible)
+        }
         .accessibilityIdentifier("sidebarToggle")
     }
 
@@ -270,63 +330,11 @@ extension LibraryScreen {
         }
     }
 
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: Symbol.search.name)
-                .scaledFont(size: 16, weight: .medium)
-                .foregroundStyle(Tokens.Colors.textSecondary)
-                .accessibilityHidden(true)
-            TextField("Search notebooks", text: $query)
-                .scaledFont(size: 15)
-                .textFieldStyle(.plain)
-                .submitLabel(.search)
-                .autocorrectionDisabled()
-            if !query.isEmpty {
-                Button("Clear search", systemImage: "xmark.circle.fill") { query = "" }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(Tokens.Colors.textTertiary)
-                    .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, Tokens.Spacing.l)
-        .padding(.vertical, Tokens.Spacing.xs)
-        .frame(width: 250 * typeSize.chromeScale)
-        .frame(minHeight: 40)
-        .glassEffect(.regular.interactive(), in: .capsule)
-    }
-
     private var settingsButton: some View {
-        Button {
-            showsSettings = true
-        } label: {
-            Image(systemName: Symbol.settings.name)
-                .scaledFont(size: 17, weight: .medium)
-                .foregroundStyle(Tokens.Colors.pillText)
-                .frame(width: 40, height: 40)
-                .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
-        .accessibilityLabel("Settings")
-        .popover(isPresented: $showsSettings) {
-            SettingsView(showsGallery: showsGallery)
-        }
-    }
-
-    private var newButton: some View {
-        Button {
-            showsNewNotebook = true
-        } label: {
-            Label("New", systemImage: Symbol.add.name)
-                .font(.chromeTitle)
-                .foregroundStyle(Tokens.Colors.libraryBackground)
-                .padding(.horizontal, 2)
-                .frame(minHeight: 28)
-        }
-        .buttonStyle(.glassProminent)
-        .tint(Tokens.Colors.textPrimary.color)
-        .fixedSize()
-        .accessibilityIdentifier("newNotebook")
+        GlassCircleButton(symbol: Symbol.settings.name, label: "Settings") { showsSettings = true }
+            .popover(isPresented: $showsSettings) {
+                SettingsView(showsGallery: showsGallery)
+            }
     }
 
     /// Search spans the whole library; otherwise the selected folder's own notebooks.
