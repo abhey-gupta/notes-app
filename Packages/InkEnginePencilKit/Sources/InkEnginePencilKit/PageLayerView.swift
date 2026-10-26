@@ -3,7 +3,8 @@ import InkModel
 import PencilKit
 import UIKit
 
-/// One visible page in content space: paper color, vector template marks, and an image of its ink
+/// One visible page in content space: paper color, imported artwork (a PDF page, ``ArtworkLayer``),
+/// vector template marks, and an image of its ink
 /// (outside ``inkHole``, the part a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask).
 ///
 /// The image is one of (#70's fallback chain, best first): the raster for ``requestedKey``; a stale
@@ -14,7 +15,7 @@ import UIKit
 /// (``crossfadeDuration``, #43); raster-to-raster swaps are instant.
 ///
 /// The view sits in the host's zoom view, so zoom is the ancestor's transform; the template marks
-/// re-rasterize at ``layout(frame:template:markScale:colors:)``'s `markScale` to stay crisp.
+/// re-rasterize at ``layout(frame:template:artwork:markScale:colors:)``'s `markScale` to stay crisp.
 @MainActor
 final class PageLayerView: UIView {
     private let linesLayer = CAShapeLayer()
@@ -29,6 +30,7 @@ final class PageLayerView: UIView {
     var crossfadeDuration: TimeInterval = 0.12
 
     private var templateKey: TemplateKey?
+    private var artworkLayer: ArtworkLayer?
 
     private struct TemplateKey: Equatable {
         var template: PageTemplate
@@ -107,9 +109,10 @@ final class PageLayerView: UIView {
         fatalError("init(coder:) not supported")
     }
 
-    /// Lays out at `frame` (content space, the page's size) with `template`; `markScale` (px per pt,
-    /// `nil` to keep the current one) is the template layers' `contentsScale`.
-    func layout(frame: CGRect, template: PageTemplate, markScale: CGFloat?, colors: Colors) {
+    /// Lays out at `frame` (content space, the page's size) with `template` over `artwork`; `markScale`
+    /// (px per pt, `nil` to keep the current one) is the template layers' `contentsScale`. A page's
+    /// artwork is set once (it never changes for a page ID).
+    func layout(frame: CGRect, template: PageTemplate, artwork: (any PageArtwork)?, markScale: CGFloat?, colors: Colors) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         if bounds.size != .zero, bounds.size != frame.size {
@@ -129,6 +132,17 @@ final class PageLayerView: UIView {
         dotsLayer.frame = bounds
         imageLayer.frame = bounds
         inkLayer.frame = imageLayer.bounds
+        if (artwork == nil) != (artworkLayer == nil) {
+            artworkLayer?.removeFromSuperlayer()
+            artworkLayer = artwork.map(ArtworkLayer.init)
+            if let artworkLayer {
+                artworkLayer.contentsScale = max(window?.screen.scale ?? traitCollection.displayScale, 1)
+                layer.insertSublayer(artworkLayer, below: linesLayer)
+            }
+        }
+        if let artworkLayer, artworkLayer.frame != bounds {
+            artworkLayer.frame = bounds
+        }
         layoutThumbnail()
         let key = TemplateKey(template: template, size: frame.size)
         if templateKey != key {

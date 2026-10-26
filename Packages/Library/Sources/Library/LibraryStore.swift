@@ -91,6 +91,24 @@ public actor LibraryStore {
     /// then "Untitled 2", "Untitled 3"…
     @discardableResult
     public func create(_ notebook: Notebook, in folder: FolderID? = nil) async throws(LibraryError) -> LibraryEntry {
+        try await create(notebook, in: folder) { url, notebook throws(DocumentError) in
+            try NotebookPackage.create(at: url, notebook: notebook)
+        }
+    }
+
+    /// Creates a notebook from a PDF (#119): one page per PDF page, drawn on a copy of the file kept in
+    /// the package (``NotebookPackage/create(at:notebook:pdf:)``), then its index entry. `pdf` is only read.
+    public func importPDF(_ pdf: URL, as notebook: Notebook, in folder: FolderID? = nil) async throws(LibraryError) -> LibraryEntry {
+        try await create(notebook, in: folder) { url, notebook throws(DocumentError) in
+            try NotebookPackage.create(at: url, notebook: notebook, pdf: pdf)
+        }
+    }
+
+    private func create(
+        _ notebook: Notebook,
+        in folder: FolderID?,
+        write: (URL, Notebook) throws(DocumentError) -> NotebookPackage
+    ) async throws(LibraryError) -> LibraryEntry {
         var next = await loadedIndex()
         try Self.check(folder, in: next)
         var notebook = notebook
@@ -100,7 +118,7 @@ public actor LibraryStore {
         let url = NotebookPackage.url(for: notebook.id, in: locations.notebooksDirectory)
         let package: NotebookPackage
         do {
-            package = try NotebookPackage.create(at: url, notebook: notebook)
+            package = try write(url, notebook)
         } catch {
             throw .document(error)
         }

@@ -26,6 +26,8 @@ public enum DocumentError: Error, Hashable, Sendable {
     case notFound(URL)
     /// File system failure at `url`.
     case io(URL, reason: String)
+    /// Not a PDF CoreGraphics can open, password-protected, or without pages (PDF import, #119).
+    case unreadablePDF(URL)
 }
 
 extension DocumentError: LocalizedError {
@@ -54,6 +56,8 @@ extension DocumentError: LocalizedError {
             "No notebook at \(url.path(percentEncoded: false))."
         case let .io(url, reason):
             "Could not access \(url.lastPathComponent): \(reason)"
+        case let .unreadablePDF(url):
+            "\(url.lastPathComponent) can't be opened as a PDF."
         }
     }
 }

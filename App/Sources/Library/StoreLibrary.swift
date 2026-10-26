@@ -82,6 +82,12 @@ final class StoreLibrary: LibraryModel {
         return summary(entry)
     }
 
+    func importPDF(_ draft: PDFImportDraft) async throws -> NotebookSummary {
+        let entry = try await store.importPDF(draft.url, as: draft.makeNotebook(), in: draft.folderID)
+        await refresh()
+        return summary(entry)
+    }
+
     func update(_ notebook: NotebookSummary) {
         guard let index = notebooks.firstIndex(where: { $0.id == notebook.id }) else { return }
         let old = notebooks[index]
