@@ -76,7 +76,7 @@ struct PagesCapsule: View {
             .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
             .popover(isPresented: $showsMore) {
                 PagePopover(
-                    tools: tools, paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding,
+                    tools: tools, paper: $paper, pattern: $pattern,
                     onShare: onShare
                 ) {
                     showsMore = false
@@ -112,10 +112,6 @@ struct PagesCapsule: View {
     private func shareFromMore() {
         sharesAfterMore = true
         showsMore = false
-    }
-
-    private var exactColorsBinding: Binding<Bool> {
-        Binding { state.keepsExactColors } set: { state.onKeepsExactColors($0) }
     }
 }
 

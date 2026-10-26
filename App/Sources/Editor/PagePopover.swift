@@ -2,14 +2,12 @@ import DesignSystem
 import SwiftUI
 import Tools
 
-/// The ⋯ popover (#126): Paper swatches, Template thumbnails, "Keep exact colors" (Night only), then Share (compact
+/// The ⋯ popover (#126): Paper swatches, Template thumbnails, then Share (compact
 /// chrome, #118) and Focus mode. DEBUG adds the toolbar dock picker.
 struct PagePopover: View {
     let tools: ToolState
     @Binding var paper: PaperTheme
     @Binding var pattern: PaperPattern
-    /// "Keep exact colors", offered on Night paper.
-    @Binding var keepsExactColors: Bool
     /// Compact chrome's share row; `nil` hides it.
     var onShare: (() -> Void)?
     let onFocus: () -> Void
@@ -34,10 +32,6 @@ struct PagePopover: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            if paper == .night {
-                exactColorsToggle
-                    .transition(.reveal)
-            }
             Divider()
                 .padding(.vertical, 12)
             if let onShare {
@@ -60,24 +54,10 @@ struct PagePopover: View {
         }
         .padding(Tokens.Size.popoverPadding)
         .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
-        .animation(.snappy(duration: 0.28), value: paper == .night)
         .presentationCompactAdaptation(.popover)
         .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pagePopover")
-    }
-
-    /// Below the templates so nothing above moves when it slides open on Night.
-    private var exactColorsToggle: some View {
-        Toggle(isOn: $keepsExactColors) {
-            Label("Keep exact colors", systemImage: "eyedropper")
-        }
-        .scaledFont(size: 14, weight: .medium)
-        .foregroundStyle(Tokens.Colors.chromeText)
-        .tint(Tokens.Colors.selection.color)
-        .padding(.horizontal, Tokens.Spacing.xs)
-        .padding(.top, 14)
-        .accessibilityIdentifier("keepExactColors")
     }
 
     private func row(_ title: String, symbol: Symbol, action: @escaping () -> Void) -> some View {
@@ -177,30 +157,4 @@ struct PagePopover: View {
             Binding { tools.dock } set: { tools.dock = $0 }
         }
     #endif
-}
-
-private extension AnyTransition {
-    /// Unrolls from the top edge as the rows below slide down; fading alone left the switch popping in.
-    static var reveal: AnyTransition {
-        .modifier(active: RevealModifier(progress: 0), identity: RevealModifier(progress: 1))
-    }
-}
-
-private nonisolated struct RevealModifier: ViewModifier, Animatable {
-    var progress: CGFloat
-
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(progress)
-            .mask(alignment: .top) {
-                GeometryReader { proxy in
-                    Rectangle().frame(height: proxy.size.height * progress)
-                }
-            }
-    }
 }

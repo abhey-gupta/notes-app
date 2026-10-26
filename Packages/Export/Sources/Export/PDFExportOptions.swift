@@ -73,12 +73,11 @@ public struct PDFExportOptions: Hashable, Sendable {
         self.title = title
     }
 
-    /// Options for `notebook`: its page size (widened pages export at their full width, #129), theme, color setting and title.
+    /// Options for `notebook`: its page size (widened pages export at their full width, #129), theme and title.
     public init(notebook: Notebook, pages: PageSelection = .all, exportsAsShown: Bool = false) {
         self.init(
             pageSize: notebook.extendedPageSize,
             theme: notebook.theme,
-            keepsExactColors: notebook.keepsExactColors,
             exportsAsShown: exportsAsShown,
             pages: pages,
             title: notebook.title
