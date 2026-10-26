@@ -9,8 +9,10 @@ extension ActiveTool {
     /// eraser's diameter, or the lasso. Stroke vs partial erase stays with the session.
     func configuration(allowsFingerDrawing: Bool) -> ToolConfiguration {
         switch self {
-        case let .ink(kind, color, width):
-            ToolConfiguration(tool: .pen(kind), color: color, width: width, allowsFingerDrawing: allowsFingerDrawing)
+        case let .ink(kind, color, width, pressure):
+            ToolConfiguration(
+                tool: .pen(kind), color: color, width: width, pressure: pressure, allowsFingerDrawing: allowsFingerDrawing
+            )
         case let .eraser(eraser):
             ToolConfiguration(tool: .eraser, width: eraser.width, allowsFingerDrawing: allowsFingerDrawing)
         case .lasso:

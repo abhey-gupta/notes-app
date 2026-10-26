@@ -35,6 +35,17 @@ extension PencilKitInkEngine {
         applyTool()
     }
 
+    /// The stroke the current pen commits for `pk`, and the PencilKit stroke the canvas keeps for it. With
+    /// pressure off (#123) both are flattened (``InkModel/Stroke/pressureFlattened``) and `canvas` is marked
+    /// for a rebuild, which swaps the flattened stroke in once the tool lifts.
+    func capture(_ pk: PKStroke, on canvas: PageCanvas) -> (Stroke, PKStroke) {
+        let stroke = PencilKitConversion.stroke(from: pk, tool: tool.penKind ?? .ballpoint, color: tool.color, width: tool.width)
+        guard !tool.pressure else { return (stroke, pk) }
+        let flat = stroke.pressureFlattened
+        canvas.needsRebuild = true
+        return (flat, PencilKitConversion.pkStroke(from: flat, color: uiColor(tool.color)))
+    }
+
     func uiColor(_ color: InkColor) -> UIColor {
         UIColor(palette.ink(color, on: theme))
     }
