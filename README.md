@@ -23,6 +23,8 @@ make open           # gen + open in Xcode
 make build          # build app for the iPad simulator
 make ipa            # unsigned Release build/Notespace.ipa for sideloading
 make test           # app UI tests + every package's tests on the simulator
+make test-unit      # same without the UI tests (the PR gate)
+make test-ui        # UI tests only
 make test-packages  # headless packages via `swift test` (no simulator)
 make perf           # perf tests (Release), no gate
 make perf-gate      # perf tests vs Tests/PerfTests/baselines.json, fails on > 10 % regression
@@ -31,7 +33,7 @@ make fixtures       # Fixtures/{1,10,100,300}-pages.nb, deterministic (notespace
 make lint / format
 ```
 
-CI: GitHub Actions on a self-hosted runner on the dev Mac (`runs-on: [self-hosted, macOS, xcode27]`), service in `~/actions-runner/notespace` (`./svc.sh status/start/stop`). Jobs: lint, packages, ios. Perf gate runs nightly and on PRs labeled `run-perf`; it comments the summary on the PR.
+CI: GitHub Actions on a self-hosted runner on the dev Mac (`runs-on: [self-hosted, macOS, xcode27]`), service in `~/actions-runner/notespace` (`./svc.sh status/start/stop`). PR gate `ci.yml`: one job (lint, headless packages, simulator tests without UI tests, ~6 min). `ui.yml`: UI tests nightly, on demand, and on PRs touching `App/**`, `Tests/UITests/**` or `project.yml`. Perf gate runs nightly and on PRs labeled `run-perf`; it comments the summary on the PR.
 
 Release: push a `v*` tag → `release.yml` builds the unsigned `.ipa` and attaches it to a GitHub release (manual run: artifact only). Install with AltStore/SideStore, which re-sign it with a free Apple ID (7-day expiry, refreshed over Wi-Fi by AltServer/SideStore).
 
