@@ -196,6 +196,13 @@ struct DockLayout {
         var shift: CGFloat = 0
     }
 
+    /// Widest the nav capsule can be at the top with a `toolbarLength` toolbar docked there beside it, so the
+    /// title truncates instead of pushing the toolbar off the row (#176). Unbounded for other docks.
+    func navMaxWidth(at dock: ToolbarDock, toolbarLength: CGFloat) -> CGFloat {
+        guard dock == .top, containerWidth > 0 else { return .infinity }
+        return containerWidth - pages - toolbarLength - 2 * Tokens.Spacing.m - 1
+    }
+
     /// Padding and nudge that put a `length`-long toolbar at `dock`:
     /// - top: centred under the status bar, clear of the nav (left) and pages (right) capsules; on a row too
     ///   narrow for all three it drops below them.

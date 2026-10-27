@@ -82,6 +82,7 @@ struct ToolbarHost: View {
                 if !state.isFocused {
                     HStack(alignment: .top) {
                         NavCapsule(title: title, paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, onBack: onBack)
+                            .maxWidth(layout.navMaxWidth(at: tools.dock, toolbarLength: restingLength(.horizontal)))
                             .chromeID(.nav, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
                             .accessibilitySortPriority(ChromeOrder.nav)
