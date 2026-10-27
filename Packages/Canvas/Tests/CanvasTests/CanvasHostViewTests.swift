@@ -20,6 +20,10 @@
         func canvasHostDidLiftAllTouches(_: CanvasHostView) {}
     }
 
+    final class Target {
+        var undone = 0
+    }
+
     /// The canvas host and page residency through the engine seam, with a recording engine.
     @MainActor
     @Suite(.timeLimit(.minutes(1)))
@@ -76,6 +80,39 @@
         /// The engine's view sits inside the zoomed content: content-sized, in page points.
         @Test func engineViewIsContentSized() {
             #expect(engine.view.bounds.size == host.layout.contentSize)
+        }
+
+        /// Two- and three-finger taps (#121): on the scroll view, fingers only, off with the setting and
+        /// while fingers ink; while on they replace the system's three-finger editing gestures.
+        @Test func tapUndoFollowsTheSettingAndFingerDrawing() {
+            let taps = host.canvasScrollView.gestureRecognizers?.compactMap { $0 as? UITapGestureRecognizer } ?? []
+            #expect(taps.contains { $0 === host.tapUndo.undo && $0.numberOfTouchesRequired == 2 })
+            #expect(taps.contains { $0 === host.tapUndo.redo && $0.numberOfTouchesRequired == 3 })
+            #expect(host.tapUndo.undo.allowedTouchTypes == [NSNumber(value: UITouch.TouchType.direct.rawValue)])
+            #expect(host.tapUndo.isEnabled)
+            #expect(host.editingInteractionConfiguration == .none)
+
+            host.allowsTapUndo = false
+            #expect(!host.tapUndo.undo.isEnabled)
+            #expect(!host.tapUndo.redo.isEnabled)
+            #expect(host.editingInteractionConfiguration == .default)
+
+            host.allowsTapUndo = true
+            host.allowsFingerDrawing = true
+            #expect(!host.tapUndo.isEnabled, "one finger inks: taps would leave dots")
+            host.allowsFingerDrawing = false
+            #expect(host.tapUndo.isEnabled)
+        }
+
+        /// The taps reach the delegate; the default goes straight to the host's undo manager.
+        @Test func tapsUndoAndRedoThroughTheDelegate() {
+            let target = Target()
+            host.editUndoManager.groupsByEvent = false
+            host.editUndoManager.beginUndoGrouping()
+            host.editUndoManager.registerUndo(withTarget: target) { $0.undone += 1 }
+            host.editUndoManager.endUndoGrouping()
+            host.handleUndoTap()
+            #expect(target.undone == 1)
         }
 
         /// Residency on iOS feeds the engine: page snapshots for the engine window, accepted edits as edits.

@@ -16,6 +16,7 @@ struct EditorScreen: View {
     @State private var notebook: NotebookSummary
     @State private var session: NotebookSession
     @State private var pencil: PencilGestures
+    @AppStorage(SettingsView.tapToUndoKey) private var tapToUndo = true
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -79,6 +80,9 @@ struct EditorScreen: View {
         .onAppear { pencil.install(on: session.host) }
         .onChange(of: tools.active, initial: true) { _, tool in
             session.setTool(tool, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing)
+        }
+        .onChange(of: tapToUndo, initial: true) { _, on in
+            session.host.allowsTapUndo = on
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {

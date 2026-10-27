@@ -321,6 +321,14 @@ extension NotebookSession: CanvasHostViewDelegate {
         insertPage(after: nil, template: nil)
     }
 
+    func canvasHostDidRequestUndo(_: CanvasHostView) {
+        state.undo()
+    }
+
+    func canvasHostDidRequestRedo(_: CanvasHostView) {
+        state.redo()
+    }
+
     func canvasHostDidLiftAllTouches(_: CanvasHostView) {
         state.strokeEnded()
         edits?.endGesture()

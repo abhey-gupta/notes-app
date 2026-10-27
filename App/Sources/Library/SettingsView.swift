@@ -1,14 +1,26 @@
 import SwiftUI
 
-/// Settings popover from the library gear. Only developer toggles exist on Day 0.
+/// Settings popover from the library gear.
 struct SettingsView: View {
+    /// `UserDefaults` key of "Tap to undo" (#121): two fingers undo, three redo, on the canvas.
+    static let tapToUndoKey = "tapToUndo"
+
     /// DEBUG: opens the DesignSystem gallery.
     let showsGallery: Binding<Bool>?
 
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(tapToUndoKey) private var tapToUndo = true
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Tap to undo", isOn: $tapToUndo)
+                    .accessibilityIdentifier("tapToUndo")
+            } header: {
+                Text("Gestures")
+            } footer: {
+                Text("Tap with two fingers to undo, three fingers to redo.")
+            }
             #if DEBUG
                 Section {
                     if let showsGallery {
