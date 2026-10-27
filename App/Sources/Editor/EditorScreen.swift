@@ -25,6 +25,7 @@ struct EditorScreen: View {
         self.tools = tools
         _notebook = State(initialValue: notebook)
         let session = NotebookSession(notebook: notebook, library: library, startsFocused: startsFocused)
+        session.onErased = { [tools] in tools.finishedErasing() }
         _session = State(initialValue: session)
         _pencil = State(initialValue: PencilGestures(tools: tools, state: session.state))
     }

@@ -106,6 +106,7 @@ final class CanvasTests: XCTestCase {
         app.buttons["Eraser"].tap()
         ink(in: app, from: CGVector(dx: 0.45, dy: 0.3), to: CGVector(dx: 0.5, dy: 0.55))
         XCTAssertTrue(waitForStrokes("0 strokes", in: app), "eraser crossing the stroke removes it")
+        XCTAssertTrue(app.buttons["Pen"].isSelected, "lifting after an erase switches back to the pen")
 
         app.buttons["Undo"].tap()
         XCTAssertTrue(waitForStrokes("1 stroke", in: app), "one undo restores the erased stroke")

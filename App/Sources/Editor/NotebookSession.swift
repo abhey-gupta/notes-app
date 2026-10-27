@@ -50,6 +50,9 @@ final class NotebookSession {
     private(set) var edits: EditPipeline?
     /// The toolbar's current tool (``setTool(_:allowsFingerDrawing:)``); erasing reads its mode and size.
     private var tool = ActiveTool.ink(.ballpoint, color: .primary, width: 2)
+    /// Lift after an eraser stroke (#156: the toolbar may switch back).
+    var onErased: (() -> Void)?
+    private var isErasing = false
     private(set) var isClosed = false
     private var awaitingFirstPage = true
     var awaitingFirstSharp = true
@@ -295,7 +298,8 @@ extension NotebookSession: InkEngineDelegate {
         if !host.isFirstResponder {
             host.becomeFirstResponder()
         }
-        edits?.beginGesture(erasing: tool.isEraser)
+        isErasing = tool.isEraser
+        edits?.beginGesture(erasing: isErasing)
     }
 }
 
@@ -320,5 +324,9 @@ extension NotebookSession: CanvasHostViewDelegate {
     func canvasHostDidLiftAllTouches(_: CanvasHostView) {
         state.strokeEnded()
         edits?.endGesture()
+        if isErasing {
+            isErasing = false
+            onErased?()
+        }
     }
 }
