@@ -80,10 +80,13 @@ struct HighlighterLookTests {
         let px = try RGBAPixels(#require(job.ink(scale: 2)))
         let height = Int(RenderFixtures.pageSize.height * 2)
         #expect(abs(Fixtures.bandHeight(px, x: 250, height: height) - 24) <= 1)
-        // Upright flat ends half the nib's thickness (6 pt) past the end samples, full height to the edge.
-        #expect(Fixtures.bandHeight(px, x: 422.5, height: height) >= 23)
+        // Upright ends half the nib's thickness (6 pt) past the end samples, corners rounded (2.7 pt):
+        // full height just inside, less right at the edge, nothing past it.
+        #expect(Fixtures.bandHeight(px, x: 420, height: height) >= 23)
+        let edge = Fixtures.bandHeight(px, x: 422.5, height: height)
+        #expect(edge > 18 && edge < 23, "rounded corner: \(edge)")
         #expect(Fixtures.bandHeight(px, x: 423.5, height: height) == 0)
-        #expect(Fixtures.bandHeight(px, x: 77.5, height: height) >= 23)
+        #expect(Fixtures.bandHeight(px, x: 80, height: height) >= 23)
         #expect(Fixtures.bandHeight(px, x: 76.5, height: height) == 0)
         // Drawn downwards it is the nib's thickness: the nib stays upright, whatever the Pencil does.
         let down = RenderFixtures.line(3, from: CGPoint(x: 200, y: 200), to: CGPoint(x: 200, y: 500), tool: .highlighter, width: 24)
@@ -120,9 +123,10 @@ struct HighlighterLookTests {
             width: 24,
             samples: [Sample(x: 300, y: 300)]
         )
-        let path = try #require(Highlight.path(of: dot))
-        #expect(path.boundingBox == CGRect(x: 297, y: 288, width: 6, height: 24))
-        #expect(Highlight.path(of: Stroke(tool: .highlighter, color: .primary, width: 24, samples: [])) == nil)
+        let shape = try #require(Highlight.shape(of: dot))
+        let box = shape.path.boundingBox.insetBy(dx: -shape.rim / 2, dy: -shape.rim / 2)
+        #expect(abs(box.minX - 297) < 0.01 && abs(box.minY - 288) < 0.01 && abs(box.width - 6) < 0.01 && abs(box.height - 24) < 0.01)
+        #expect(Highlight.shape(of: Stroke(tool: .highlighter, color: .primary, width: 24, samples: [])) == nil)
     }
 
     /// A page's raster leaves highlights to the page view's layers; thumbnails and the lifted image have them.

@@ -35,9 +35,15 @@ enum Highlight {
         CGFloat(HighlightBand.height(of: stroke))
     }
 
-    /// `stroke`'s band (``InkGeometry/HighlightBand``) as a path to fill with the nonzero rule, page space;
-    /// `nil` without samples.
-    static func path(of stroke: Stroke) -> CGPath? {
+    /// A stroke's band, page space: ``path`` filled (nonzero) and stroked ``rim`` wide with round joins,
+    /// both in one opaque color (``InkGeometry/HighlightBand``: the rim rounds the nib's corners).
+    struct Shape {
+        var path: CGPath
+        var rim: CGFloat
+    }
+
+    /// `stroke`'s band; `nil` without samples.
+    static func shape(of stroke: Stroke) -> Shape? {
         let band = HighlightBand(stroke: stroke)
         guard !band.polygons.isEmpty else { return nil }
         let path = CGMutablePath()
@@ -45,19 +51,23 @@ enum Highlight {
             path.addLines(between: polygon.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) })
             path.closeSubpath()
         }
-        return path
+        return Shape(path: path, rim: CGFloat(2 * band.cornerRadius))
     }
 
-    /// Paints `strokes` (highlights, in order) into `context`, page space, each one translucent fill.
+    /// Paints `strokes` (highlights, in order) into `context`, page space, each one translucent shape.
     static func draw(_ strokes: [Stroke], color: (Stroke) -> CGColor, in context: CGContext) {
         for stroke in strokes {
-            guard let path = path(of: stroke) else { continue }
+            guard let shape = shape(of: stroke) else { continue }
+            let tint = color(stroke)
             context.saveGState()
             context.setAlpha(opacity)
             context.beginTransparencyLayer(in: stroke.bounds, auxiliaryInfo: nil)
-            context.addPath(path)
-            context.setFillColor(color(stroke))
-            context.fillPath(using: .winding)
+            context.setFillColor(tint)
+            context.setStrokeColor(tint)
+            context.setLineWidth(shape.rim)
+            context.setLineJoin(.round)
+            context.addPath(shape.path)
+            context.drawPath(using: .fillStroke)
             context.endTransparencyLayer()
             context.restoreGState()
         }
@@ -82,8 +92,7 @@ enum Highlight {
         let layer = CAShapeLayer()
         layer.anchorPoint = .zero
         layer.fillRule = .nonZero
-        layer.strokeColor = nil
-        layer.lineWidth = 0
+        layer.lineJoin = .round
         layer.opacity = Float(opacity)
         return layer
     }
@@ -91,14 +100,21 @@ enum Highlight {
     /// Shows `stroke` in `layer`: the layer covers the stroke's bounds (page space) and fills its band.
     static func configure(_ layer: CAShapeLayer, stroke: Stroke, color: CGColor) {
         let bounds = stroke.bounds
-        guard let path = path(of: stroke), !bounds.isNull else {
+        guard let shape = shape(of: stroke), !bounds.isNull else {
             layer.path = nil
             return
         }
         layer.frame = bounds
         var toLayer = CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)
-        layer.path = path.copy(using: &toLayer)
+        layer.path = shape.path.copy(using: &toLayer)
+        layer.lineWidth = shape.rim
+        tint(layer, color)
+    }
+
+    /// Colors `layer`'s band (fill and rim alike).
+    static func tint(_ layer: CAShapeLayer, _ color: CGColor) {
         layer.fillColor = color
+        layer.strokeColor = color
     }
 }
 

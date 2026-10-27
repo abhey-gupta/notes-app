@@ -183,7 +183,7 @@ final class PageLayerView: UIView {
             if highlightLayers[stroke.id]?.stroke != stroke {
                 Highlight.configure(layer, stroke: stroke, color: color(stroke))
             } else {
-                layer.fillColor = color(stroke)
+                Highlight.tint(layer, color(stroke))
             }
             kept[stroke.id] = (stroke, layer)
             ordered.append(layer)

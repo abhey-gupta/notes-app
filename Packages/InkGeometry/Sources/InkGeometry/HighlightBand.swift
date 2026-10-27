@@ -9,9 +9,16 @@ import InkModel
 /// that move one way in x and one way in y, each run's sweep one polygon (between the centerline traced by
 /// the nib's two leading corners). Every polygon winds the same way (positive signed area in page
 /// space), so filling them all with the nonzero rule paints the union once.
+///
+/// The nib's corners are rounded (``cornerRadius``) so the band's ends and turns look soft, not cut: the
+/// polygons are the sweep of the nib shrunk by the radius, and the band is them grown by it again, i.e.
+/// filled and stroked ``cornerRadius`` × 2 wide with round joins, as one opaque shape (then made
+/// translucent as a whole), so the overlap of fill and stroke never shows.
 public struct HighlightBand: Sendable {
     /// Nib thickness per band height.
     public static let nibAspect: Float = 0.25
+    /// Corner radius per half nib thickness: nearly round across the thin side.
+    public static let cornerRoundness: Float = 0.9
     /// The nib is never thinner than this (pt).
     public static let minimumThickness: Float = 1
 
@@ -19,6 +26,8 @@ public struct HighlightBand: Sendable {
     public let height: Float
     /// Nib thickness (pt).
     public let thickness: Float
+    /// Radius (pt) of the nib's corners: grow ``polygons`` by it (stroke them `2 ×` as wide, round joins).
+    public let cornerRadius: Float
     /// Closed polygons, page space; empty without samples.
     public private(set) var polygons: [[Point2]] = []
 
@@ -31,15 +40,19 @@ public struct HighlightBand: Sendable {
     public init(samples: [Sample], height: Float) {
         let h = height.isFinite ? max(height, Centerline.minimumWidth) : 1
         self.height = h
-        thickness = max(h * Self.nibAspect, Self.minimumThickness)
+        let t = max(h * Self.nibAspect, Self.minimumThickness)
+        thickness = t
+        let r = t / 2 * Self.cornerRoundness
+        cornerRadius = r
+        let (a, b) = (t / 2 - r, h / 2 - r)
         let points = Self.path(samples, height: h)
         guard let first = points.first else { return }
         guard points.count > 1 else {
-            polygons = [Self.positive(Self.rectangle(at: first, a: thickness / 2, b: h / 2))]
+            polygons = [Self.positive(Self.rectangle(at: first, a: a, b: b))]
             return
         }
         for run in Self.monotoneRuns(points) {
-            polygons.append(Self.positive(Self.sweep(run, a: thickness / 2, b: h / 2)))
+            polygons.append(Self.positive(Self.sweep(run, a: a, b: b)))
         }
     }
 

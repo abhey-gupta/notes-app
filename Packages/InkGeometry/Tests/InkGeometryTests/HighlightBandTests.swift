@@ -10,13 +10,38 @@ struct HighlightBandTests {
         return Stroke(tool: .highlighter, color: .primary, width: height, samples: samples)
     }
 
-    private static func path(_ band: HighlightBand) -> CGPath {
-        let path = CGMutablePath()
-        for polygon in band.polygons {
-            path.addLines(between: polygon.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) })
-            path.closeSubpath()
+    /// The band's region: its polygons filled, or their outline stroked `2 × cornerRadius` wide.
+    private struct Region {
+        let fill: CGPath
+        let rim: CGPath
+
+        init(_ band: HighlightBand) {
+            let path = CGMutablePath()
+            for polygon in band.polygons {
+                path.addLines(between: polygon.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) })
+                path.closeSubpath()
+            }
+            fill = path
+            rim = path.copy(strokingWithWidth: CGFloat(2 * band.cornerRadius), lineCap: .round, lineJoin: .round, miterLimit: 10)
         }
-        return path
+
+        var boundingBox: CGRect {
+            fill.boundingBox.union(rim.boundingBox)
+        }
+
+        func contains(_ p: CGPoint) -> Bool {
+            fill.contains(p, using: .winding) || rim.contains(p, using: .winding)
+        }
+    }
+
+    private static func path(_ band: HighlightBand) -> Region {
+        Region(band)
+    }
+
+    /// Signed distance from `p` to a rounded rectangle centered on `c` (half sizes `a`, `b`, radius `r`).
+    private static func distance(_ p: Point2, _ c: Point2, a: Float, b: Float, r: Float) -> Float {
+        let q = Point2(abs(p.x - c.x) - (a - r), abs(p.y - c.y) - (b - r))
+        return norm(Point2(max(q.x, 0), max(q.y, 0))) + min(max(q.x, q.y), 0) - r
     }
 
     /// Wiggly strokes: every point is in the band exactly when the nib, centered on some centerline
@@ -34,14 +59,14 @@ struct HighlightBandTests {
         let band = HighlightBand(stroke: stroke)
         let centerline = HighlightBand.path(stroke.samples, height: 20)
         let path = Self.path(band)
-        let (a, b) = (band.thickness / 2, band.height / 2)
+        let (a, b, r) = (band.thickness / 2, band.height / 2, band.cornerRadius)
         let margin: Float = 0.6
         var checked = 0
         for gx in stride(from: Float(-10), through: 340, by: 1.7) {
             for gy in stride(from: Float(30), through: 180, by: 1.3) {
-                let distance = centerline.map { max(abs(gx - $0.x) - a, abs(gy - $0.y) - b) }.min() ?? .infinity
+                let distance = centerline.map { Self.distance(Point2(gx, gy), $0, a: a, b: b, r: r) }.min() ?? .infinity
                 guard abs(distance) > margin else { continue }
-                let inside = path.contains(CGPoint(x: CGFloat(gx), y: CGFloat(gy)), using: .winding)
+                let inside = path.contains(CGPoint(x: CGFloat(gx), y: CGFloat(gy)))
                 #expect(inside == (distance < 0), "(\(gx), \(gy)) distance \(distance)")
                 checked += 1
             }
@@ -73,24 +98,28 @@ struct HighlightBandTests {
 
     @Test func sidewaysIsTallWithUprightEndsAndUpwardsIsThin() {
         let sideways = Self.path(HighlightBand(stroke: Self.stroke([(100, 100), (300, 100)])))
-        #expect(sideways.boundingBox == CGRect(x: 97.5, y: 90, width: 205, height: 20))
-        // Upright ends: full height right up to the end.
-        #expect(sideways.contains(CGPoint(x: 302, y: 90.5)) && sideways.contains(CGPoint(x: 302, y: 109.5)))
+        #expect(sideways.boundingBox.insetBy(dx: -0.01, dy: -0.01).contains(CGRect(x: 97.51, y: 90.01, width: 204.98, height: 19.98)))
+        #expect(CGRect(x: 97.49, y: 89.99, width: 205.02, height: 20.02).contains(sideways.boundingBox))
+        // Upright ends, corners rounded: full height just inside the end, not at the very corner.
+        #expect(sideways.contains(CGPoint(x: 300, y: 90.5)) && sideways.contains(CGPoint(x: 300, y: 109.5)))
+        #expect(sideways.contains(CGPoint(x: 302.3, y: 100)))
+        #expect(!sideways.contains(CGPoint(x: 302.3, y: 90.3)), "corner rounded off")
         let upwards = Self.path(HighlightBand(stroke: Self.stroke([(100, 300), (100, 100)])))
-        #expect(upwards.boundingBox == CGRect(x: 97.5, y: 90, width: 5, height: 220))
+        #expect(abs(upwards.boundingBox.width - 5) < 0.02 && abs(upwards.boundingBox.height - 220) < 0.02)
     }
 
     /// A hook where the Pencil lands only adds to the band; it never notches the end.
     @Test func hookAtTheStartDoesNotNotchTheEnd() {
         let band = Self.path(HighlightBand(stroke: Self.stroke([(104, 106), (100, 100), (101, 100), (300, 100)])))
         for y in stride(from: CGFloat(90.5), through: 109.5, by: 1) {
-            #expect(band.contains(CGPoint(x: 99, y: y)), "y \(y)")
+            #expect(band.contains(CGPoint(x: 99, y: y)) || abs(y - 100) > 8.5, "y \(y)")
         }
     }
 
     @Test func dotIsTheNib() {
         let band = HighlightBand(stroke: Self.stroke([(50, 50)], height: 24))
-        #expect(Self.path(band).boundingBox == CGRect(x: 47, y: 38, width: 6, height: 24))
+        let box = Self.path(band).boundingBox
+        #expect(abs(box.minX - 47) < 0.02 && abs(box.minY - 38) < 0.02 && abs(box.width - 6) < 0.02 && abs(box.height - 24) < 0.02)
         #expect(HighlightBand(stroke: Self.stroke([])).polygons.isEmpty)
     }
 

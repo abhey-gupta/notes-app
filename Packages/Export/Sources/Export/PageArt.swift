@@ -86,10 +86,18 @@ struct PageArt: Sendable {
         return art
     }
 
-    /// The band the screen draws (#120) at the highlighter's alpha: one nonzero fill of its polygons, so
-    /// each pixel paints once.
+    /// The band the screen draws (#120) at the highlighter's alpha: its polygons merged with their rounded
+    /// rim (the nib's corners) into one outline, filled once, so each pixel paints once.
     private static func highlight(_ stroke: Stroke, color: CGColor) -> InkRun? {
-        let fills = HighlightBand(stroke: stroke).polygons.compactMap(CubicContour.polygon)
+        let band = HighlightBand(stroke: stroke)
+        guard !band.polygons.isEmpty else { return nil }
+        let path = CGMutablePath()
+        for polygon in band.polygons {
+            path.addLines(between: polygon.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) })
+            path.closeSubpath()
+        }
+        let rim = path.copy(strokingWithWidth: CGFloat(2 * band.cornerRadius), lineCap: .round, lineJoin: .round, miterLimit: 10)
+        let fills = CubicContour.contours(of: path.union(rim, using: .winding))
         guard !fills.isEmpty else { return nil }
         let alpha = color.alpha * CGFloat(PenProfile.highlighter.opacity)
         return InkRun(color: color.copy(alpha: alpha) ?? color, fills: fills)
