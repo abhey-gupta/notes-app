@@ -4,8 +4,8 @@ import InkModel
 import SwiftUI
 import Tools
 
-/// Tool options (mock §03), opened by tapping the active tool. Pen: family, live stroke preview, 5 widths,
-/// palette + custom color, pressure. Highlighter: preview, 3 widths, colors. Eraser: mode, 3 sizes,
+/// Tool options (mock §03), opened by tapping the active tool. Pen: family, live stroke preview, size in mm
+/// (#168), palette + custom color, pressure. Highlighter: preview, size, colors. Eraser: mode, 3 sizes,
 /// switch back after erasing.
 /// Every control writes straight to `ToolState`, which the editor pushes to the engine, so the next stroke
 /// already uses it.
@@ -42,11 +42,10 @@ struct ToolPopover: View {
         SegmentedChoice(PenSettings.kinds, selection: $tools.pen.kind, title: \.displayName)
             .accessibilityIdentifier("penKind")
         preview(InkPreview.Spec(kind: tools.pen.kind, width: tools.pen.width, color: ink(tools.pen.color), pressure: tools.pen.pressure))
-        SectionLabel("Thickness")
-        OptionRow(values: PenSettings.widths, selection: $tools.pen.widthIndex, label: "Width") { index, _ in
-            Circle()
+        SizeControl(size: $tools.pen.size, range: PenSettings.sizeRange(for: tools.pen.kind), id: "penSize") { position in
+            Capsule()
                 .fill(tools.pen.color.color(on: paper))
-                .frame(width: Tokens.Size.penWidthDots[index], height: Tokens.Size.penWidthDots[index])
+                .frame(width: 26, height: 1.5 + 6 * position)
         }
         SectionLabel("Color")
         PaletteGrid(colors: PaletteEntry.pen, selection: $tools.pen.color, paper: paper)
@@ -60,16 +59,10 @@ struct ToolPopover: View {
         let color = tools.highlighter.color
         preview(InkPreview.Spec(kind: .highlighter, width: tools.highlighter.width, color: ink(color)))
             .padding(.top, -6)
-        SectionLabel("Thickness")
-        OptionRow(
-            values: HighlighterSettings.widths,
-            selection: $tools.highlighter.widthIndex,
-            label: "Width"
-        ) { index, _ in
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
+        SizeControl(size: $tools.highlighter.size, range: HighlighterSettings.sizeRange, id: "highlighterSize") { position in
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
                 .fill(color.color(on: paper).opacity(0.7))
-                .frame(width: 20, height: Tokens.Size.highlighterWidthBars[index])
-                .rotationEffect(.degrees(-20))
+                .frame(width: 26, height: 3 + 6 * position)
         }
         SectionLabel("Color")
         PaletteGrid(colors: PaletteEntry.highlighter, selection: $tools.highlighter.color, paper: paper)

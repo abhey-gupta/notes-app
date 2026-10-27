@@ -146,9 +146,7 @@ public enum Tokens {
         public static let previewHeight: CGFloat = 72
         /// Width / size option hit circle.
         public static let widthOption: CGFloat = 40
-        /// Width option glyphs: pen dots (mock 3/5/8/11/15), highlighter chisel heights, eraser rings.
-        public static let penWidthDots: [CGFloat] = [3, 5, 8, 11, 15]
-        public static let highlighterWidthBars: [CGFloat] = [6, 10, 15]
+        /// Eraser size option rings.
         public static let eraserWidthRings: [CGFloat] = [10, 17, 26]
         /// A4 portrait in points.
         public static let pageA4 = CGSize(width: 595, height: 842)

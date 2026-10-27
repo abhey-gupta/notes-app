@@ -42,9 +42,9 @@ final class AccessibilityTests: XCTestCase {
 
         let pen = app.buttons["Pen"]
         XCTAssertTrue(pen.waitForExistence(timeout: 10))
-        XCTAssertEqual(pen.value as? String, "Ballpoint pen, Black, width 2.5")
+        XCTAssertEqual(pen.value as? String, "Ballpoint pen, Black, 0.5 mm")
         app.buttons["Blue"].tap()
-        XCTAssertEqual(pen.value as? String, "Ballpoint pen, Blue, width 2.5", "quick color updates the pen's value")
+        XCTAssertEqual(pen.value as? String, "Ballpoint pen, Blue, 0.5 mm", "quick color updates the pen's value")
         XCTAssertTrue(app.buttons["Blue"].isSelected)
         XCTAssertTrue(app.buttons["Undo"].exists)
         XCTAssertTrue(app.buttons["Redo"].exists)
@@ -55,10 +55,10 @@ final class AccessibilityTests: XCTestCase {
         XCTAssertEqual(drawing.label, "Drawing area")
         XCTAssertTrue((drawing.value as? String)?.hasPrefix("Page 1 of ") == true, "drawing value: \(String(describing: drawing.value))")
 
-        // Tool options: widths are named by size.
+        // Tool options: sizes are spoken in mm.
         pen.tap()
         XCTAssertTrue(app.descendants(matching: .any)["toolPopover"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Width 2.5"].isSelected)
+        XCTAssertTrue(app.buttons["Saved size 0.5 mm"].isSelected)
     }
 
     /// AX1: chrome text and capsules grow (buttons 1.5×) and stay on screen.
@@ -79,7 +79,7 @@ final class AccessibilityTests: XCTestCase {
         pen.tap()
         let popover = app.descendants(matching: .any)["toolPopover"]
         XCTAssertTrue(popover.waitForExistence(timeout: 3))
-        XCTAssertTrue(window.contains(app.buttons["Width 8"].frame), "popover widths fit")
+        XCTAssertTrue(window.contains(app.buttons["penSizePlus"].frame), "popover size controls fit")
         attachScreenshot(app, "Tool options AX1")
     }
 

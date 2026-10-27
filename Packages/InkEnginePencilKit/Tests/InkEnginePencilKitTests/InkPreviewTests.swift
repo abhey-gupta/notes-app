@@ -13,10 +13,15 @@ struct InkPreviewTests {
     static func spec(_ kind: PenKind, width: Float? = nil, pressure: Bool = true) -> InkPreview.Spec {
         InkPreview.Spec(
             kind: kind,
-            width: width ?? PencilKitConversion.referenceWidth(for: kind),
+            width: width ?? defaultWidth(kind),
             color: RGBA8(r: 0x1E, g: 0x21, b: 0x29),
             pressure: pressure
         )
+    }
+
+    /// Fresh-install widths (pt): 0.5 mm pens, 8 mm brush, 5.5 mm highlighter.
+    static func defaultWidth(_ kind: PenKind) -> Float {
+        kind == .highlighter ? 15.6 : kind == .brush ? 22.7 : 1.42
     }
 
     @Test(arguments: kinds)
@@ -33,13 +38,11 @@ struct InkPreviewTests {
         }
     }
 
-    /// The middle preset draws at PencilKit's default width for the ink, like the canvas (the highlighter's
-    /// band at its toolbar width, #120).
+    /// Neutral pressure draws at the canvas's tool width (the highlighter's band at its width, #120).
     @Test(arguments: kinds)
     func neutralPressureDrawsAtThePencilKitWidth(kind: PenKind) {
         let widths = InkPreview.pointWidths(Self.spec(kind, pressure: false))
-        let expected = kind == .highlighter
-            ? CGFloat(PencilKitConversion.referenceWidth(for: kind)) : PencilKitConversion.inkType(for: kind).defaultWidth
+        let expected = PencilKitConversion.pencilKitWidth(for: kind, width: Self.defaultWidth(kind))
         #expect(widths.allSatisfy { abs($0 - expected) < 1e-3 })
     }
 
@@ -52,7 +55,7 @@ struct InkPreviewTests {
     }
 
     @Test func widerPresetsDrawWider() {
-        let widths = [Float](arrayLiteral: 1.5, 2.5, 4, 6, 8).map { width in
+        let widths = [Float](arrayLiteral: 0.28, 0.85, 1.42, 2.8, 5.7).map { width in
             InkPreview.pointWidths(Self.spec(.ballpoint, width: width, pressure: false))[0]
         }
         #expect(widths == widths.sorted())
@@ -62,16 +65,24 @@ struct InkPreviewTests {
     /// Bold inks shrink to fit; fine pens draw true size.
     @Test func boldInksScaleDown() {
         #expect(InkPreview.fit(Self.spec(.ballpoint), in: Self.size) == 1)
-        #expect(InkPreview.fit(Self.spec(.brush), in: Self.size) < 1)
+        #expect(InkPreview.fit(Self.spec(.brush, width: 57), in: Self.size) < 1)
     }
 
-    @Test(arguments: kinds)
-    func imageIsPreviewSizedAndInked(kind: PenKind) throws {
-        let image = InkPreview.image(Self.spec(kind), size: Self.size, scale: 2)
+    /// Every size shows ink, down to 0.1 mm (#168: the two finest presets drew an empty preview).
+    @Test(arguments: [
+        (PenKind.ballpoint, Float(0.28)),
+        (.fountain, 0.28),
+        (.ballpoint, 1.42),
+        (.fountain, 1.42),
+        (.brush, 22.7),
+        (.highlighter, 15.6)
+    ])
+    func imageIsPreviewSizedAndInked(kind: PenKind, width: Float) throws {
+        let image = InkPreview.image(Self.spec(kind, width: width), size: Self.size, scale: 2)
         let cg = try #require(image.cgImage)
         #expect(abs(cg.width - 592) <= 1)
         #expect(abs(cg.height - 144) <= 1)
-        #expect(Self.inkedPixels(cg) > 500)
+        #expect(Self.inkedPixels(cg) > 200, "\(kind) \(width) pt")
     }
 
     private static func inkedPixels(_ image: CGImage) -> Int {

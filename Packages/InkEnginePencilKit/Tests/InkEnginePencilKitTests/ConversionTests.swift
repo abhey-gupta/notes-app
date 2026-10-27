@@ -69,17 +69,15 @@ struct ConversionTests {
         #expect(tool.width <= PKInk.InkType.pen.validWidthRange.upperBound)
     }
 
-    @Test(arguments: PenKind.allCases.filter { $0 != .highlighter })
-    func referenceWidthDrawsAtPencilKitDefaultAndPresetsStepUp(kind: PenKind) {
+    /// The tool width paints the asked width (#168: `.pen` paints `2 × size − 4`, so a 1.6 size drew
+    /// nothing), from 0.1 mm up, as long as the ink can go that fine.
+    @Test(arguments: [(PenKind.ballpoint, Float(0.28)), (.fountain, 0.28), (.ballpoint, 5.7), (.brush, 17), (.brush, 57)])
+    func toolWidthPaintsTheAskedWidth(kind: PenKind, width: Float) {
         let type = PencilKitConversion.inkType(for: kind)
-        let reference = PencilKitConversion.referenceWidth(for: kind)
-        #expect(PencilKitConversion.pencilKitWidth(for: kind, width: reference) == type.defaultWidth)
-        // Presets step strictly finer → bolder within the ink's range.
-        let presets: [Float] = [1.5, 2.5, 4, 6, 8]
-        let widths = presets.map { PencilKitConversion.pencilKitWidth(for: kind, width: $0) }
-        #expect(widths == widths.sorted())
-        #expect(Set(widths).count == widths.count)
-        #expect(widths.allSatisfy { type.validWidthRange.contains($0) })
+        let size = PencilKitConversion.pencilKitWidth(for: kind, width: width)
+        #expect(type.validWidthRange.contains(size))
+        let nib = InkNib(ink: type.rawValue, point: PointRendering(width: Float(size), height: Float(size)))
+        #expect(abs(nib.along - width) < 0.01, "\(kind) \(width) pt → size \(size) paints \(nib.along)")
     }
 
     /// The highlighter is not a PencilKit ink (#120): its band is as wide as the toolbar says.
@@ -88,18 +86,5 @@ struct ConversionTests {
             #expect(PencilKitConversion.pencilKitWidth(for: .highlighter, width: width) == CGFloat(width))
         }
         #expect(PencilKitConversion.pencilKitWidth(for: .highlighter, width: .nan) == 0)
-    }
-
-    /// The default pen (preset 2.5) is a fine pen, not PencilKit's bolder default, and the finest
-    /// preset is at or near the ink's minimum (real-iPad feedback: default fountain read marker-thick).
-    @Test(arguments: [PenKind.ballpoint, .fountain])
-    func defaultPresetIsAFinePen(kind: PenKind) {
-        let range = PencilKitConversion.inkType(for: kind).validWidthRange
-        let fine = PencilKitConversion.pencilKitWidth(for: kind, width: 2.5)
-        #expect((1.5 ... 1.85).contains(fine), "\(kind) default \(fine)")
-        let finest = PencilKitConversion.pencilKitWidth(for: kind, width: 1.5)
-        #expect(finest <= range.lowerBound * 1.1, "\(kind) finest \(finest)")
-        let boldest = PencilKitConversion.pencilKitWidth(for: kind, width: 8)
-        #expect(boldest >= 3 * fine, "\(kind) boldest \(boldest)")
     }
 }

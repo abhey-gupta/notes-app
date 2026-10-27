@@ -108,13 +108,13 @@ extension Tool {
 }
 
 extension ToolState {
-    /// VoiceOver value of `tool`'s button (#45): "Fountain pen, Black, width 2.5", "Stroke eraser, size 16".
+    /// VoiceOver value of `tool`'s button (#45): "Fountain pen, Black, 0.5 mm", "Stroke eraser, size 16".
     func accessibilityValue(of tool: Tool) -> String {
         switch tool {
         case .pen:
-            "\(pen.kind.displayName) pen, \(pen.color.accessibilityName), width \(pen.width.formatted())"
+            "\(pen.kind.displayName) pen, \(pen.color.accessibilityName), \(InkSize.label(pen.size.millimetres))"
         case .highlighter:
-            "\(highlighter.color.accessibilityName), width \(highlighter.width.formatted())"
+            "\(highlighter.color.accessibilityName), \(InkSize.label(highlighter.size.millimetres))"
         case .eraser:
             "\(eraser.mode.displayName) eraser, size \(eraser.width.formatted())"
         case .lasso:
