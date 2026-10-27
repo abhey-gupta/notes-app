@@ -82,37 +82,44 @@
             #expect(engine.view.bounds.size == host.layout.contentSize)
         }
 
-        /// Two- and three-finger taps (#121): on the scroll view, fingers only, off with the setting and
-        /// while fingers ink; while on they replace the system's three-finger editing gestures.
-        @Test func tapUndoFollowsTheSettingAndFingerDrawing() {
-            let taps = host.canvasScrollView.gestureRecognizers?.compactMap { $0 as? UITapGestureRecognizer } ?? []
-            #expect(taps.contains { $0 === host.tapUndo.undo && $0.numberOfTouchesRequired == 2 })
-            #expect(taps.contains { $0 === host.tapUndo.redo && $0.numberOfTouchesRequired == 3 })
-            #expect(host.tapUndo.undo.allowedTouchTypes == [NSNumber(value: UITouch.TouchType.direct.rawValue)])
-            #expect(host.tapUndo.isEnabled)
+        /// Two- and three-finger taps (#121) undo and redo through the delegate (the default goes to the
+        /// host's undo manager); off with the setting and while fingers ink. While on, the system's
+        /// three-finger editing gestures are off.
+        @Test func fingerTapsUndoAndRedo() {
+            let target = Target()
+            let undo = host.editUndoManager
+            undo.groupsByEvent = false
+            func register() {
+                undo.beginUndoGrouping()
+                undo.registerUndo(withTarget: target) { $0.undone += 1 }
+                undo.endUndoGrouping()
+            }
+            register()
             #expect(host.editingInteractionConfiguration == .none)
+            host.fingersTapped(2)
+            #expect(target.undone == 1)
 
+            register()
             host.allowsTapUndo = false
-            #expect(!host.tapUndo.undo.isEnabled)
-            #expect(!host.tapUndo.redo.isEnabled)
+            host.fingersTapped(2)
+            #expect(target.undone == 1, "setting off")
             #expect(host.editingInteractionConfiguration == .default)
 
             host.allowsTapUndo = true
             host.allowsFingerDrawing = true
-            #expect(!host.tapUndo.isEnabled, "one finger inks: taps would leave dots")
+            host.fingersTapped(2)
+            #expect(target.undone == 1, "one finger inks")
             host.allowsFingerDrawing = false
-            #expect(host.tapUndo.isEnabled)
+            host.fingersTapped(4)
+            #expect(target.undone == 1, "four fingers: nothing")
+            host.fingersTapped(2)
+            #expect(target.undone == 2)
         }
 
-        /// The taps reach the delegate; the default goes straight to the host's undo manager.
-        @Test func tapsUndoAndRedoThroughTheDelegate() {
-            let target = Target()
-            host.editUndoManager.groupsByEvent = false
-            host.editUndoManager.beginUndoGrouping()
-            host.editUndoManager.registerUndo(withTarget: target) { $0.undone += 1 }
-            host.editUndoManager.endUndoGrouping()
-            host.handleUndoTap()
-            #expect(target.undone == 1)
+        /// No tap recognizers on the scroll view: even a disabled one slowed its pan enough to swallow a
+        /// fast flick (the fixture scroll UI test caught it).
+        @Test func scrollViewHasNoTapRecognizers() {
+            #expect(!(host.canvasScrollView.gestureRecognizers ?? []).contains { $0 is UITapGestureRecognizer })
         }
 
         /// Residency on iOS feeds the engine: page snapshots for the engine window, accepted edits as edits.
