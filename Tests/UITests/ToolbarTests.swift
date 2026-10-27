@@ -182,9 +182,17 @@ final class ToolbarTests: XCTestCase {
         app.buttons["Pen"].tap()
         XCTAssertTrue(popover(app).waitForExistence(timeout: 3), "tapping the active tool opens its options")
         app.buttons["Brush"].tap()
-        app.buttons["Width 8"].tap()
+        let size = app.descendants(matching: .any)["penSize"]
+        XCTAssertEqual(size.value as? String, "8.0 mm", "brush has its own size")
+        app.buttons["penSizePlus"].tap()
+        XCTAssertEqual(size.value as? String, "8.1 mm", "+ steps 0.1 mm")
+        app.buttons["penSizeSaved2"].tap()
+        XCTAssertEqual(size.value as? String, "15.0 mm", "a saved size applies on tap")
+        XCTAssertTrue(app.buttons["penSizeSaved2"].isSelected)
+        app.buttons["penSizeMinus"].tap()
+        app.buttons["penSizeSaved0"].press(forDuration: 0.8)
+        XCTAssertTrue(app.buttons["Saved size 14.9 mm"].waitForExistence(timeout: 2), "touch and hold stores the current size")
         XCTAssertTrue(app.buttons["Brush"].isSelected)
-        XCTAssertTrue(app.buttons["Width 8"].isSelected)
         XCTAssertTrue(app.switches["pressureToggle"].exists)
         dismissPopover(app)
 
@@ -211,8 +219,12 @@ final class ToolbarTests: XCTestCase {
         app.buttons["Highlighter"].tap()
         app.buttons["Highlighter"].tap()
         XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Width 24"].exists)
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Width ")).count, 3, "highlighter has 3 widths")
+        XCTAssertTrue(app.descendants(matching: .any)["highlighterSize"].exists)
+        XCTAssertEqual(
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Saved size ")).count,
+            3,
+            "highlighter has 3 saved sizes"
+        )
         XCTAssertLessThan(popover(app).frame.maxX, bar.frame.minX + 1, "opens beside a right-docked toolbar")
         dismissPopover(app)
 
