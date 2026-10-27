@@ -52,9 +52,9 @@
         /// Template of a page, for the preview to continue its marks (`nil`: blank).
         public var templateProvider: ((PageID) -> PageTemplate?)?
 
-        /// Breathing room inside the safe area: top clears the floating chrome, sides keep a desk margin when
-        /// zoomed in, bottom clears the page pill.
-        public var margins = UIEdgeInsets(top: 48, left: 16, bottom: 96, right: 16) {
+        /// Breathing room inside the safe area: top clears the floating chrome (6 pt + 52 pt capsule) with a
+        /// 14 pt gap, sides keep a desk margin when zoomed in, bottom clears the page pill.
+        public var margins = UIEdgeInsets(top: 72, left: 16, bottom: 96, right: 16) {
             didSet { setNeedsLayout() }
         }
 
