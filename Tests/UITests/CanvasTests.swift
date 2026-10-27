@@ -208,6 +208,38 @@ final class CanvasTests: XCTestCase {
         XCTAssertTrue(waitForStrokes("1 stroke", in: app), "page 1 unchanged by the pinch")
     }
 
+    /// Pages expand sideways (#129): press-hold at the right page edge and drag out widens every page,
+    /// the drawing area says so, and the width survives reopening the notebook.
+    @MainActor
+    func testSideGrabWidensPagesAndPersists() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-resetLibrary", "YES", "-seedNotebooks", "1", "-resetToolState", "YES"]
+        app.launch()
+        let cover = app.buttons["cover-Thermodynamics"]
+        XCTAssertTrue(cover.waitForExistence(timeout: 15))
+        cover.tap()
+        XCTAssertTrue(waitForStrokes("0 strokes", in: app), "blank page 1 loads")
+        let drawing = app.descendants(matching: .any)["drawingArea"]
+        XCTAssertFalse((drawing.value as? String)?.contains("Widened") == true)
+
+        // At the fitted zoom the page sits 96 pt of desk from the screen's right edge.
+        let window = app.windows.firstMatch
+        let frame = window.frame
+        let origin = window.coordinate(withNormalizedOffset: .zero)
+        let edge = origin.withOffset(CGVector(dx: frame.width - 96, dy: frame.height * 0.55))
+        let out = edge.withOffset(CGVector(dx: 150, dy: 0))
+        edge.press(forDuration: 0.8, thenDragTo: out, withVelocity: .slow, thenHoldForDuration: 0.3)
+        let widened = NSPredicate(format: "value CONTAINS %@", "Widened to")
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: widened, evaluatedWith: drawing)], timeout: 10), .completed, "pages widened")
+        XCTAssertEqual(app.buttons["pageIndicator"].label, "1 of 11")
+
+        app.buttons["Library"].tap()
+        XCTAssertTrue(cover.waitForExistence(timeout: 5))
+        cover.tap()
+        XCTAssertTrue(waitForStrokes("0 strokes", in: app))
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: widened, evaluatedWith: drawing)], timeout: 10), .completed, "width persisted")
+    }
+
     /// A downward drag at the top of the notebook (finger scroll, or ink with finger drawing) must not start
     /// the zoom transition's swipe-to-dismiss.
     @MainActor

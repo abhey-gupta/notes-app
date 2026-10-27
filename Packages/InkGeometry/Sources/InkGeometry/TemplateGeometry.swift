@@ -30,9 +30,14 @@ public struct TemplateGeometry {
         lines.isEmpty && dots.isEmpty
     }
 
-    public init(_ template: PageTemplate, size: CGSize) {
+    /// Marks for `template` on a `size` page. `leftExtension` is paper added left of the page's original
+    /// origin (#129): columns of dots and grid lines stay on the original grid, moved right with the ink
+    /// (`x ≡ leftExtension mod spacing`), and the Cornell cue column keeps its place beside the original left edge, so widening
+    /// a page never moves its marks under the ink.
+    public init(_ template: PageTemplate, size: CGSize, leftExtension: CGFloat = 0) {
         let lines = CGMutablePath()
         let dots = CGMutablePath()
+        let shift = leftExtension.isFinite ? leftExtension : 0
         func rules(spacing: CGFloat, until bottom: CGFloat) {
             for y in stride(from: Self.top, to: bottom, by: spacing) {
                 lines.move(to: CGPoint(x: 0, y: y))
@@ -48,13 +53,13 @@ public struct TemplateGeometry {
             let s = Self.clamped(spacing)
             let r = Self.dotRadius
             for y in stride(from: s, to: size.height, by: s) {
-                for x in stride(from: s, to: size.width, by: s) {
+                for x in Self.columns(spacing: s, width: size.width, shift: shift) {
                     dots.addEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
                 }
             }
         case let .grid(spacing):
             let s = Self.clamped(spacing)
-            for x in stride(from: s, to: size.width, by: s) {
+            for x in Self.columns(spacing: s, width: size.width, shift: shift) {
                 lines.move(to: CGPoint(x: x, y: 0))
                 lines.addLine(to: CGPoint(x: x, y: size.height))
             }
@@ -64,7 +69,7 @@ public struct TemplateGeometry {
             }
         case .cornell:
             let summary = max(size.height - Self.cornellSummary, Self.top)
-            let cue = min(Self.cornellCue, size.width / 2)
+            let cue = shift + min(Self.cornellCue, max(size.width - shift, 0) / 2)
             rules(spacing: Self.cornellSpacing, until: summary)
             lines.move(to: CGPoint(x: cue, y: Self.top - Self.cornellSpacing))
             lines.addLine(to: CGPoint(x: cue, y: summary))
@@ -80,11 +85,26 @@ public struct TemplateGeometry {
         spacing.isFinite ? CGFloat(max(spacing, 4)) : 24
     }
 
+    /// Column positions `0 < x < width` on the grid `x ≡ shift (mod spacing)` (the original page's
+    /// columns, `spacing, 2·spacing, …`, moved right by `shift`).
+    public static func columns(spacing: CGFloat, width: CGFloat, shift: CGFloat) -> [CGFloat] {
+        var first = shift.truncatingRemainder(dividingBy: spacing)
+        if first < 0 {
+            first += spacing
+        }
+        if first == 0 {
+            first = spacing
+        }
+        return Array(stride(from: first, to: width, by: spacing))
+    }
+
     /// Draws paper and marks into `context` (page space, origin top-left).
-    public static func drawBackground(_ template: PageTemplate, size: CGSize, paper: CGColor, line: CGColor, in context: CGContext) {
+    public static func drawBackground(
+        _ template: PageTemplate, size: CGSize, leftExtension: CGFloat = 0, paper: CGColor, line: CGColor, in context: CGContext
+    ) {
         context.setFillColor(paper)
         context.fill(CGRect(origin: .zero, size: size))
-        let marks = TemplateGeometry(template, size: size)
+        let marks = TemplateGeometry(template, size: size, leftExtension: leftExtension)
         guard !marks.isEmpty else { return }
         context.setStrokeColor(line)
         context.setLineWidth(lineWidth)

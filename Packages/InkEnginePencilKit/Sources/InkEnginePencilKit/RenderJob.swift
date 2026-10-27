@@ -56,6 +56,7 @@ struct RenderJob: Sendable {
             TemplateGeometry.drawBackground(
                 page.page.template,
                 size: page.size,
+                leftExtension: page.leftExtension,
                 paper: palette.paper(theme).cgColor,
                 line: palette.templateLine(theme).cgColor,
                 in: cg

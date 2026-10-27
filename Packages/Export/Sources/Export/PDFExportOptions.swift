@@ -43,6 +43,8 @@ public enum PDFExportError: Error, Hashable, Sendable {
 public struct PDFExportOptions: Hashable, Sendable {
     /// PDF page size in points (the notebook page size; one PDF page per notebook page).
     public var pageSize: CGSize
+    /// Paper added left of the original page (``Notebook/leftExtension``): keeps template marks on their grid.
+    public var leftExtension: CGFloat
     /// The notebook's paper theme.
     public var theme: PaperTheme
     /// The notebook's "Keep exact colors" setting (custom colors not remapped on Night).
@@ -58,6 +60,7 @@ public struct PDFExportOptions: Hashable, Sendable {
     /// Creates options. Defaults: A4 portrait, white paper, all pages.
     public init(
         pageSize: CGSize = Notebook.a4Portrait,
+        leftExtension: CGFloat = 0,
         theme: PaperTheme = .white,
         keepsExactColors: Bool = false,
         exportsAsShown: Bool = false,
@@ -65,6 +68,7 @@ public struct PDFExportOptions: Hashable, Sendable {
         title: String? = nil
     ) {
         self.pageSize = pageSize
+        self.leftExtension = leftExtension
         self.theme = theme
         self.keepsExactColors = keepsExactColors
         self.exportsAsShown = exportsAsShown
@@ -76,6 +80,7 @@ public struct PDFExportOptions: Hashable, Sendable {
     public init(notebook: Notebook, pages: PageSelection = .all, exportsAsShown: Bool = false) {
         self.init(
             pageSize: notebook.pageSize,
+            leftExtension: notebook.leftExtension,
             theme: notebook.theme,
             keepsExactColors: notebook.keepsExactColors,
             exportsAsShown: exportsAsShown,

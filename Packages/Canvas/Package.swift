@@ -11,6 +11,7 @@ let package = Package(
     products: [.library(name: "Canvas", targets: ["Canvas"])],
     dependencies: [
         .package(path: "../InkEngine"),
+        .package(path: "../InkGeometry"),
         .package(path: "../InkModel"),
         .package(path: "../Document"),
         .package(path: "../Perf"),
@@ -25,6 +26,7 @@ let package = Package(
                 "InkModel",
                 "Document",
                 .product(name: "InkEngine", package: "InkEngine", condition: iOS),
+                .product(name: "InkGeometry", package: "InkGeometry", condition: iOS),
                 .product(name: "Perf", package: "Perf", condition: iOS),
             ]
         ),

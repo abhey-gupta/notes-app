@@ -92,6 +92,19 @@ struct ManifestTests {
         #expect(try Manifest.decode(manifest.encoded()) == Manifest(notebook: manifest.notebook, entries: manifest.pages))
     }
 
+    /// Widened notebooks (#129) carry `leftExtension`; unwidened ones don't write the key, so their
+    /// manifests are byte-identical to before the key existed and old builds' output decodes as 0.
+    @Test func leftExtensionIsAdditive() throws {
+        var manifest = sampleManifest()
+        #expect(try json(manifest)["leftExtension"] == nil)
+        manifest.notebook.leftExtension = 120.5
+        let object = try json(manifest)
+        #expect(object["leftExtension"] as? Double == 120.5)
+        let decoded = try Manifest.decode(manifest.encoded())
+        #expect(decoded.notebook.leftExtension == 120.5)
+        #expect(decoded == manifest)
+    }
+
     @Test func unknownKeysSurviveRoundTrip() throws {
         var object = try json(sampleManifest())
         object["syncState"] = ["cursor": "abc", "vector": [1, 2, 3], "nested": ["deep": NSNull()]]

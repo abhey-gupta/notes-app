@@ -33,6 +33,7 @@ final class PageLayerView: UIView {
     private struct TemplateKey: Equatable {
         var template: PageTemplate
         var size: CGSize
+        var leftExtension: CGFloat
     }
 
     /// Paper fill and template mark colors.
@@ -56,6 +57,8 @@ final class PageLayerView: UIView {
         var strokeCount: Int
         /// Strokes drawn on the canvas but not yet echoed into the snapshot.
         var pendingCount: Int
+        /// Page size the raster covers: a widened page (#129) re-renders even with the same strokes.
+        var size: CGSize = .zero
 
         /// What the raster shows, bucket aside.
         var content: ContentKey {
@@ -105,10 +108,14 @@ final class PageLayerView: UIView {
     }
 
     /// Lays out at `frame` (content space, the page's size) with `template`; `markScale` (px per pt,
-    /// `nil` to keep the current one) is the template layers' `contentsScale`.
-    func layout(frame: CGRect, template: PageTemplate, markScale: CGFloat?, colors: Colors) {
+    /// `nil` to keep the current one) is the template layers' `contentsScale`. A page that changed size
+    /// (widened, #129) drops its image: a raster of the old size would be stretched over the new one.
+    func layout(frame: CGRect, template: PageTemplate, leftExtension: CGFloat = 0, markScale: CGFloat?, colors: Colors) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        if bounds.size != .zero, bounds.size != frame.size {
+            clearImages()
+        }
         self.frame = frame
         layer.backgroundColor = colors.paper
         linesLayer.strokeColor = colors.line
@@ -118,10 +125,10 @@ final class PageLayerView: UIView {
         imageLayer.frame = bounds
         inkLayer.frame = imageLayer.bounds
         layoutThumbnail()
-        let key = TemplateKey(template: template, size: frame.size)
+        let key = TemplateKey(template: template, size: frame.size, leftExtension: leftExtension)
         if templateKey != key {
             templateKey = key
-            let paths = TemplateGeometry(template, size: frame.size)
+            let paths = TemplateGeometry(template, size: frame.size, leftExtension: leftExtension)
             linesLayer.path = paths.lines
             dotsLayer.path = paths.dots
         }
@@ -167,6 +174,17 @@ final class PageLayerView: UIView {
         showsThumbnail = true
         layoutThumbnail()
         CATransaction.commit()
+    }
+
+    /// Drops the raster and thumbnail (the page's size changed; the next raster is requested afresh).
+    private func clearImages() {
+        inkLayer.image = nil
+        shownKey = nil
+        requestedKey = nil
+        thumbnailLayer.removeAllAnimations()
+        thumbnailLayer.isHidden = true
+        thumbnailLayer.image = nil
+        showsThumbnail = false
     }
 
     private func layoutThumbnail() {

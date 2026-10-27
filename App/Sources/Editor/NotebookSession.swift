@@ -56,6 +56,11 @@ final class NotebookSession {
     /// Lasso selection (`+Selection`); set by ``open()``.
     private(set) var selection: SelectionMachine?
     let selectionOverlay = SelectionOverlayView()
+    /// Pages expanding sideways (`+Width`, #129): the ink-extent lookup of a grab, the pages whose sharp
+    /// ink lifts the frozen frame after a widen, and the timeout that lifts it anyway.
+    var inkExtentLookup: Task<Void, Never>?
+    var awaitingSharpInk: Set<PageID> = []
+    var widenSettle: Task<Void, Never>?
 
     private static var closing: [NotebookID: Task<Void, Never>] = [:]
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "editor")
@@ -109,6 +114,7 @@ final class NotebookSession {
                 state.keepsExactColors = true
                 applyPalette(keepsExactColors: true)
             }
+            host.pageExtension = PageExtension(notebook: manifest.notebook)
             host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
             if let window = host.pageWindow {
                 residency.update(window)
@@ -147,6 +153,8 @@ final class NotebookSession {
         isClosed = true
         engine.delegate = nil
         host.delegate = nil
+        inkExtentLookup?.cancel()
+        widenSettle?.cancel()
         residency?.close()
         thumbnailRegeneration?.cancel()
         edits?.close()
@@ -188,6 +196,7 @@ final class NotebookSession {
     func setPaper(theme: PaperTheme, style: PaperStyle) {
         engine.setTheme(theme)
         tintSelection(for: theme)
+        applyPaperAppearance(theme, to: host)
         initialTheme = theme
         edits?.run("paper") { [weak self] in
             guard let self, let store, let residency else { return }
@@ -247,6 +256,7 @@ final class NotebookSession {
         engine.delegate = self
         host.delegate = self
         installSelection(on: host, engine: engine, theme: initialTheme)
+        installWidening(on: host, theme: initialTheme)
         return host
     }
 

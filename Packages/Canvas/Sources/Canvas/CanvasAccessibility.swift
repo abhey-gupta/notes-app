@@ -28,7 +28,7 @@
         override var accessibilityValue: String? {
             get {
                 guard let scrollView else { return nil }
-                let parts = [scrollView.pageLabel?(), scrollView.valueProvider?()].compactMap(\.self)
+                let parts = [scrollView.pageLabel?(), scrollView.valueProvider?(), scrollView.widthLabel?()].compactMap(\.self)
                 return parts.isEmpty ? nil : parts.joined(separator: ", ")
             }
             set { _ = newValue }

@@ -52,13 +52,22 @@ struct EditorScreen: View {
                     onBack: { dismiss() }
                 )
                 SelectionBar(tools: tools, state: session.state, paper: notebook.theme.style)
+                if session.state.showsWidenHint {
+                    WidenHint()
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                        .zIndex(2)
+                }
             }
         }
+        .animation(Tokens.Motion.morph, value: session.state.showsWidenHint)
         .animation(Tokens.Motion.reducedMorph, value: session.state.pages.isPresented)
         .toolbar(.hidden, for: .navigationBar)
         .persistentSystemOverlays(session.state.isFocused ? .hidden : .automatic)
         .task {
             await session.open()
+            if LaunchOptions.showsHints {
+                session.state.offerWidenHint()
+            }
             #if DEBUG
                 if LaunchOptions.showsPagesOverview {
                     try? await Task.sleep(for: .seconds(4))

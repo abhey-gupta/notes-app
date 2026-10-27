@@ -38,6 +38,33 @@ final class EditorState {
         throw PDFExportError.noPages
     }
 
+    /// The one-time "Hold a page edge to widen" caption (#129) is up.
+    private(set) var showsWidenHint = false
+    @ObservationIgnored private var widenHintTask: Task<Void, Never>?
+    /// Where the hint's shown-once flag lives.
+    static let widenHintKey = "widenHintShown"
+
+    /// Shows the widen hint once per install, a moment after the editor settles, for a few seconds.
+    func offerWidenHint(defaults: UserDefaults = .standard) {
+        guard !defaults.bool(forKey: Self.widenHintKey), widenHintTask == nil else { return }
+        defaults.set(true, forKey: Self.widenHintKey)
+        widenHintTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled, let self, !isFocused else { return }
+            showsWidenHint = true
+            try? await Task.sleep(for: .seconds(7))
+            guard !Task.isCancelled else { return }
+            showsWidenHint = false
+        }
+    }
+
+    /// The user found the edge (or left): the hint goes.
+    func dismissWidenHint() {
+        widenHintTask?.cancel()
+        widenHintTask = nil
+        showsWidenHint = false
+    }
+
     var canUndo: Bool {
         edits.canUndo
     }
