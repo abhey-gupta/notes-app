@@ -6,7 +6,9 @@ import InkModel
 ///
 /// - Coalesced touches append to ``samples``.
 /// - Predicted touches replace ``predicted``, a discardable tail drawn after the samples and thrown
-///   away on the next event.
+///   away on the next event. They carry position and time only: force, altitude and azimuth come from
+///   the newest real sample (UIKit reports none for predicted touches, and a nib at zero altitude draws
+///   a hairline that flashes ahead of the pen in fast writing).
 /// - Estimated properties (force, altitude, azimuth, location) are patched in place when UIKit
 ///   delivers their final values, matched by `estimationUpdateIndex`.
 public struct LiveStroke: Sendable {
@@ -71,7 +73,32 @@ public struct LiveStroke: Sendable {
             samples.append(sample(record))
             latestTimestamp = max(latestTimestamp, record.timestamp)
         }
-        predicted = newPredicted.map(sample)
+        let reference = samples.last
+        predicted = newPredicted.map { record in
+            var s = sample(record)
+            if let reference {
+                s.force = reference.force
+                s.altitude = reference.altitude
+                s.azimuth = reference.azimuth
+            }
+            return s
+        }
+    }
+
+    /// Gives up on pending estimate updates (the stroke is ending before they can arrive): each sample
+    /// still carrying estimates takes force, altitude and azimuth from the nearest sample that doesn't.
+    public mutating func resolvePendingEstimates() {
+        guard !pending.isEmpty else { return }
+        let unresolved = Set(pending.values.map(\.index))
+        pending = [:]
+        let settled = samples.indices.filter { !unresolved.contains($0) }
+        guard !settled.isEmpty else { return }
+        for i in unresolved {
+            guard let nearest = settled.min(by: { abs($0 - i) < abs($1 - i) }) else { continue }
+            samples[i].force = samples[nearest].force
+            samples[i].altitude = samples[nearest].altitude
+            samples[i].azimuth = samples[nearest].azimuth
+        }
     }
 
     /// Patches the sample that `record` (from `touchesEstimatedPropertiesUpdated`) refines.
