@@ -40,8 +40,8 @@ struct HighlighterEngineTests {
         let view = try #require(h.engine.pageViews[page])
         let layers = view.highlightShapeLayers
         #expect(layers.count == 1)
-        #expect(layers.first?.lineWidth == 24)
-        #expect(layers.first?.lineCap == .butt)
+        #expect(layers.first?.path?.boundingBox.height == 24)
+        #expect(layers.first?.fillColor != nil && layers.first?.strokeColor == nil)
         #expect(layers.first?.frame.contains(CGPoint(x: 250, y: 100)) == true)
         #expect(layers.first?.opacity == Float(Highlight.opacity))
         h.engine.rebuildCanvas(canvas)
@@ -74,7 +74,7 @@ struct HighlighterEngineTests {
         #expect(live.page == page)
         #expect(view.highlightShapeLayers == [live.layer])
         #expect(live.layer.path != nil)
-        #expect(live.layer.lineWidth == 16)
+        #expect(live.layer.path?.boundingBox.height == 16)
         #expect(live.layer.frame.contains(CGPoint(x: 150, y: 1800 - h.frames[2].frame.minY)))
         #expect(canvas.view.drawing.strokes.isEmpty)
         send(tracker.ended(at(300, 1800, 0.02)))
@@ -188,11 +188,11 @@ struct HighlighterEngineTests {
         try h.engine.apply(#require(h.engine.snapshots[page]).page.addEdit([Fixtures.highlight]), to: page)
         let view = try #require(h.engine.pageViews[page])
         let layer = try #require(view.highlightShapeLayers.first)
-        let light = layer.strokeColor
+        let light = layer.fillColor
         h.engine.setTheme(.night)
         #expect(view.highlightShapeLayers.first === layer)
-        #expect(layer.strokeColor != light)
-        #expect(layer.strokeColor == Highlight.color(UIColor(FixturePalette().ink(.semantic(.red), on: .night))))
+        #expect(layer.fillColor != light)
+        #expect(layer.fillColor == Highlight.color(UIColor(FixturePalette().ink(.semantic(.red), on: .night))))
     }
 
     /// Pre-#120 highlights (PencilKit's marker chisel) draw as bands at their widest extent.
@@ -204,8 +204,8 @@ struct HighlighterEngineTests {
                 points: Array(repeating: PointRendering(width: 20.6, height: 20.6), count: Fixtures.highlight.samples.count)
             )
         )
-        let shape = try #require(Highlight.shape(of: legacy))
-        #expect(abs(shape.lineWidth - (1.45 * 20.6 - 0.5)) < 1e-3)
+        let path = try #require(Highlight.path(of: legacy))
+        #expect(abs(path.boundingBox.height - (1.45 * 20.6 - 0.5)) < 1e-3)
         let h = Harness()
         h.scroll(toY: 900)
         let page = h.frames[1].id

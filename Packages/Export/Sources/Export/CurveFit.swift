@@ -14,6 +14,12 @@ struct CubicContour: Sendable {
 
     var start: Point2
     var segments: [Segment]
+
+    /// `points` as straight segments (closed by the fill), `nil` if fewer than 3.
+    static func polygon(_ points: [Point2]) -> CubicContour? {
+        guard points.count >= 3 else { return nil }
+        return CubicContour(start: points[0], segments: points.dropFirst().map { Segment(c1: $0, c2: $0, end: $0, isLine: true) })
+    }
 }
 
 /// Fits cubic Béziers to dense polylines (Schneider, "An Algorithm for Automatically Fitting Digitized

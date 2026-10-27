@@ -80,15 +80,16 @@ struct HighlighterLookTests {
         let px = try RGBAPixels(#require(job.ink(scale: 2)))
         let height = Int(RenderFixtures.pageSize.height * 2)
         #expect(abs(Fixtures.bandHeight(px, x: 250, height: height) - 24) <= 1)
-        // The end is flat and lands on the last sample (no cap past it, no taper before it).
-        #expect(Fixtures.bandHeight(px, x: 419, height: height) >= 23)
-        #expect(Fixtures.bandHeight(px, x: 421, height: height) == 0)
-        #expect(Fixtures.bandHeight(px, x: 79, height: height) == 0)
-        // Just as wide drawn downwards: the nib turns with the stroke, not with the Pencil.
+        // Upright flat ends half the nib's thickness (6 pt) past the end samples, full height to the edge.
+        #expect(Fixtures.bandHeight(px, x: 422.5, height: height) >= 23)
+        #expect(Fixtures.bandHeight(px, x: 423.5, height: height) == 0)
+        #expect(Fixtures.bandHeight(px, x: 77.5, height: height) >= 23)
+        #expect(Fixtures.bandHeight(px, x: 76.5, height: height) == 0)
+        // Drawn downwards it is the nib's thickness: the nib stays upright, whatever the Pencil does.
         let down = RenderFixtures.line(3, from: CGPoint(x: 200, y: 200), to: CGPoint(x: 200, y: 500), tool: .highlighter, width: 24)
         let vertical =
             try RGBAPixels(#require(RenderJob(page: Fixtures.page([down]), palette: FixturePalette(), theme: .white).ink(scale: 2)))
-        #expect(abs(Fixtures.bandWidth(vertical, y: 350, width: Int(RenderFixtures.pageSize.width * 2)) - 24) <= 1)
+        #expect(abs(Fixtures.bandWidth(vertical, y: 350, width: Int(RenderFixtures.pageSize.width * 2)) - 6) <= 1)
     }
 
     @Test func crossingItselfDoesNotDarken() throws {
@@ -119,10 +120,9 @@ struct HighlighterLookTests {
             width: 24,
             samples: [Sample(x: 300, y: 300)]
         )
-        let shape = try #require(Highlight.shape(of: dot))
-        #expect(shape.lineWidth == 0)
-        #expect(shape.path.boundingBox == CGRect(x: 297, y: 288, width: 6, height: 24))
-        #expect(Highlight.shape(of: Stroke(tool: .highlighter, color: .primary, width: 24, samples: [])) == nil)
+        let path = try #require(Highlight.path(of: dot))
+        #expect(path.boundingBox == CGRect(x: 297, y: 288, width: 6, height: 24))
+        #expect(Highlight.path(of: Stroke(tool: .highlighter, color: .primary, width: 24, samples: [])) == nil)
     }
 
     /// A page's raster leaves highlights to the page view's layers; thumbnails and the lifted image have them.
