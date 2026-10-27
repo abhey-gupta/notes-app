@@ -32,7 +32,7 @@ public struct PenProfile: Hashable, Sendable {
     public init(_ kind: PenKind) {
         self.kind = kind
         capStyle = kind == .highlighter ? .butt : .round
-        opacity = kind == .highlighter ? 0.4 : 1
+        opacity = kind == .highlighter ? 0.55 : 1
         drawsBeneathInk = kind == .highlighter
         edgeSoftness = kind == .brush ? 0.35 : 0
     }
@@ -43,7 +43,7 @@ public struct PenProfile: Hashable, Sendable {
     public static let ballpoint = PenProfile(.ballpoint)
     /// Pressure and tilt widen; soft edge.
     public static let brush = PenProfile(.brush)
-    /// Constant width, flat chisel caps, 40 % alpha, beneath ink.
+    /// Constant width, flat caps, 55 % alpha (the mock's `rgba(255,214,51,.55)`), beneath ink.
     public static let highlighter = PenProfile(.highlighter)
 
     /// Width multiplier for one sample.

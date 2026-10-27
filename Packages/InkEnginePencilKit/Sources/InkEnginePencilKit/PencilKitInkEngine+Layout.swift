@@ -101,8 +101,8 @@ extension PencilKitInkEngine {
         }
     }
 
-    /// Paper, template and ink image for every visible page; images keep out of the region a canvas
-    /// has drawn. Renders queue nearest the viewport first (`+Images`).
+    /// Paper, template, highlights and ink image for every visible page; images keep out of the region a
+    /// canvas has drawn. Renders queue nearest the viewport first (`+Images`).
     func layoutPages() {
         let visible = Set(viewport.pages.map(\.id))
         for (id, view) in pageViews where !visible.contains(id) {
@@ -138,6 +138,7 @@ extension PencilKitInkEngine {
                 showThumbnail(view, for: page.id)
                 continue
             }
+            refreshHighlights(view, snapshot: snapshot)
             // The image shows wherever the canvas hasn't drawn: around it (zooming out reveals more page),
             // all of it until the canvas has drawn, and the part a scroll or settled zoom just added.
             let drawn = canvas?.drawnRegion

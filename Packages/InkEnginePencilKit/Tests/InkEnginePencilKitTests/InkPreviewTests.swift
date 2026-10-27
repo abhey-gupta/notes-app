@@ -33,11 +33,13 @@ struct InkPreviewTests {
         }
     }
 
-    /// The middle preset draws at PencilKit's default width for the ink, like the canvas.
+    /// The middle preset draws at PencilKit's default width for the ink, like the canvas (the highlighter's
+    /// band at its toolbar width, #120).
     @Test(arguments: kinds)
     func neutralPressureDrawsAtThePencilKitWidth(kind: PenKind) {
         let widths = InkPreview.pointWidths(Self.spec(kind, pressure: false))
-        let expected = PencilKitConversion.inkType(for: kind).defaultWidth
+        let expected = kind == .highlighter
+            ? CGFloat(PencilKitConversion.referenceWidth(for: kind)) : PencilKitConversion.inkType(for: kind).defaultWidth
         #expect(widths.allSatisfy { abs($0 - expected) < 1e-3 })
     }
 

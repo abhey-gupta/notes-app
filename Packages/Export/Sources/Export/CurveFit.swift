@@ -1,3 +1,4 @@
+import CoreGraphics
 import InkGeometry
 
 /// A path as one start point plus cubic Bézier (or straight) segments, page space: a closed outline contour
@@ -14,6 +15,48 @@ struct CubicContour: Sendable {
 
     var start: Point2
     var segments: [Segment]
+
+    /// The subpaths of `path` (lines and curves as they are, quadratics raised to cubics).
+    static func contours(of path: CGPath) -> [CubicContour] {
+        var out: [CubicContour] = []
+        var current: CubicContour?
+        var last = Point2.zero
+        func point(_ p: CGPoint) -> Point2 {
+            Point2(Float(p.x), Float(p.y))
+        }
+        path.applyWithBlock { element in
+            let e = element.pointee
+            switch e.type {
+            case .moveToPoint:
+                if let current, !current.segments.isEmpty {
+                    out.append(current)
+                }
+                last = point(e.points[0])
+                current = CubicContour(start: last, segments: [])
+            case .addLineToPoint:
+                last = point(e.points[0])
+                current?.segments.append(Segment(c1: last, c2: last, end: last, isLine: true))
+            case .addQuadCurveToPoint:
+                let (q, end) = (point(e.points[0]), point(e.points[1]))
+                current?.segments.append(Segment(c1: last + (q - last) * (2 / 3), c2: end + (q - end) * (2 / 3), end: end))
+                last = end
+            case .addCurveToPoint:
+                last = point(e.points[2])
+                current?.segments.append(Segment(c1: point(e.points[0]), c2: point(e.points[1]), end: last))
+            case .closeSubpath:
+                if let current, !current.segments.isEmpty {
+                    out.append(current)
+                }
+                current = nil
+            @unknown default:
+                break
+            }
+        }
+        if let current, !current.segments.isEmpty {
+            out.append(current)
+        }
+        return out
+    }
 }
 
 /// Fits cubic Béziers to dense polylines (Schneider, "An Algorithm for Automatically Fitting Digitized

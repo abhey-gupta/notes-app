@@ -8,7 +8,8 @@ import UIKit
 /// shows what the next stroke will look like.
 ///
 /// Ink bolder than the preview can hold (brush, highlighter) is drawn true-size in a larger space and scaled
-/// down to fit (``fit(_:in:)``), so its texture and shape still match the canvas.
+/// down to fit (``fit(_:in:)``), so its texture and shape still match the canvas. The highlighter's band is
+/// drawn the way the engine draws it (``Highlight``, #120), not by PencilKit.
 public enum InkPreview {
     /// What to draw.
     public struct Spec: Hashable, Sendable {
@@ -99,13 +100,34 @@ public enum InkPreview {
     /// like the canvas (colors are already resolved for the paper).
     public static func image(_ spec: Spec, size: CGSize, scale: CGFloat) -> UIImage {
         let fit = fit(spec, in: size)
-        let drawing = PKDrawing(strokes: [stroke(spec, in: size)])
+        let stroke = stroke(spec, in: size)
+        if spec.kind == .highlighter {
+            let format = UIGraphicsImageRendererFormat.preferred()
+            format.scale = scale
+            format.opaque = false
+            return UIGraphicsImageRenderer(size: size, format: format).image { context in
+                let cg = context.cgContext
+                cg.scaleBy(x: fit, y: fit)
+                let band = Self.highlightStroke(stroke, spec: spec)
+                Highlight.draw([band], color: { _ in Highlight.color(UIColor(spec.color)) }, in: cg)
+            }
+        }
+        let drawing = PKDrawing(strokes: [stroke])
         let rect = CGRect(x: 0, y: 0, width: size.width / fit, height: size.height / fit)
         var image = UIImage()
         traits.performAsCurrent {
             image = drawing.image(from: rect, scale: scale * fit)
         }
         return image
+    }
+
+    /// The preview squiggle as the highlighter stroke the engine would draw: its control points as
+    /// samples, `spec.width` wide.
+    static func highlightStroke(_ stroke: PKStroke, spec: Spec) -> Stroke {
+        let samples = stroke.path.map { point in
+            Sample(x: Float(point.location.x), y: Float(point.location.y), t: Float(point.timeOffset))
+        }
+        return Highlight.stroke(color: .custom(spec.color), width: spec.width, samples: samples)
     }
 
     // MARK: Profile

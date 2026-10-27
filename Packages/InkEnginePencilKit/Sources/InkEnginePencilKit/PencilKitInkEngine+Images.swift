@@ -13,10 +13,10 @@ import UIKit
 /// at a time, nearest the viewport first; an edit changes the key, so the page re-renders and its
 /// previous rasters are dropped from the cache when the new one lands.
 extension PencilKitInkEngine {
-    /// Brings a page's raster up to date: snapshot strokes plus strokes still pending on the way to the
-    /// document, rendered off main by PencilKit.
+    /// Brings a page's ink raster up to date: snapshot strokes plus strokes still pending on the way to the
+    /// document, rendered off main by PencilKit. Highlights are the view's own layers, not the raster's.
     func refreshInk(_ view: PageLayerView, snapshot: PageSnapshot, pixelScale: CGFloat) {
-        let pendingStrokes = (pending[snapshot.id] ?? []).map(\.pk)
+        let pendingStrokes = (pending[snapshot.id] ?? []).compactMap(\.pk)
         let key = PageLayerView.InkKey(
             rev: snapshot.rev, theme: theme, pixelScale: pixelScale,
             strokeCount: snapshot.strokes.count, pendingCount: pendingStrokes.count, size: snapshot.size
@@ -24,7 +24,7 @@ extension PencilKitInkEngine {
         guard view.shownKey != key, view.requestedKey != key else { return }
         view.requestedKey = key
         let id = snapshot.id
-        let job = RenderJob(page: snapshot, palette: palette, theme: theme, pending: pendingStrokes)
+        let job = RenderJob(page: snapshot, palette: palette, theme: theme, pending: pendingStrokes, layers: .ink)
         guard !job.isEmpty else {
             renderQueue.cancel(id)
             view.setInk(nil, key: key)

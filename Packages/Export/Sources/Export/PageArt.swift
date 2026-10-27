@@ -9,7 +9,7 @@ struct InkRun: Sendable {
     var fills: [CubicContour] = []
     /// Centerline pieces stroked with round joins and ``cap``.
     var strokes: [StrokedPath] = []
-    /// Cap for ``strokes``: round for pens, butt for the highlighter's chisel.
+    /// Cap for ``strokes`` (round for pens).
     var cap: CGLineCap = .round
 }
 
@@ -58,25 +58,24 @@ struct PageArt: Sendable {
             }
         }
         let skipsBrush = art.brushImage != nil
-        let highlighterOpacity = CGFloat(PenProfile.highlighter.opacity)
 
         for stroke in page.strokes where !stroke.samples.isEmpty {
             if stroke.tool == .brush, skipsBrush {
                 continue
             }
-            var color = resolve(stroke.color)
-            let isHighlighter = stroke.tool == .highlighter
-            if isHighlighter {
-                color = color.copy(alpha: color.alpha * highlighterOpacity) ?? color
+            let color = resolve(stroke.color)
+            if stroke.tool == .highlighter {
+                if let run = highlight(stroke, color: color) {
+                    art.highlights.append(run)
+                }
+                continue
             }
             // Translucent ink must paint each pixel once: one stroke operation or one fill, no overlaps.
             let isOpaque = color.alpha >= 1
             let shape = StrokeShape(stroke: stroke, allowsOverlap: isOpaque)
             guard !shape.isEmpty else { continue }
             let run = InkRun(color: color, fills: shape.fills, strokes: shape.strokes, cap: shape.cap)
-            if isHighlighter {
-                art.highlights.append(run)
-            } else if isOpaque, let last = art.ink.indices.last, art.ink[last].color == color, art.ink[last].cap == run.cap {
+            if isOpaque, let last = art.ink.indices.last, art.ink[last].color == color, art.ink[last].cap == run.cap {
                 // Opaque: the union looks the same as separate paints, with fewer PDF operators.
                 art.ink[last].fills += run.fills
                 art.ink[last].strokes += run.strokes
@@ -85,5 +84,22 @@ struct PageArt: Sendable {
             }
         }
         return art
+    }
+
+    /// The band the screen draws (#120) at the highlighter's alpha: its polygons merged with their rounded
+    /// rim (the nib's corners) into one outline, filled once, so each pixel paints once.
+    private static func highlight(_ stroke: Stroke, color: CGColor) -> InkRun? {
+        let band = HighlightBand(stroke: stroke)
+        guard !band.polygons.isEmpty else { return nil }
+        let path = CGMutablePath()
+        for polygon in band.polygons {
+            path.addLines(between: polygon.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) })
+            path.closeSubpath()
+        }
+        let rim = path.copy(strokingWithWidth: CGFloat(2 * band.cornerRadius), lineCap: .round, lineJoin: .round, miterLimit: 10)
+        let fills = CubicContour.contours(of: path.union(rim, using: .winding))
+        guard !fills.isEmpty else { return nil }
+        let alpha = color.alpha * CGFloat(PenProfile.highlighter.opacity)
+        return InkRun(color: color.copy(alpha: alpha) ?? color, fills: fills)
     }
 }
