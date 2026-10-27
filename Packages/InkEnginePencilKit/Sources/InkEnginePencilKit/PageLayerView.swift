@@ -5,7 +5,8 @@ import UIKit
 
 /// One visible page in content space: paper color, vector template marks, its highlights (#120, one shape
 /// layer each, beneath everything that draws ink), and an image of its ink (outside ``inkHole``, the part
-/// a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask).
+/// a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask). Pages touch (#162): every page but
+/// the first draws a one-pixel hairline in the template mark color along its top edge, over its image.
 ///
 /// The image is one of (#70's fallback chain, best first): the raster for ``requestedKey``; a stale
 /// raster of the page (an older bucket or content, scaled by the layer) while that renders; the page's
@@ -30,6 +31,8 @@ final class PageLayerView: UIView {
     /// The scaled-up thumbnail (opaque: paper, template and ink at thumbnail resolution).
     let thumbnailLayer = HoledImageLayer()
     let inkLayer = HoledImageLayer()
+    /// The seam with the page above (#162), one screen pixel tall; hidden on the first page.
+    let seamLayer = CALayer()
 
     /// Thumbnail → raster crossfade length, seconds (the app sets it from its motion tokens).
     var crossfadeDuration: TimeInterval = 0.12
@@ -121,6 +124,7 @@ final class PageLayerView: UIView {
         layer.addSublayer(dotsLayer)
         layer.addSublayer(highlightsLayer)
         layer.addSublayer(imageLayer)
+        layer.addSublayer(seamLayer)
     }
 
     @available(*, unavailable)
@@ -161,6 +165,9 @@ final class PageLayerView: UIView {
                 sublayer.contentsScale = markScale
             }
         }
+        seamLayer.backgroundColor = colors.line
+        seamLayer.isHidden = frame.minY <= 0
+        seamLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: 1 / max(linesLayer.contentsScale, 1))
         updateInkHole()
         CATransaction.commit()
     }

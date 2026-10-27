@@ -2,15 +2,16 @@ import CoreGraphics
 import InkModel
 
 /// Where every page of a notebook sits in content space (ARCHITECTURE.md §5.2): a vertical stack of
-/// fixed-size pages separated by ``gap``, starting at `y = 0`, plus a ``footer`` below the last page
-/// (the add-page affordance). Content space is unzoomed points; the host's scroll view zooms it.
+/// fixed-size pages separated by ``gap`` (none by default: pages touch, a hairline marks the seam, #162),
+/// starting at `y = 0`, plus a ``footer`` below the last page (the add-page affordance). Content space is
+/// unzoomed points; the host's scroll view zooms it.
 ///
 /// Frames are precomputed; visibility and hit queries are binary searches, so a 300-page notebook
 /// costs the same per scroll frame as a 3-page one. Pages have no view objects: they are just these
 /// frames, which the engine is told about.
 public struct PageLayout: Hashable, Sendable {
-    /// Gap between pages (pt).
-    public static let defaultGap: CGFloat = 24
+    /// Gap between pages (pt): none, pages butt edge to edge with a hairline between them (#162).
+    public static let defaultGap: CGFloat = 0
 
     /// Page size (pt), the same for every page (A4 portrait on Day 0).
     public let pageSize: CGSize

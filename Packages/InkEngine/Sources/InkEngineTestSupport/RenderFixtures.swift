@@ -78,7 +78,7 @@ public enum RenderFixtures {
         PageSnapshot(page: Page(id: pageID(2), template: .blank), size: pageSize)
     }
 
-    /// `count` pages stacked vertically with a 24 pt gap (`PageLayout` defaults), for viewport tests.
+    /// `count` pages stacked vertically with a 24 pt gap (so hit tests can probe between pages), for viewport tests.
     public static func stackedPages(_ count: Int) -> [VisiblePage] {
         (0 ..< count).map { i in
             VisiblePage(
