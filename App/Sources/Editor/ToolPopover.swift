@@ -5,7 +5,8 @@ import SwiftUI
 import Tools
 
 /// Tool options (mock §03), opened by tapping the active tool. Pen: family, live stroke preview, 5 widths,
-/// palette + custom color, pressure. Highlighter: preview, 3 widths, colors. Eraser: mode, 3 sizes.
+/// palette + custom color, pressure. Highlighter: preview, 3 widths, colors. Eraser: mode, 3 sizes,
+/// switch back after erasing.
 /// Every control writes straight to `ToolState`, which the editor pushes to the engine, so the next stroke
 /// already uses it.
 struct ToolPopover: View {
@@ -49,17 +50,7 @@ struct ToolPopover: View {
         }
         SectionLabel("Color")
         PaletteGrid(colors: PaletteEntry.pen, selection: $tools.pen.color, paper: paper)
-        Toggle("Pressure sensitivity", isOn: $tools.pen.pressure)
-            .scaledFont(size: 14, weight: .medium)
-            .foregroundStyle(Tokens.Colors.textPrimary)
-            .padding(.top, 12)
-            .padding(.horizontal, Tokens.Spacing.xs)
-            .padding(.bottom, 2)
-            .overlay(alignment: .top) {
-                Rectangle().fill(Tokens.Colors.separator).frame(height: 0.5)
-            }
-            .padding(.top, 18)
-            .sensoryFeedback(.selection, trigger: tools.pen.pressure)
+        settingToggle("Pressure sensitivity", isOn: $tools.pen.pressure)
             .accessibilityIdentifier("pressureToggle")
     }
 
@@ -103,9 +94,26 @@ struct ToolPopover: View {
                 .strokeBorder(selected ? Tokens.Colors.iconActive : Tokens.Colors.icon, lineWidth: 1.5)
                 .frame(width: Tokens.Size.eraserWidthRings[index], height: Tokens.Size.eraserWidthRings[index])
         }
+        settingToggle("Switch back after erasing", isOn: $tools.eraser.autoDeselect)
+            .accessibilityIdentifier("eraserAutoDeselectToggle")
     }
 
     // MARK: Pieces
+
+    /// On/off row under a hairline, closing a tool's options.
+    private func settingToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+        Toggle(title, isOn: isOn)
+            .scaledFont(size: 14, weight: .medium)
+            .foregroundStyle(Tokens.Colors.textPrimary)
+            .padding(.top, 12)
+            .padding(.horizontal, Tokens.Spacing.xs)
+            .padding(.bottom, 2)
+            .overlay(alignment: .top) {
+                Rectangle().fill(Tokens.Colors.separator).frame(height: 0.5)
+            }
+            .padding(.top, 18)
+            .sensoryFeedback(.selection, trigger: isOn.wrappedValue)
+    }
 
     private func preview(_ spec: InkPreview.Spec) -> some View {
         StrokePreview(spec: spec, size: previewSize, paper: paper.paper.color)

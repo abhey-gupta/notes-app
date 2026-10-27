@@ -37,6 +37,7 @@ struct ToolStateTests {
         state.highlighter.color = .semantic(.accent)
         state.eraser.mode = .partial
         state.eraser.widthIndex = 2
+        state.eraser.autoDeselect = false
         state.setQuickColor(.custom(RGBA8(r: 0x7E, g: 0x4F, b: 0xD8)), at: 2)
         state.dock = .left
         state.isCompact = true
@@ -46,7 +47,7 @@ struct ToolStateTests {
         #expect(relaunched.settings == state.settings)
         #expect(relaunched.tool == .eraser && relaunched.dock == .left && relaunched.isCompact)
         #expect(relaunched.pen == PenSettings(kind: .brush, widthIndex: 4, color: .primary, pressure: false))
-        #expect(relaunched.eraser == EraserSettings(mode: .partial, widthIndex: 2))
+        #expect(relaunched.eraser == EraserSettings(mode: .partial, widthIndex: 2, autoDeselect: false))
     }
 
     @Test func savesAreDebounced() async throws {
@@ -130,6 +131,28 @@ struct ToolStateTests {
         state.toggleEraser()
         state.toggleEraser()
         #expect(state.tool == .pen)
+    }
+
+    @Test func finishedErasingReturnsToPreviousToolUnlessOff() throws {
+        let state = try makeState(makeDefaults())
+        state.select(.highlighter)
+        state.select(.eraser)
+        state.finishedErasing()
+        #expect(state.tool == .highlighter)
+        state.finishedErasing()
+        #expect(state.tool == .highlighter, "no-op off the eraser")
+
+        state.eraser.autoDeselect = false
+        state.select(.eraser)
+        state.finishedErasing()
+        #expect(state.tool == .eraser)
+    }
+
+    @Test func eraserSettingsWithoutAutoDeselectKeepModeAndSize() throws {
+        let defaults = try makeDefaults()
+        defaults.set(Data(#"{"eraser":{"mode":"partial","widthIndex":2}}"#.utf8), forKey: "tools")
+        let state = makeState(defaults)
+        #expect(state.eraser == EraserSettings(mode: .partial, widthIndex: 2, autoDeselect: true))
     }
 
     @Test func currentColorFollowsInkingTool() throws {

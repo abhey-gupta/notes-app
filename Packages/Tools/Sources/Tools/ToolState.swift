@@ -114,6 +114,13 @@ public final class ToolState {
         tool = tool == .eraser ? (previousTool == .eraser ? .pen : previousTool) : .eraser
     }
 
+    /// An eraser stroke lifted: back to the tool before the eraser if
+    /// ``EraserSettings/autoDeselect`` is on (#156).
+    public func finishedErasing() {
+        guard tool == .eraser, eraser.autoDeselect else { return }
+        toggleEraser()
+    }
+
     /// Pencil "switch to previous tool".
     public func switchToPrevious() {
         tool = previousTool == tool ? .pen : previousTool

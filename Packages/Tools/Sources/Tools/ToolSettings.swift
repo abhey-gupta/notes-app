@@ -90,7 +90,8 @@ public struct HighlighterSettings: Hashable, Sendable, Codable {
     }
 }
 
-/// Eraser settings: whole-stroke or partial, and a width step.
+/// Eraser settings: whole-stroke or partial, a width step, and whether lifting after an erase goes back to
+/// the previous tool.
 public struct EraserSettings: Hashable, Sendable, Codable {
     /// Whole strokes (`PageEdit.remove`) or split where touched (`PageEdit.replace`).
     public enum Mode: String, CaseIterable, Hashable, Sendable, Codable {
@@ -107,15 +108,33 @@ public struct EraserSettings: Hashable, Sendable, Codable {
         didSet { widthIndex = widthIndex.clamped(to: Self.widths.indices) }
     }
 
+    /// Lifting after an eraser stroke switches back to the previous tool (#156).
+    public var autoDeselect: Bool
+
     /// Diameter in points.
     public var width: Float {
         Self.widths[widthIndex]
     }
 
     /// Creates eraser settings.
-    public init(mode: Mode = .stroke, widthIndex: Int = 1) {
+    public init(mode: Mode = .stroke, widthIndex: Int = 1, autoDeselect: Bool = true) {
         self.mode = mode
         self.widthIndex = widthIndex.clamped(to: Self.widths.indices)
+        self.autoDeselect = autoDeselect
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case mode, widthIndex, autoDeselect
+    }
+
+    /// `autoDeselect` is optional so settings saved before #156 keep their mode and size.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            mode: container.decode(Mode.self, forKey: .mode),
+            widthIndex: container.decode(Int.self, forKey: .widthIndex),
+            autoDeselect: container.decodeIfPresent(Bool.self, forKey: .autoDeselect) ?? true
+        )
     }
 }
 
@@ -159,7 +178,7 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         // Re-run the normalizing inits: synthesized decoding skips them.
         self.pen = PenSettings(kind: pen.kind, widthIndex: pen.widthIndex, color: pen.color, pressure: pen.pressure)
         self.highlighter = HighlighterSettings(widthIndex: highlighter.widthIndex, color: highlighter.color)
-        self.eraser = EraserSettings(mode: eraser.mode, widthIndex: eraser.widthIndex)
+        self.eraser = EraserSettings(mode: eraser.mode, widthIndex: eraser.widthIndex, autoDeselect: eraser.autoDeselect)
         self.quickColors = Self.normalized(quickColors)
         self.dock = dock
         self.isCompact = isCompact
