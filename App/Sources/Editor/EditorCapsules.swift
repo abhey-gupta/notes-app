@@ -10,11 +10,20 @@ struct NavCapsule: View {
     /// "Keep exact colors", offered on Night paper.
     @Binding var keepsExactColors: Bool
     let onBack: () -> Void
+    /// Whole capsule's width budget (``maxWidth(_:)``).
+    private var maxWidth: CGFloat = .infinity
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var width: CGFloat = 0
+    @State private var titleWidth: CGFloat = 0
+
+    /// Shortest the title truncates to; past that the capsule overflows `maxWidth` (the toolbar drops a row).
+    private static let minTitleWidth: CGFloat = 96
 
     var body: some View {
         let scale = typeSize.chromeScale
+        // Everything but the title (back button, chevron, padding) is fixed; the title takes what's left (#176).
+        let titleCap = max(min(220 * scale, maxWidth - (width - titleWidth)), Self.minTitleWidth * scale)
         GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
             ToolButton(.back, "Library", action: onBack)
             Menu {
@@ -37,8 +46,10 @@ struct NavCapsule: View {
                         .font(.chromeTitle)
                         .foregroundStyle(Tokens.Colors.textPrimary)
                         .lineLimit(1)
-                        .frame(maxWidth: 220 * scale, alignment: .leading)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: titleCap, alignment: .leading)
                         .fixedSize(horizontal: true, vertical: false)
+                        .onGeometryChange(for: CGFloat.self, of: \.size.width) { titleWidth = $0 }
                     Image(systemName: Symbol.disclosure.name)
                         .scaledFont(size: 11, weight: .semibold)
                         .foregroundStyle(Tokens.Colors.textTertiary)
@@ -51,6 +62,14 @@ struct NavCapsule: View {
             .accessibilityLabel("\(title), notebook options")
             .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
         }
+        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
+    }
+
+    /// Caps the capsule at `width` by tail-truncating the title (#176).
+    func maxWidth(_ width: CGFloat) -> Self {
+        var capsule = self
+        capsule.maxWidth = width
+        return capsule
     }
 }
 
