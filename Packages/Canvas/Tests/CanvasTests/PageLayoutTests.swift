@@ -188,12 +188,12 @@ struct PageWindowTests {
         #expect(PageLayout.fillZoom(pageWidth: 0, viewWidth: 1190) == 1)
     }
 
-    /// A pinch ending within 10 % of fit width snaps to it; farther out, or already there, it stays put.
+    /// A pinch ending within 5 % of fit width snaps to it; farther out, or already there, it stays put.
     @Test func pinchNearFitWidthSnaps() {
-        #expect(PageLayout.snapZoom(1.85, fill: 2) == 2)
-        #expect(PageLayout.snapZoom(2.19, fill: 2) == 2)
-        #expect(PageLayout.snapZoom(1.7, fill: 2) == nil)
-        #expect(PageLayout.snapZoom(2.3, fill: 2) == nil)
+        #expect(PageLayout.snapZoom(1.92, fill: 2) == 2)
+        #expect(PageLayout.snapZoom(2.09, fill: 2) == 2)
+        #expect(PageLayout.snapZoom(1.85, fill: 2) == nil)
+        #expect(PageLayout.snapZoom(2.15, fill: 2) == nil)
         #expect(PageLayout.snapZoom(2, fill: 2) == nil)
         #expect(PageLayout.snapZoom(1.9, fill: 2, threshold: 0.02) == nil)
     }
