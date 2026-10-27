@@ -21,9 +21,10 @@ extension PencilKitInkEngine {
     /// PencilKit adapts ink for dark appearance; the canvas is pinned to light (`RenderJob.traits`).
     private static let lightTraits = UITraitCollection(userInterfaceStyle: .light)
 
-    /// The current tool is a pen with pressure off: input and drawing go through this path.
+    /// The current tool is a pen with pressure off: input and drawing go through this path (the
+    /// highlighter has its own, `+Highlighter`).
     var usesFlatPen: Bool {
-        tool.penKind != nil && !tool.pressure
+        tool.penKind != nil && !usesHighlighter && !tool.pressure
     }
 
     func setUpFlatPen() {
@@ -108,7 +109,7 @@ extension PencilKitInkEngine {
         guard !live.samples.isEmpty, let template = selection.flatPenStroke else { return nil }
         let stroke = Self.flatStroke(template, samples: live.samples)
         let pk = PencilKitConversion.pkStroke(from: stroke, color: uiColor(stroke.color))
-        pending[live.page, default: []].append((stroke.id, pk))
+        pending[live.page, default: []].append(PendingStroke(stroke: stroke, pk: pk))
         var drawnBy: PageCanvas?
         if let canvas = canvas(for: live.page), !canvas.isUsingTool {
             isSettingDrawing = true

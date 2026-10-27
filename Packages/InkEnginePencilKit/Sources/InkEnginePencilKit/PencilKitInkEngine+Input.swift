@@ -4,7 +4,8 @@ import UIKit
 
 /// Eraser and lasso input: the shared `InkInputView` (content-sized, above the canvases) reports samples in
 /// page space; the engine forwards them and draws nothing (`Tools` resolves erasing, ARCHITECTURE.md §6).
-/// Pens with pressure off take the same route and are drawn and committed by the engine (`+FlatPen`, #123).
+/// The highlighter (`+Highlighter`, #120) and pens with pressure off (`+FlatPen`, #123) take the same route
+/// and are drawn and committed by the engine.
 extension PencilKitInkEngine: InkInputViewDelegate {
     public func inkInputView(_: InkInputView, targetAt point: CGPoint) -> InkInputTarget? {
         // The input view is content-sized: `point` is in content space, page space is a translation away.
@@ -17,6 +18,8 @@ extension PencilKitInkEngine: InkInputViewDelegate {
             drawLasso(event)
         } else if tool.tool == .eraser {
             trackEraserCursor(event)
+        } else if usesHighlighter {
+            drawHighlighter(event)
         } else if usesFlatPen {
             drawFlatPen(event)
         }

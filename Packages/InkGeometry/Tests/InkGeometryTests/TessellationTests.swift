@@ -116,7 +116,7 @@ struct PenProfileTests {
         #expect(brush.edgeSoftness > 0 && brush.capStyle == .round)
         let h = PenProfile.highlighter
         #expect(h.widthScale(force: 0, speed: 0, altitude: 0) == 1 && h.widthScale(force: 1, speed: 9000, altitude: 1.5) == 1)
-        #expect(h.capStyle == .butt && h.drawsBeneathInk && h.opacity == 0.4)
+        #expect(h.capStyle == .butt && h.drawsBeneathInk && h.opacity == 0.55)
         #expect(!f.drawsBeneathInk && f.opacity == 1 && f.edgeSoftness == 0)
     }
 }

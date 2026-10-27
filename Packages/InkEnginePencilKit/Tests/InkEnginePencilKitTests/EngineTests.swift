@@ -191,7 +191,7 @@ struct EngineTests {
         let h = Harness()
         h.scroll(toY: 900)
         #expect(h.engine.canvases.count == 2)
-        for (kind, type) in [(PenKind.highlighter, PKInk.InkType.marker), (.fountain, .fountainPen), (.ballpoint, .pen)] {
+        for (kind, type) in [(PenKind.brush, PKInk.InkType.watercolor), (.fountain, .fountainPen), (.ballpoint, .pen)] {
             h.engine.setTool(ToolConfiguration(tool: .pen(kind)))
             for canvas in h.engine.canvases {
                 let tool = try #require(canvas.view.tool as? PKInkingTool)

@@ -3,8 +3,9 @@ import InkModel
 import PencilKit
 import UIKit
 
-/// One visible page in content space: paper color, vector template marks, and an image of its ink
-/// (outside ``inkHole``, the part a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask).
+/// One visible page in content space: paper color, vector template marks, its highlights (#120, one shape
+/// layer each, beneath everything that draws ink), and an image of its ink (outside ``inkHole``, the part
+/// a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask).
 ///
 /// The image is one of (#70's fallback chain, best first): the raster for ``requestedKey``; a stale
 /// raster of the page (an older bucket or content, scaled by the layer) while that renders; the page's
@@ -19,6 +20,11 @@ import UIKit
 final class PageLayerView: UIView {
     private let linesLayer = CAShapeLayer()
     private let dotsLayer = CAShapeLayer()
+    /// Highlight bands in stroke order, the live one (if any) last. Beneath the thumbnail (which has them
+    /// baked in) and the ink image; the canvas above draws ink only.
+    private let highlightsLayer = CALayer()
+    private var highlightLayers: [StrokeID: (stroke: Stroke, layer: CAShapeLayer)] = [:]
+    private var liveHighlight: CAShapeLayer?
     /// Holds the thumbnail and ink layers.
     private let imageLayer = CALayer()
     /// The scaled-up thumbnail (opaque: paper, template and ink at thumbnail resolution).
@@ -40,6 +46,20 @@ final class PageLayerView: UIView {
     struct Colors {
         var paper: CGColor
         var line: CGColor
+    }
+
+    /// What the highlight layers show; ``setHighlights(_:key:color:)`` is skipped while it holds.
+    private(set) var highlightKey: HighlightKey?
+
+    /// Identifies the set of highlights a page view shows and their colors.
+    struct HighlightKey: Hashable {
+        var rev: UInt64
+        var theme: PaperTheme
+        /// Palette generation (`PKStrokeCache.generation`): colors changed.
+        var colors: Int
+        var pendingCount: Int
+        /// Strokes left out (lifted by the selection).
+        var hidden: Set<StrokeID>
     }
 
     /// The raster being rendered (or shown) for this page.
@@ -99,6 +119,7 @@ final class PageLayerView: UIView {
         imageLayer.addSublayer(inkLayer)
         layer.addSublayer(linesLayer)
         layer.addSublayer(dotsLayer)
+        layer.addSublayer(highlightsLayer)
         layer.addSublayer(imageLayer)
     }
 
@@ -122,6 +143,7 @@ final class PageLayerView: UIView {
         dotsLayer.fillColor = colors.line
         linesLayer.frame = bounds
         dotsLayer.frame = bounds
+        highlightsLayer.frame = bounds
         imageLayer.frame = bounds
         inkLayer.frame = imageLayer.bounds
         layoutThumbnail()
@@ -135,10 +157,81 @@ final class PageLayerView: UIView {
         if let markScale, linesLayer.contentsScale != markScale {
             linesLayer.contentsScale = markScale
             dotsLayer.contentsScale = markScale
+            for sublayer in highlightsLayer.sublayers ?? [] {
+                sublayer.contentsScale = markScale
+            }
         }
         updateInkHole()
         CATransaction.commit()
     }
+
+    // MARK: Highlights
+
+    /// Shows `strokes` (highlights, in order) as one shape layer each, keeping the layers of strokes that
+    /// didn't change; the live highlight, if any, stays on top.
+    func setHighlights(_ strokes: [Stroke], key: HighlightKey, color: (Stroke) -> CGColor) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        highlightKey = key
+        var kept: [StrokeID: (stroke: Stroke, layer: CAShapeLayer)] = [:]
+        kept.reserveCapacity(strokes.count)
+        var ordered: [CALayer] = []
+        ordered.reserveCapacity(strokes.count + 1)
+        for stroke in strokes {
+            let layer = highlightLayers[stroke.id]?.layer ?? Self.makeHighlightLayer(contentsScale: linesLayer.contentsScale)
+            if highlightLayers[stroke.id]?.stroke != stroke {
+                Highlight.configure(layer, stroke: stroke, color: color(stroke))
+            } else {
+                let tint = color(stroke)
+                if layer.lineWidth > 0 {
+                    layer.strokeColor = tint
+                } else {
+                    layer.fillColor = tint
+                }
+            }
+            kept[stroke.id] = (stroke, layer)
+            ordered.append(layer)
+        }
+        if let liveHighlight {
+            ordered.append(liveHighlight)
+        }
+        highlightLayers = kept
+        if highlightsLayer.sublayers ?? [] != ordered {
+            highlightsLayer.sublayers = ordered
+        }
+    }
+
+    /// The layers of the highlights on show, in order (tests).
+    var highlightShapeLayers: [CAShapeLayer] {
+        (highlightsLayer.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+    }
+
+    /// Puts the band being drawn above the page's highlights.
+    func addLiveHighlight(_ layer: CAShapeLayer) {
+        liveHighlight?.removeFromSuperlayer()
+        layer.contentsScale = linesLayer.contentsScale
+        liveHighlight = layer
+        highlightsLayer.addSublayer(layer)
+    }
+
+    /// The live band is now `stroke`'s layer (no handoff on lift).
+    func adoptLiveHighlight(_ layer: CAShapeLayer, as stroke: Stroke) {
+        if liveHighlight === layer {
+            liveHighlight = nil
+        }
+        highlightLayers[stroke.id]?.layer.removeFromSuperlayer()
+        highlightLayers[stroke.id] = (stroke, layer)
+        highlightKey = nil
+    }
+
+    private static func makeHighlightLayer(contentsScale: CGFloat) -> CAShapeLayer {
+        let layer = Highlight.makeLayer()
+        layer.contentsScale = contentsScale
+        return layer
+    }
+
+    // MARK: Ink image
 
     /// Shows the raster for `key` (`nil` image: the page has no ink). A thumbnail on screen crossfades out.
     func setInk(_ image: CGImage?, key: InkKey?) {

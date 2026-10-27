@@ -55,7 +55,7 @@ public enum PencilKitConversion {
     /// - ballpoint (`.pen`, reference 4.2): 0.96 / **1.6** / 2.55 / 3.83 / 5.1
     /// - fountain (`.fountainPen`, 5.5): 1.5 (clamped from 1.09) / **1.82** / 2.91 / 4.36 / 5.82
     /// - brush (`.watercolor`, 5): 12 / **20** / 32 / 48 / 64
-    /// - highlighter (`.marker`, 16; presets 10 / **16** / 24): 12.9 / **20.6** / 30.9
+    /// - highlighter: not PencilKit's; the band is the toolbar width (10 / **16** / 24), see ``Highlight``
     ///
     /// Strokes keep the point sizes PencilKit drew (format v2), so changing these only affects new ink.
     public static func referenceWidth(for kind: PenKind) -> Float {
@@ -69,8 +69,9 @@ public enum PencilKitConversion {
 
     /// PencilKit tool width for a toolbar width: the ink's `defaultWidth` scaled by
     /// `width / referenceWidth(for:)`, clamped to the ink's `validWidthRange` (table at
-    /// ``referenceWidth(for:)``).
+    /// ``referenceWidth(for:)``). The highlighter is not a PencilKit ink (#120): its band is `width` wide.
     public static func pencilKitWidth(for kind: PenKind, width: Float) -> CGFloat {
+        guard kind != .highlighter else { return CGFloat(width.isFinite ? max(width, 0) : 0) }
         let type = inkType(for: kind)
         let range = type.validWidthRange
         let scaled = type.defaultWidth * CGFloat(width / referenceWidth(for: kind))

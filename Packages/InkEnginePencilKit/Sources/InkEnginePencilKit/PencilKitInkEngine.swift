@@ -13,8 +13,9 @@ import UIKit
 /// `PKDrawing.image`, rendered off main a few at a time nearest the viewport first (``RasterRenderQueue``),
 /// kept per zoom bucket in an ``InkRasterCache`` that empties on memory warnings; while one renders the
 /// page shows its nearest cached raster, its thumbnail or just paper (`+Images`, #70). Pens draw through
-/// PencilKit (pens with pressure off through `+FlatPen`, #123); eraser and lasso input goes through the
-/// shared ``InkEngine/InkInputView`` pipeline and is reported, never applied.
+/// PencilKit (pens with pressure off through `+FlatPen`, #123); the highlighter draws its own bands as
+/// shape layers beneath everything (`+Highlighter`, ``Highlight``, #120); eraser and lasso input goes
+/// through the shared ``InkEngine/InkInputView`` pipeline and is reported, never applied.
 ///
 /// A canvas starts its page from the document snapshot. A finished PencilKit stroke is reported via
 /// `didCommit` and kept on the canvas as pending until the document echoes it back through
@@ -71,7 +72,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// The canvases' strokes as PencilKit strokes, converted off main by ``prepare(_:)`` or on first use.
     let strokeCache = PKStrokeCache()
     /// Strokes reported via `didCommit` but not yet in the page snapshot, per page, in draw order.
-    var pending: [PageID: [(id: StrokeID, pk: PKStroke)]] = [:]
+    var pending: [PageID: [PendingStroke]] = [:]
     var hasSeenPencil = false
 
     var pageViews: [PageID: PageLayerView] = [:]
@@ -181,9 +182,12 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             return
         }
         var echoedOnly = false
-        if case let .add(placed) = edit, let waiting = pending[page] {
+        if case let .add(placed) = edit {
             let ids = Set(placed.map(\.stroke.id))
-            echoedOnly = ids.isSubset(of: Set(waiting.map(\.id)))
+            let waiting = pending[page] ?? []
+            // Echoed commits, or highlights (never on the canvas): the canvas already shows the rest.
+            let waitingIDs = Set(waiting.map(\.id))
+            echoedOnly = placed.allSatisfy { Highlight.isHighlight($0.stroke) || waitingIDs.contains($0.stroke.id) }
             pending[page] = waiting.filter { !ids.contains($0.id) }
         }
         contentChanged(page, rebuild: !echoedOnly)
@@ -191,8 +195,13 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     /// Converts the page's strokes off main, so handing it over in ``setPages(_:)`` doesn't stall a frame.
     public func prepare(_ page: PageSnapshot) async {
-        guard !page.strokes.isEmpty else { return }
-        let (strokes, palette, theme, generation) = (page.strokes, palette, theme, strokeCache.generation)
+        let (strokes, palette, theme, generation) = (
+            page.strokes.filter { !Highlight.isHighlight($0) },
+            palette,
+            theme,
+            strokeCache.generation
+        )
+        guard !strokes.isEmpty else { return }
         let pks = await Task.detached(priority: .userInitiated) {
             strokes.map { PencilKitConversion.pkStroke(from: $0, color: UIColor(palette.ink($0.color, on: theme))) }
         }.value
@@ -207,16 +216,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     }
 
     // MARK: Canvases
-
-    /// The canvas drawing `page`, if it has one.
-    func canvas(for page: PageID) -> PageCanvas? {
-        canvases.first { $0.page == page }
-    }
-
-    /// The pooled canvas behind `view`.
-    func canvas(of view: PKCanvasView) -> PageCanvas? {
-        canvases.first { $0.view === view }
-    }
 
     /// A free canvas, made if the pool allows it.
     func freeCanvas() -> PageCanvas? {
@@ -279,8 +278,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     private func contentChanged(_ page: PageID, rebuild: Bool) {
         if let canvas = canvas(for: page) {
-            let shown = (snapshots[page]?.strokes.map(\.id) ?? []).filter { !selection.strokes.contains($0) }
-            let desired = shown + (pending[page] ?? []).map(\.id)
+            let shown = (snapshots[page]?.strokes ?? []).filter { !Highlight.isHighlight($0) && !selection.strokes.contains($0.id) }
+            let desired = shown.map(\.id) + (pending[page] ?? []).filter { !$0.isHighlight }.map(\.id)
             if rebuild || desired != canvas.ids {
                 rebuildCanvas(canvas)
             }
@@ -302,12 +301,12 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         for pk in strokes[canvas.ids.count...] {
             let stroke = PencilKitConversion.stroke(from: pk, tool: kind, color: tool.color, width: tool.width)
             canvas.ids.append(stroke.id)
-            pending[page, default: []].append((stroke.id, pk))
+            pending[page, default: []].append(PendingStroke(stroke: stroke, pk: pk))
             delegate?.engine(self, didCommit: stroke, to: page)
         }
     }
 
-    /// Replaces `canvas`'s drawing with its page's snapshot plus pending strokes.
+    /// Replaces `canvas`'s drawing with its page's ink (never highlights) plus pending strokes.
     func rebuildCanvas(_ canvas: PageCanvas) {
         guard !canvas.isUsingTool else {
             canvas.needsRebuild = true
@@ -321,18 +320,30 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         var strokes: [PKStroke] = []
         var ids: [StrokeID] = []
         if let page = canvas.page, let snapshot = snapshots[page] {
-            let shown = snapshot.strokes.filter { !selection.strokes.contains($0.id) }
+            let shown = snapshot.strokes.filter { !Highlight.isHighlight($0) && !selection.strokes.contains($0.id) }
             strokes = strokeCache.pkStrokes(shown, on: page) { PencilKitConversion.pkStroke(from: $0, color: uiColor($0.color)) }
             ids = shown.map(\.id)
-            for entry in pending[page] ?? [] {
-                strokes.append(entry.pk)
-                ids.append(entry.id)
+            for case let (id, pk)? in (pending[page] ?? []).map(\.ink) {
+                strokes.append(pk)
+                ids.append(id)
             }
         }
         isSettingDrawing = true
         canvas.view.drawing = PKDrawing(strokes: strokes)
         isSettingDrawing = false
         canvas.ids = ids
+    }
+}
+
+extension PencilKitInkEngine {
+    /// The canvas drawing `page`, if it has one.
+    func canvas(for page: PageID) -> PageCanvas? {
+        canvases.first { $0.page == page }
+    }
+
+    /// The pooled canvas behind `view`.
+    func canvas(of view: PKCanvasView) -> PageCanvas? {
+        canvases.first { $0.view === view }
     }
 
     /// Rebuilds the canvas of `page`, if it has one.

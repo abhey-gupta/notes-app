@@ -36,8 +36,8 @@ public struct StrokeRendering: Hashable, Sendable, Codable {
         points.reduce(0) { max($0, $1.width, $1.height) }
     }
 
-    /// PencilKit ink identifiers (`PKInk.InkType` raw values), spelled out so headless packages
-    /// (fixtures, migration) can name them without importing PencilKit.
+    /// Ink identifiers: PencilKit's (`PKInk.InkType` raw values), spelled out so headless packages
+    /// (fixtures, migration) can name them without importing PencilKit, and our own highlighter.
     public enum Ink {
         public static let pen = "com.apple.ink.pen"
         public static let pencil = "com.apple.ink.pencil"
@@ -46,6 +46,9 @@ public struct StrokeRendering: Hashable, Sendable, Codable {
         public static let fountainPen = "com.apple.ink.fountainpen"
         public static let watercolor = "com.apple.ink.watercolor"
         public static let crayon = "com.apple.ink.crayon"
+        /// The highlighter band (#120): a constant-width, flat-ended band the engine draws itself,
+        /// beneath all other ink, each stroke one translucent fill. Pre-#120 highlights are `marker`.
+        public static let highlighter = "com.abhey.ink.highlighter"
 
         /// The ink a pen draws with (ARCHITECTURE.md §3).
         public static func `for`(_ kind: PenKind) -> String {
@@ -53,7 +56,7 @@ public struct StrokeRendering: Hashable, Sendable, Codable {
             case .fountain: fountainPen
             case .ballpoint: pen
             case .brush: watercolor
-            case .highlighter: marker
+            case .highlighter: highlighter
             }
         }
     }

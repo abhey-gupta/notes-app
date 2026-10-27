@@ -99,17 +99,17 @@ struct PDFExporterTests {
         let options = PDFExportOptions(theme: .night, exportsAsShown: true)
         let bitmap = try await PDF(exporter.pdfData(pages: [page], options: options)).bitmap(0)
 
-        // Over Night paper, multiply darkens: yellow × #1B1C1F at 40 % stays near the paper color, where
+        // Over Night paper, multiply darkens: yellow × #1B1C1F at 55 % stays near the paper color, where
         // normal blending would turn it mid-yellow (~118, 105, 39).
         let onPaper = bitmap[300, 350]
         #expect(onPaper.r <= 0x1B + 2 && onPaper.g <= 0x1C + 2 && onPaper.b <= 0x1F)
         #expect(onPaper.b < 0x1F - 4) // but it did draw (blue × 0.2)
         // Ink stays on top, untouched by the highlighter.
         #expect(bitmap[300, 400] == Pixel(0xE9, 0xE8, 0xE4))
-        // Highlighter on white paper: yellow at 40 %.
+        // Highlighter on white paper: yellow at 55 %.
         let light = try await PDF(exporter.pdfData(pages: [page], options: PDFExportOptions())).bitmap(0)
         let tint = light[300, 350]
-        #expect(tint.r == 255 && abs(tint.g - 239) <= 2 && abs(tint.b - 173) <= 2)
+        #expect(tint.r == 255 && abs(tint.g - 232) <= 2 && abs(tint.b - 143) <= 2)
     }
 
     @Test func templatesAreVector() async throws {

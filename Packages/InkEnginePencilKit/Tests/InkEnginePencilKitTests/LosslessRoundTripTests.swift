@@ -150,7 +150,8 @@ struct LosslessRoundTripTests {
     @Test func rasterOfStoredStrokesMatchesCanvasDrawing() throws {
         // The inactive-page raster draws the model strokes; it must equal PencilKit's image of what was
         // captured (light appearance, as the canvas is pinned to).
-        let original = Self.capturedLikeStrokes(seed: 4)
+        // Marker strokes are highlights, which the engine draws itself (#120).
+        let original = Self.capturedLikeStrokes(seed: 4).filter { $0.ink.inkType != .marker }
         let page = Page(strokes: original.map(Self.model))
         let snapshot = PageSnapshot(page: page, size: CGSize(width: 595, height: 842))
         let job = RenderJob(page: snapshot, palette: FixturePalette(), theme: .white)

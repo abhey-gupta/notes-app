@@ -28,6 +28,13 @@ struct InkNibTests {
         #expect(nib(StrokeRendering.Ink.marker, 10, 20).along > nib(StrokeRendering.Ink.marker, 10, 10).along)
     }
 
+    @Test func highlighterIsABandAsWideAsItsPoint() {
+        let n = nib(StrokeRendering.Ink.highlighter, 16)
+        #expect(n == InkNib(along: 16, across: 16) && n.isRound)
+        #expect(nib(StrokeRendering.Ink.highlighter, 16, 40) == InkNib(along: 16, across: 16), "height is not used")
+        #expect(StrokeRendering.Ink.for(.highlighter) == StrokeRendering.Ink.highlighter)
+    }
+
     @Test func watercolorWashShrinksWithSecondaryScale() {
         #expect(abs(nib(StrokeRendering.Ink.watercolor, 10).along - 16.3) < 1e-4)
         #expect(abs(nib(StrokeRendering.Ink.watercolor, 10, secondary: 0.83).along - 14.027) < 1e-3)
@@ -42,6 +49,7 @@ struct InkNibTests {
     @Test(arguments: [
         StrokeRendering.Ink.pen, StrokeRendering.Ink.monoline, StrokeRendering.Ink.fountainPen, StrokeRendering.Ink.marker,
         StrokeRendering.Ink.watercolor, StrokeRendering.Ink.pencil, StrokeRendering.Ink.crayon, "com.example.ink",
+        StrokeRendering.Ink.highlighter,
     ])
     func pointSizeInvertsTheNibAlongTheAzimuth(ink: String) {
         for width: Float in [0.5, 1, 2.5, 4, 16, 40] {

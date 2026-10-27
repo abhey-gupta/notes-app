@@ -69,17 +69,25 @@ struct ConversionTests {
         #expect(tool.width <= PKInk.InkType.pen.validWidthRange.upperBound)
     }
 
-    @Test(arguments: PenKind.allCases)
+    @Test(arguments: PenKind.allCases.filter { $0 != .highlighter })
     func referenceWidthDrawsAtPencilKitDefaultAndPresetsStepUp(kind: PenKind) {
         let type = PencilKitConversion.inkType(for: kind)
         let reference = PencilKitConversion.referenceWidth(for: kind)
         #expect(PencilKitConversion.pencilKitWidth(for: kind, width: reference) == type.defaultWidth)
         // Presets step strictly finer → bolder within the ink's range.
-        let presets: [Float] = kind == .highlighter ? [10, 16, 24] : [1.5, 2.5, 4, 6, 8]
+        let presets: [Float] = [1.5, 2.5, 4, 6, 8]
         let widths = presets.map { PencilKitConversion.pencilKitWidth(for: kind, width: $0) }
         #expect(widths == widths.sorted())
         #expect(Set(widths).count == widths.count)
         #expect(widths.allSatisfy { type.validWidthRange.contains($0) })
+    }
+
+    /// The highlighter is not a PencilKit ink (#120): its band is as wide as the toolbar says.
+    @Test func highlighterWidthIsTheBandWidth() {
+        for width: Float in [10, 16, 24] {
+            #expect(PencilKitConversion.pencilKitWidth(for: .highlighter, width: width) == CGFloat(width))
+        }
+        #expect(PencilKitConversion.pencilKitWidth(for: .highlighter, width: .nan) == 0)
     }
 
     /// The default pen (preset 2.5) is a fine pen, not PencilKit's bolder default, and the finest

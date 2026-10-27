@@ -106,16 +106,24 @@ extension PencilKitInkEngine {
         layoutPages()
     }
 
-    /// Puts the strokes back on the canvas; the image goes once the canvas has drawn them.
+    /// Puts the strokes back on the canvas; the image goes once the canvas has drawn them. Lifted
+    /// highlights stay out of their page view until then too, so the image never doubles them; a
+    /// selection of highlights alone waits for nothing.
     private func endSelectionPreview() {
         guard selection.preview != nil || !selection.strokes.isEmpty else { return }
         let page = selection.preview?.page
+        let lifted = page.flatMap { snapshots[$0]?.strokes.filter { selection.strokes.contains($0.id) } } ?? []
         selection.strokes = []
+        selection.liftedHighlights = Set(lifted.filter(Highlight.isHighlight).map(\.id))
         if let page {
             rebuildCanvas(for: page)
         }
         layoutPages()
         selection.generation += 1
+        guard lifted.contains(where: { !Highlight.isHighlight($0) }) else {
+            removeLiftedImage()
+            return
+        }
         let generation = selection.generation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self, selection.generation == generation else { return }
@@ -138,6 +146,10 @@ extension PencilKitInkEngine {
         selection.lifted.isHidden = true
         selection.lifted.contents = nil
         CATransaction.commit()
+        if !selection.liftedHighlights.isEmpty {
+            selection.liftedHighlights = []
+            layoutPages()
+        }
     }
 
     /// Places the lifted image: page-space preview transform, then page → content.
@@ -198,6 +210,10 @@ final class SelectionLayers {
     var preview: SelectionPreview?
     /// Strokes left out of the canvas while the preview draws them.
     var strokes: Set<StrokeID> = []
+    /// Highlights of an ended preview, left out of their page view until the lifted image goes.
+    var liftedHighlights: Set<StrokeID> = []
+    /// The highlight being drawn (`+Highlighter`, #120).
+    var liveHighlight: LiveHighlight?
     /// Page-space rect the `lifted` image covers.
     var rect = CGRect.null
     var generation = 0
