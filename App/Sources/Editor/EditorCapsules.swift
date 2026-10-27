@@ -60,7 +60,7 @@ struct PagesCapsule: View {
     let state: EditorState
     /// Current page (1-based) and page count, for export.
     let page: (current: Int, total: Int)
-    let isNight: Bool
+    let paper: PaperTheme
 
     @State private var showsShare = false
     @State private var presenter = ActivityPresenter()
@@ -74,7 +74,7 @@ struct PagesCapsule: View {
             ToolButton(.share, "Share") { showsShare.toggle() }
                 .background(ActivityAnchor(presenter: presenter))
                 .popover(isPresented: $showsShare) {
-                    SharePopover(state: state, page: page, isNight: isNight) { url in
+                    SharePopover(state: state, page: page, isNight: paper.isDark) { url in
                         showsShare = false
                         // Present once SwiftUI has started dismissing the popover.
                         Task {
@@ -82,6 +82,7 @@ struct PagesCapsule: View {
                             presenter.share(url)
                         }
                     }
+                    .chromePopover(for: paper)
                 }
             Menu {
                 Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }

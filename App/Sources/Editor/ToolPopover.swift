@@ -26,6 +26,7 @@ struct ToolPopover: View {
         }
         .padding(Tokens.Size.popoverPadding)
         .frame(width: Tokens.Size.popoverWidth * typeSize.chromeScale)
+        .chromePopover(for: paper)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("toolPopover")
     }

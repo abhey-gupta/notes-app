@@ -24,6 +24,25 @@ struct TokenTests {
         #expect(PaperTheme.cream.paper.hex == 0xF6F0E1)
     }
 
+    /// #122: chrome glass follows the paper, not the system appearance.
+    @Test(arguments: PaperTheme.allCases)
+    func chromeGlassFollowsPaper(theme: PaperTheme) {
+        let chrome = ChromeGlass(for: theme)
+        #expect(chrome == (theme.isDark ? .clear : .tinted))
+        #expect(chrome.colorScheme == (theme.isDark ? .dark : .light))
+    }
+
+    /// #122: chrome text reads at WCAG AA on its glass: the tint composited over white, the smoke over Night.
+    @Test func chromeTextReadsOnItsGlass() {
+        let colors = Tokens.Colors.self
+        let tinted = colors.chromeTint.light.composited(over: PaperTheme.white.paper)
+        let clear = colors.chromeSmoke.dark.composited(over: PaperTheme.night.paper)
+        for text in [colors.textPrimary, colors.textSecondary, colors.textTertiary, colors.chipText, colors.icon, colors.pillText] {
+            #expect(text.light.contrastRatio(against: tinted) >= 4.5)
+            #expect(text.dark.contrastRatio(against: clear) >= 4.5)
+        }
+    }
+
     @Test func counts() {
         #expect(Tokens.palette.count == 11)
         #expect(Set(Tokens.palette).count == 11)

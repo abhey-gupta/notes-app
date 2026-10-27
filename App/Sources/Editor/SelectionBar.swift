@@ -61,6 +61,7 @@ struct SelectionBar: View {
             }
         }
         .fixedSize()
+        .chromeGlass(for: paper)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("selectionBar")
     }
@@ -78,6 +79,7 @@ struct SelectionBar: View {
             }
         }
         .padding(Tokens.Spacing.l)
+        .chromePopover(for: paper)
         .presentationCompactAdaptation(.popover)
     }
 

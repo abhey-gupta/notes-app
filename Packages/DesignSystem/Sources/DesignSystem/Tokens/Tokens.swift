@@ -18,13 +18,21 @@ public enum Tokens {
         public static let glassBorder = DynamicColor(light: RGBA(0x000000, alpha: 0.07), dark: RGBA(0xFFFFFF, alpha: 0.10))
 
         public static let textPrimary = DynamicColor(light: RGBA(0x1E2129), dark: RGBA(0xECECEE))
-        public static let textSecondary = DynamicColor(light: RGBA(0x666970), dark: RGBA(0xA9ABB2))
-        public static let textTertiary = DynamicColor(light: RGBA(0x6A6D74), dark: RGBA(0x8D8F96))
+        /// Secondary / tertiary read at ≥ 4.5:1 on the chrome's glass (#122).
+        public static let textSecondary = DynamicColor(light: RGBA(0x4A4D55), dark: RGBA(0xC8CBD1))
+        public static let textTertiary = DynamicColor(light: RGBA(0x5C5F66), dark: RGBA(0xA3A6AD))
+
+        /// Editor chrome glass (#122): paper-white tint over light paper, Night smoke under clear glass. Capsules
+        /// float over the desk too, so they carry more of their own color than popovers, which sit on the page.
+        public static let chromeTint = DynamicColor(RGBA(0xFCFBF8, alpha: 0.86))
+        public static let chromeSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.82))
+        public static let popoverTint = DynamicColor(RGBA(0xFCFBF8, alpha: 0.55))
+        public static let popoverSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.45))
 
         /// Toolbar glyphs at rest / active.
-        public static let icon = DynamicColor(light: RGBA(0x3A3D45), dark: RGBA(0xD6D7DB))
+        public static let icon = DynamicColor(light: RGBA(0x33363E), dark: RGBA(0xD6D7DB))
         public static let iconActive = DynamicColor(light: RGBA(0x1E2129), dark: RGBA(0xE8E8EA))
-        public static let pillText = DynamicColor(light: RGBA(0x55585F), dark: RGBA(0xA9ABB2))
+        public static let pillText = DynamicColor(light: RGBA(0x4A4D55), dark: RGBA(0xB4B7BD))
         public static let separator = DynamicColor(light: RGBA(0x000000, alpha: 0.10), dark: RGBA(0xFFFFFF, alpha: 0.14))
         /// Drop slot shown at the toolbar's target dock while it is dragged.
         public static let dockHint = DynamicColor(light: RGBA(0x1E2129, alpha: 0.05), dark: RGBA(0xFFFFFF, alpha: 0.06))
@@ -36,13 +44,13 @@ public enum Tokens {
         public static let selection = DynamicColor(light: RGBA(0x2C4FD6), dark: RGBA(0x5FD3C4))
 
         /// Library folder chips at rest.
-        public static let chipText = DynamicColor(light: RGBA(0x5B5E66), dark: RGBA(0xA9ABB2))
+        public static let chipText = DynamicColor(light: RGBA(0x4A4D55), dark: RGBA(0xC8CBD1))
         /// Subtle selected fill for chips / segmented rows (`rgba(30,33,41,.07)`).
         public static let subtleFill = DynamicColor(light: RGBA(0x1E2129, alpha: 0.07), dark: RGBA(0xFFFFFF, alpha: 0.10))
         /// New-notebook sheet: cover preview panel and text field.
         public static let sheetPanel = DynamicColor(light: RGBA(0xEFECE6), dark: RGBA(0x1C1D21))
         public static let field = DynamicColor(light: RGBA(0xFFFFFF), dark: RGBA(0x2A2B30))
-        public static let fieldBorder = DynamicColor(light: RGBA(0x000000, alpha: 0.10), dark: RGBA(0xFFFFFF, alpha: 0.12))
+        public static let fieldBorder = DynamicColor(light: RGBA(0x000000, alpha: 0.14), dark: RGBA(0xFFFFFF, alpha: 0.18))
     }
 
     // MARK: Ink
