@@ -18,7 +18,8 @@ import Tools
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
 /// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
-/// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests).
+/// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests); also silences
+///   one-time hints (the "hold a page edge to widen" caption, #129) so screenshots stay deterministic.
 /// - `-penKind fountain|ballpoint|brush`, `-penWidth <0...4>`: pen family and width step (UI tests).
 /// - `-eraserMode stroke|partial`: eraser mode (no eraser options popover yet).
 /// - `-allowFingerDrawing YES`: fingers ink (one finger draws, two scroll) — the simulator has no Pencil.
@@ -34,6 +35,11 @@ enum LaunchOptions {
     /// With `-openNotebook`: open the pages overview once the notebook is up (screenshots, timing).
     static var showsPagesOverview: Bool {
         flag("pagesOverview")
+    }
+
+    /// One-time hints may show (off under `-resetToolState`, i.e. in UI tests).
+    static var showsHints: Bool {
+        !flag("resetToolState")
     }
 
     /// "Draw with finger" (no user setting yet; ARCHITECTURE.md §15.4 default off).

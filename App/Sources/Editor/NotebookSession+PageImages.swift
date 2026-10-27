@@ -12,6 +12,7 @@ extension NotebookSession {
     /// The engine showed sharp ink on `id` (raster landed or canvas drew): the first visible one after an
     /// open ends `canvas.firstSharpTile` (#43).
     func engine(_: any InkEngine, didShowSharpInkOn id: PageID) {
+        pageShowedSharpInk(id)
         guard awaitingFirstSharp, residency?.isVisible(id) == true else { return }
         awaitingFirstSharp = false
         FrameAfter.next { OpenTrace.sharp() }

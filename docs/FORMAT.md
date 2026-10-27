@@ -46,3 +46,4 @@ Stroke files and journals are little-endian, CRC-32 checked; damage is a typed e
 
 - **v1**: initial format.
 - **v2** (#71): stroke files and journals gain the PencilKit rendering block (per-point size and opacity, ink, seed), so strokes redraw exactly as captured. v1 strokes render from the pen profile.
+- **v2, additive** (#129): `manifest.json` may carry `leftExtension` (points of paper added left of the original page; absent = 0). `pageSize.width` grows with the paper added either side. Strokes are stored in page space from the widened paper's top-left, so a left extension shifts their x.

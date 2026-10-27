@@ -36,8 +36,10 @@ public final class PageResidency {
 
     /// The notebook's store.
     public let store: DocumentStore
-    /// Page size for snapshots.
-    public let pageSize: CGSize
+    /// Page size for snapshots (every page; ``setPageGeometry(size:leftExtension:)`` when the notebook widens).
+    public private(set) var pageSize: CGSize
+    /// Paper added left of the original page (``InkModel/Notebook/leftExtension``), for snapshots.
+    public private(set) var leftExtension: CGFloat = 0
     /// Pages in order.
     public private(set) var pageIDs: [PageID]
     /// Current window, if the host reported one.
@@ -170,6 +172,20 @@ public final class PageResidency {
         window = nil
     }
 
+    /// The template of `id` (from the manifest, or the page itself once loaded).
+    public func template(of id: PageID) -> PageTemplate? {
+        resident[id]?.template ?? templates[id]
+    }
+
+    /// The pages widened (#129): every snapshot the sink holds is replaced at the new size.
+    public func setPageGeometry(size: CGSize, leftExtension: CGFloat) {
+        guard size != pageSize || leftExtension != self.leftExtension else { return }
+        pageSize = size
+        self.leftExtension = leftExtension
+        pushed = []
+        pushPages()
+    }
+
     /// Templates changed (the store already has them).
     public func setTemplate(_ template: PageTemplate, for ids: some Sequence<PageID>) {
         for id in ids {
@@ -213,7 +229,7 @@ public final class PageResidency {
                     result = .failure(error)
                 }
                 if case let .success(page) = result, isInEngineWindow(id) {
-                    await sink.prepare(PageSnapshot(page: page, size: pageSize))
+                    await sink.prepare(PageSnapshot(page: page, size: pageSize, leftExtension: leftExtension))
                 }
                 self.finishLoad(id, result)
             }
@@ -276,10 +292,12 @@ public final class PageResidency {
 
     private func snapshot(for id: PageID) -> PageSnapshot? {
         if let page = resident[id] {
-            return PageSnapshot(page: page, size: pageSize)
+            return PageSnapshot(page: page, size: pageSize, leftExtension: leftExtension)
         }
         // Not loaded yet: template only, flagged so the engine shows the page's thumbnail, not a blank page.
-        return PageSnapshot(page: Page(id: id, template: templates[id] ?? .blank), size: pageSize, isLoaded: false)
+        return PageSnapshot(
+            page: Page(id: id, template: templates[id] ?? .blank), size: pageSize, leftExtension: leftExtension, isLoaded: false
+        )
     }
 }
 

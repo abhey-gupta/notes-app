@@ -63,6 +63,7 @@ extension NotebookSession {
         let manifest = await store.manifest
         let pages = manifest.pages.map { (id: $0.id, template: $0.template) }
         residency.setPages(pages)
+        host.pageExtension = PageExtension(notebook: manifest.notebook)
         host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
         if let window = host.pageWindow {
             residency.update(window)

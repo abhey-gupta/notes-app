@@ -196,7 +196,7 @@ public struct Manifest: Hashable, Sendable {
     private static func roundingDates(_ n: Notebook) -> Notebook {
         Notebook(
             id: n.id, title: n.title, cover: n.cover, paper: n.paper, theme: n.theme, keepsExactColors: n.keepsExactColors,
-            pageSize: n.pageSize, pages: n.pages, createdAt: n.createdAt.roundedToMilliseconds,
+            pageSize: n.pageSize, leftExtension: n.leftExtension, pages: n.pages, createdAt: n.createdAt.roundedToMilliseconds,
             modifiedAt: n.modifiedAt.roundedToMilliseconds, rev: n.rev
         )
     }
@@ -204,7 +204,7 @@ public struct Manifest: Hashable, Sendable {
 
 extension Manifest: Codable {
     private enum Key: String, CaseIterable {
-        case formatVersion, id, title, cover, paper, theme, keepsExactColors, pageSize, createdAt, modifiedAt, rev, pages
+        case formatVersion, id, title, cover, paper, theme, keepsExactColors, pageSize, leftExtension, createdAt, modifiedAt, rev, pages
 
         var key: AnyCodingKey {
             AnyCodingKey(rawValue)
@@ -239,6 +239,7 @@ extension Manifest: Codable {
             theme: c.decode(PaperTheme.self, forKey: Key.theme.key),
             keepsExactColors: c.decode(Bool.self, forKey: Key.keepsExactColors.key),
             pageSize: CGSize(width: size.width, height: size.height),
+            leftExtension: CGFloat(c.decodeIfPresent(Double.self, forKey: Key.leftExtension.key) ?? 0),
             pages: pages.map(\.id),
             createdAt: Date(unixMilliseconds: c.decode(Int64.self, forKey: Key.createdAt.key)),
             modifiedAt: Date(unixMilliseconds: c.decode(Int64.self, forKey: Key.modifiedAt.key)),
@@ -259,6 +260,10 @@ extension Manifest: Codable {
         try c.encode(n.theme, forKey: Key.theme.key)
         try c.encode(n.keepsExactColors, forKey: Key.keepsExactColors.key)
         try c.encode(Size(width: Double(n.pageSize.width), height: Double(n.pageSize.height)), forKey: Key.pageSize.key)
+        if n.leftExtension != 0 {
+            // Additive (#129): absent means 0, so manifests of unwidened notebooks are unchanged.
+            try c.encode(Double(n.leftExtension), forKey: Key.leftExtension.key)
+        }
         try c.encode(n.createdAt.unixMilliseconds, forKey: Key.createdAt.key)
         try c.encode(n.modifiedAt.unixMilliseconds, forKey: Key.modifiedAt.key)
         try c.encode(n.rev, forKey: Key.rev.key)

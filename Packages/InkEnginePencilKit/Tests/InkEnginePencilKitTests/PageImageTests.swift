@@ -83,7 +83,7 @@ struct PageImageTests {
         #expect(view.hasImage && view.shownKey == key1, "the old bucket stays on screen, scaled")
         try await waitUntil { view.shownKey?.pixelScale == scale1 * 2 }
         #expect(h.engine.rasters.count == 2, "both buckets cached")
-        #expect(h.engine.rasters.nearest(for: id, content: key1.content, pixelScale: scale1) != nil)
+        #expect(h.engine.rasters.nearest(for: id, content: key1.content, pixelScale: scale1, size: key1.size) != nil)
 
         let page = try #require(h.engine.snapshots[id]).page
         h.engine.apply(page.addEdit([RenderFixtures.line(2, from: CGPoint(x: 10, y: 400), to: CGPoint(x: 300, y: 400))]), to: id)

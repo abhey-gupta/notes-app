@@ -14,6 +14,33 @@
         func canvasHostDidRequestNewPage(_ host: CanvasHostView)
         /// The last touch on the canvas lifted (end of a Pencil gesture: eraser undo grouping, focus mode).
         func canvasHostDidLiftAllTouches(_ host: CanvasHostView)
+        /// A finger took hold of a page edge (#129): find how far ink reaches across the notebook and
+        /// answer with ``CanvasHostView/setInkExtent(_:)``, so the edge can't be dragged over ink.
+        func canvasHostDidBeginSideGrab(_ host: CanvasHostView)
+        /// A side drag ended: widen (or narrow) every page by `change`, then call
+        /// ``CanvasHostView/finishSideGrab(layout:extensions:)`` with the new layout and, once the pages
+        /// are drawn, ``CanvasHostView/endWidening()``.
+        func canvasHost(_ host: CanvasHostView, didWidenPages change: PageWidthChange)
+    }
+
+    public extension CanvasHostViewDelegate {
+        func canvasHostDidBeginSideGrab(_ host: CanvasHostView) {
+            host.setInkExtent(nil)
+        }
+
+        func canvasHost(_ host: CanvasHostView, didWidenPages change: PageWidthChange) {
+            var extensions = host.pageExtension
+            extensions[change.side] += change.added
+            let width = host.layout.pageSize.width + change.added
+            host.finishSideGrab(
+                layout: PageLayout(
+                    pageIDs: host.layout.pageIDs, pageSize: CGSize(width: width, height: host.layout.pageSize.height),
+                    gap: host.layout.gap, footer: host.layout.footer
+                ),
+                extensions: extensions
+            )
+            host.endWidening()
+        }
     }
 
     /// A view the host keeps above the ink engine (``CanvasHostView/overlay``), pinned to the visible rect
@@ -133,6 +160,8 @@
     final class CanvasScrollView: UIScrollView {
         var pageLabel: (() -> String?)?
         var valueProvider: (() -> String?)?
+        /// "Widened to 150 %" once the pages are wider than the original (#129).
+        var widthLabel: (() -> String?)?
         private(set) lazy var drawingElement = DrawingAccessibilityElement(scrollView: self)
 
         override var accessibilityElements: [Any]? {

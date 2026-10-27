@@ -126,7 +126,10 @@ extension PencilKitInkEngine {
                 return view
             }()
             let snapshot = snapshots[page.id]
-            view.layout(frame: page.frame, template: snapshot?.page.template ?? .blank, markScale: markScale, colors: colors)
+            view.layout(
+                frame: page.frame, template: snapshot?.page.template ?? .blank, leftExtension: snapshot?.leftExtension ?? 0,
+                markScale: markScale, colors: colors
+            )
             let canvas = canvas(for: page.id)
             guard var snapshot else { continue }
             guard snapshot.isLoaded else {
@@ -147,7 +150,7 @@ extension PencilKitInkEngine {
                 let shown = model.strokes.filter { !selection.strokes.contains($0.id) }
                 snapshot = PageSnapshot(
                     page: Page(id: model.id, template: model.template, strokes: shown, rev: model.rev),
-                    size: snapshot.size
+                    size: snapshot.size, leftExtension: snapshot.leftExtension
                 )
             }
             refreshInk(view, snapshot: snapshot, pixelScale: pixelScale(for: page.frame.size, screenScale: screenScale))

@@ -155,7 +155,7 @@ public struct PDFExporter: Sendable {
         context.setFillColor(palette.paper(theme))
         context.fill(CGRect(origin: .zero, size: size))
 
-        let template = TemplateGeometry(art.template, size: size)
+        let template = TemplateGeometry(art.template, size: size, leftExtension: options.leftExtension)
         if !template.isEmpty {
             let color = palette.templateLine(theme)
             context.setStrokeColor(color)

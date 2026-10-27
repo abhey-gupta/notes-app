@@ -23,6 +23,8 @@ final class InkRasterCache {
 
     private struct Key: Hashable {
         var page: PageID
+        /// Page size the raster covers (`.zero` for thumbnails).
+        var size: CGSize = .zero
         /// `nil`: the page's thumbnail.
         var content: PageLayerView.ContentKey?
         var pixelScale: CGFloat
@@ -57,15 +59,16 @@ final class InkRasterCache {
 
     /// The raster for `page` rendered for exactly `key`; marks it recently used.
     func image(for page: PageID, key: PageLayerView.InkKey) -> CGImage? {
-        let k = Key(page: page, content: key.content, pixelScale: key.pixelScale)
+        let k = Key(page: page, size: key.size, content: key.content, pixelScale: key.pixelScale)
         guard let entry = entries[k] else { return nil }
         touch(k)
         return entry.image
     }
 
     /// The same content at the bucket nearest `pixelScale` (a zoom's stand-in: scaled, slightly soft).
-    func nearest(for page: PageID, content: PageLayerView.ContentKey, pixelScale: CGFloat) -> CGImage? {
-        let candidates = entries.keys.filter { $0.page == page && $0.content == content }
+    /// Only rasters of `size` (the page's current size) qualify.
+    func nearest(for page: PageID, content: PageLayerView.ContentKey, pixelScale: CGFloat, size: CGSize) -> CGImage? {
+        let candidates = entries.keys.filter { $0.page == page && $0.content == content && $0.size == size }
         // Ties go to the lower bucket (cheaper, and deterministic: `entries` has no order).
         func distance(_ k: Key) -> (CGFloat, CGFloat) {
             (abs(log2(k.pixelScale / pixelScale)), k.pixelScale)
@@ -77,17 +80,18 @@ final class InkRasterCache {
         return entries[k]?.image
     }
 
-    /// Whatever raster `page` has (any content, newest first): a stand-in while the current one renders.
-    func latestImage(for page: PageID) -> CGImage? {
-        entries.filter { $0.key.page == page && $0.key.content != nil }.max { $0.value.insertedAt < $1.value.insertedAt }?.value.image
+    /// Whatever raster `page` has at `size` (any content, newest first): a stand-in while the current one renders.
+    func latestImage(for page: PageID, size: CGSize) -> CGImage? {
+        entries.filter { $0.key.page == page && $0.key.content != nil && $0.key.size == size }
+            .max { $0.value.insertedAt < $1.value.insertedAt }?.value.image
     }
 
     /// Inserts a raster; rasters of the page's other content are dropped (invalidated by the edit).
     func insert(_ image: CGImage, for page: PageID, key: PageLayerView.InkKey) {
-        for k in entries.keys where k.page == page && k.content != nil && k.content != key.content {
+        for k in entries.keys where k.page == page && k.content != nil && (k.content != key.content || k.size != key.size) {
             remove(k)
         }
-        put(image, at: Key(page: page, content: key.content, pixelScale: key.pixelScale))
+        put(image, at: Key(page: page, size: key.size, content: key.content, pixelScale: key.pixelScale))
     }
 
     // MARK: Thumbnails

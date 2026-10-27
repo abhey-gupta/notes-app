@@ -94,6 +94,11 @@ public struct Notebook: Hashable, Sendable, Codable, Identifiable {
     public var keepsExactColors: Bool
     /// Page size in points (all pages).
     public var pageSize: CGSize
+    /// Paper added left of the original page (#129, pt): the page grew sideways and its strokes were
+    /// shifted right by this much, so templates keep their marks under the ink
+    /// (`TemplateGeometry(_:size:leftExtension:)`). Whatever else ``pageSize`` exceeds ``a4Portrait``
+    /// by was added on the right.
+    public var leftExtension: CGFloat
     /// Page order.
     public var pages: [PageID]
     /// Creation time.
@@ -112,6 +117,7 @@ public struct Notebook: Hashable, Sendable, Codable, Identifiable {
         theme: PaperTheme = .white,
         keepsExactColors: Bool = false,
         pageSize: CGSize = Notebook.a4Portrait,
+        leftExtension: CGFloat = 0,
         pages: [PageID] = [],
         createdAt: Date = Date(),
         modifiedAt: Date? = nil,
@@ -124,6 +130,7 @@ public struct Notebook: Hashable, Sendable, Codable, Identifiable {
         self.theme = theme
         self.keepsExactColors = keepsExactColors
         self.pageSize = pageSize
+        self.leftExtension = leftExtension
         self.pages = pages
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt ?? createdAt

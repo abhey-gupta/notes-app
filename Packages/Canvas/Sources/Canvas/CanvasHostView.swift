@@ -42,9 +42,19 @@
             didSet { layoutDidChange(from: oldValue) }
         }
 
-        /// Breathing room inside the safe area: top clears the floating chrome, sides keep a desk margin when
-        /// zoomed in, bottom clears the page pill.
-        public var margins = UIEdgeInsets(top: 48, left: 16, bottom: 96, right: 16) {
+        /// Paper the notebook added each side of its original width (#129); set with ``layout``. Bounds
+        /// the side grabs (+200 % per side) and phases the preview's template marks.
+        public var pageExtension = PageExtension.none
+
+        /// Colors of the live widen preview (#129): the notebook's paper, template marks and desk.
+        public var paperAppearance = PaperAppearance(paper: .white, line: UIColor(white: 0.12, alpha: 0.16), desk: .systemGray6)
+
+        /// Template of a page, for the preview to continue its marks (`nil`: blank).
+        public var templateProvider: ((PageID) -> PageTemplate?)?
+
+        /// Breathing room inside the safe area: top clears the floating chrome (6 pt + 52 pt capsule) with a
+        /// 14 pt gap, sides keep a desk margin when zoomed in, bottom clears the page pill.
+        public var margins = UIEdgeInsets(top: 72, left: 16, bottom: 96, right: 16) {
             didSet { setNeedsLayout() }
         }
 
@@ -77,14 +87,14 @@
             scrollView
         }
 
-        private let scrollView = CanvasScrollView()
+        let scrollView = CanvasScrollView()
         let contentView = UIView()
         private let addPageButton: UIButton
         private let touchObserver = TouchObserver()
         private var hasSeenPencil = false
-        private var lastBoundsSize: CGSize = .zero
-        private var fitZoom: CGFloat = 1
-        private var isUpdatingInsets = false
+        var lastBoundsSize: CGSize = .zero
+        var fitZoom: CGFloat = 1
+        var isUpdatingInsets = false
         /// `addPageButton`'s size: `intrinsicContentSize` re-resolves its configuration (≈30 % of a scroll
         /// frame, #44), so measure once per text size.
         private var addPageButtonSize: CGSize?
@@ -92,6 +102,15 @@
         /// to fit width after a pinch (#130).
         var isPinching = false, engineIsZooming = false, isSnapping = false
         let snapHaptic = UIImpactFeedbackGenerator(style: .light)
+        /// Side grab (`CanvasHostView+SideGrab.swift`, #129): the grab under way, its recognizer, the
+        /// haptic at its stops, the width tag, the frame held while the document widens, and whether the
+        /// insets are on hold until ``endWidening()``.
+        var sideGrab: SideGrabSession?
+        let sideGrabGesture = UILongPressGestureRecognizer()
+        let grabHaptic = UIImpactFeedbackGenerator(style: .rigid)
+        var widthTag: UILabel?
+        var freezeFrame: UIView?
+        var isSettling = false
         private let dismissGestures = DismissGestureClaim()
 
         /// Creates a host around `engine`.
@@ -132,10 +151,7 @@
                 self.viewportDidChange()
             }
 
-            scrollView.pageLabel = { [weak self] in
-                guard let self, layout.pageCount > 0 else { return nil }
-                return "Page \(state.currentPage + 1) of \(layout.pageCount)"
-            }
+            installAccessibilityLabels()
             touchObserver.onPencil = { [weak self] in self?.pencilSeen() }
             touchObserver.onBegan = { [weak self] in
                 guard let self else { return }
@@ -149,6 +165,21 @@
             scrollView.pinchGestureRecognizer?.addTarget(scrollView, action: #selector(CanvasScrollView.applyPinch(_:)))
             scrollView.pinchGestureRecognizer?.addTarget(self, action: #selector(pinchChanged(_:)))
             updateNavigationGestures()
+            installSideGrab()
+        }
+
+        /// VoiceOver / UI-test labels computed on demand: "Page 3 of 11", "Widened to 150 %" (#129).
+        private func installAccessibilityLabels() {
+            scrollView.pageLabel = { [weak self] in
+                guard let self, layout.pageCount > 0 else { return nil }
+                return "Page \(state.currentPage + 1) of \(layout.pageCount)"
+            }
+            scrollView.widthLabel = { [weak self] in
+                guard let self, layout.pageCount > 0 else { return nil }
+                let base = layout.pageSize.width - pageExtension.left - pageExtension.right
+                guard base > 0, pageExtension != .none else { return nil }
+                return "Widened to \(Int((layout.pageSize.width / base * 100).rounded())) %"
+            }
         }
 
         @available(*, unavailable)
@@ -212,6 +243,7 @@
             let size = bounds.size
             guard size.width > 0, size.height > 0 else { return }
             if size != lastBoundsSize {
+                cancelSideGrabForResize()
                 resize(from: lastBoundsSize, to: size)
                 lastBoundsSize = size
             } else {
@@ -225,84 +257,16 @@
             setNeedsLayout()
         }
 
-        // MARK: Layout
-
-        /// First layout and rotation/resizes: fit the page width (unless the user zoomed), keep the content
-        /// point at the top of the viewport in place.
-        private func resize(from old: CGSize, to new: CGSize) {
-            let oldFit = fitZoom
-            fitZoom = Self.fitZoom(pageWidth: layout.pageSize.width, viewWidth: new.width)
-            let z = scrollView.zoomScale
-            let anchorY = (scrollView.contentOffset.y + scrollView.contentInset.top) / z
-            let isFirst = old == .zero
-            if isFirst || abs(z - oldFit) < 0.001 {
-                setZoom(fitZoom)
-            }
-            updateInsets()
-            let inset = scrollView.contentInset
-            let y = isFirst ? -inset.top : anchorY * scrollView.zoomScale - inset.top
-            scrollView.contentOffset = CGPoint(x: centeredOffsetX(), y: y)
-            viewportDidChange()
-        }
-
-        /// Fitted zoom: the page as wide as the mock's (760 of 1194 landscape): the view less 96 pt of
-        /// desk each side, at most 880 pt, at least 320 pt.
-        static func fitZoom(pageWidth: CGFloat, viewWidth: CGFloat) -> CGFloat {
-            guard pageWidth > 0 else { return 1 }
-            let width = max(320, min(viewWidth - 192, 880)).rounded()
-            return min(max(width / pageWidth, minimumZoom), maximumZoom)
-        }
-
-        private func setZoom(_ zoom: CGFloat) {
-            scrollView.zoomScale = zoom
-            sizeContent()
-            state.zoomScale = scrollView.zoomScale
-        }
-
-        private func layoutDidChange(from old: PageLayout) {
-            state.pageCount = layout.pageCount
-            guard layout != old else { return }
-            sizeContent()
-            updateInsets()
-            viewportDidChange()
-        }
-
-        /// Content view bounds = layout size (unzoomed); its frame and the content size scale with zoom.
-        func sizeContent() {
-            let size = layout.contentSize
-            let z = scrollView.zoomScale
-            contentView.bounds = CGRect(origin: .zero, size: size)
-            contentView.center = CGPoint(x: size.width * z / 2, y: size.height * z / 2)
-            scrollView.contentSize = CGSize(width: size.width * z, height: size.height * z)
-        }
-
-        /// Centers narrow content horizontally (none at fit width: edge to edge, #130); top/bottom clear
-        /// the chrome.
-        func updateInsets() {
-            guard !isUpdatingInsets else { return }
-            isUpdatingInsets = true
-            defer { isUpdatingInsets = false }
-            let width = layout.contentSize.width * scrollView.zoomScale
-            let insets = UIEdgeInsets(
-                top: safeAreaInsets.top + margins.top,
-                left: PageLayout.sideInset(contentWidth: width, viewWidth: bounds.width, margin: margins.left),
-                bottom: safeAreaInsets.bottom + margins.bottom,
-                right: PageLayout.sideInset(contentWidth: width, viewWidth: bounds.width, margin: margins.right)
-            )
-            if scrollView.contentInset != insets {
-                scrollView.contentInset = insets
-            }
-        }
-
-        func centeredOffsetX() -> CGFloat {
-            let width = layout.contentSize.width * scrollView.zoomScale
-            return (width - bounds.width) / 2
-        }
-
         // MARK: Viewport
 
+        /// The scroll view's bounds in content terms: during a side grab the content sits `grabLeftShift`
+        /// page points further right in the scroll view than its coordinates say (`sizeContent()`).
+        private var contentBounds: CGRect {
+            scrollView.bounds.offsetBy(dx: -grabLeftShift * scrollView.zoomScale, dy: 0)
+        }
+
         private func makeViewport() -> Viewport {
-            let bounds = scrollView.bounds
+            let bounds = contentBounds
             let z = scrollView.zoomScale
             let visible = layout.visiblePages(in: contentRect(bounds, zoom: z))
             return Viewport(
@@ -327,7 +291,7 @@
         func viewportDidChange() {
             let interval = Signpost.canvasFrame.begin()
             defer { interval.end() }
-            let bounds = scrollView.bounds
+            let bounds = contentBounds
             let z = scrollView.zoomScale
             guard bounds.width > 0, bounds.height > 0, z > 0 else { return }
             let viewport = makeViewport()

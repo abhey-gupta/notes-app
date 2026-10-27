@@ -47,10 +47,19 @@ struct InkRasterCacheTests {
         let one = try image(), four = try image()
         cache.insert(one, for: page, key: key(scale: 1))
         cache.insert(four, for: page, key: key(scale: 4))
-        #expect(cache.nearest(for: page, content: key().content, pixelScale: 2) === one, "ties go to the lower bucket")
-        #expect(cache.nearest(for: page, content: key().content, pixelScale: 3) === four)
-        #expect(cache.nearest(for: page, content: key(rev: 2).content, pixelScale: 2) == nil, "other content is not the same ink")
-        #expect(cache.latestImage(for: page) === four, "any content: the newest raster")
+        #expect(cache.nearest(for: page, content: key().content, pixelScale: 2, size: .zero) === one, "ties go to the lower bucket")
+        #expect(cache.nearest(for: page, content: key().content, pixelScale: 3, size: .zero) === four)
+        #expect(
+            cache.nearest(for: page, content: key(rev: 2).content, pixelScale: 2, size: .zero) == nil,
+            "other content is not the same ink"
+        )
+        #expect(cache.latestImage(for: page, size: .zero) === four, "any content: the newest raster")
+        let widened = CGSize(width: 800, height: 842)
+        #expect(
+            cache.nearest(for: page, content: key().content, pixelScale: 2, size: widened) == nil,
+            "a raster of another page size never stands in (#129)"
+        )
+        #expect(cache.latestImage(for: page, size: widened) == nil)
     }
 
     @Test func thumbnailsShareTheBudget() throws {
@@ -60,7 +69,7 @@ struct InkRasterCacheTests {
         cache.insertThumbnail(thumb, for: page)
         try cache.insert(image(), for: page, key: key())
         #expect(cache.thumbnail(for: page) === thumb)
-        #expect(cache.latestImage(for: page) !== thumb, "a thumbnail is not a raster")
+        #expect(cache.latestImage(for: page, size: .zero) !== thumb, "a thumbnail is not a raster")
         try cache.insert(image(), for: PageID(), key: key())
         #expect(cache.thumbnail(for: page) != nil, "touched: still the most recently used")
         #expect(cache.image(for: page, key: key()) == nil, "the page's raster was the oldest")
