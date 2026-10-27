@@ -57,6 +57,44 @@ struct SampleConversion {
         #expect(stroke.displaySamples == stroke.samples)
     }
 
+    /// Predicted touches carry no tilt or force: the tail takes the newest real sample's, so a fountain
+    /// nib never flattens to a hairline ahead of the pen.
+    @Test func predictedTailInheritsForceAndTiltFromTheNewestSample() {
+        var stroke = LiveStroke(touch: pen(100, 50, t: 0), page: page, viewToPage: viewToPage)
+        stroke.append(
+            coalesced: [pen(100, 50, t: 0, force: 3, altitude: 1.2, azimuth: 0.7)],
+            predicted: [pen(104, 54, t: 0.008, force: 0, altitude: 0, azimuth: 0)]
+        )
+        let tail = stroke.predicted[0]
+        #expect(tail.x == 2)
+        #expect(tail.force == 0.75)
+        #expect(tail.altitude == 1.2)
+        #expect(tail.azimuth == 0.7)
+    }
+
+    @Test func pendingEstimatesResolveFromTheNearestSettledSample() {
+        var stroke = LiveStroke(touch: pen(0, 0, t: 0), page: page, viewToPage: .identity)
+        stroke.append(
+            coalesced: [
+                pen(0, 0, t: 0, force: 2, altitude: 1, azimuth: 0.5),
+                pen(1, 0, t: 0.004, force: 0, altitude: 0, azimuth: 0, update: 1, expecting: [.force, .altitude, .azimuth]),
+                pen(2, 0, t: 0.008, force: 4, altitude: 0.8, azimuth: 0.6),
+                pen(3, 0, t: 0.012, force: 0, altitude: 0, azimuth: 0, update: 2, expecting: [.force]),
+            ],
+            predicted: []
+        )
+        #expect(stroke.isAwaitingEstimates)
+        stroke.resolvePendingEstimates()
+        #expect(!stroke.isAwaitingEstimates)
+        #expect(stroke.samples[1].force == 0.5)
+        #expect(stroke.samples[1].altitude == 1)
+        #expect(stroke.samples[3].force == 1)
+        #expect(stroke.samples[3].altitude == 0.8)
+        #expect(stroke.samples[3].azimuth == 0.6)
+        // A late update finds nothing to patch.
+        #expect(stroke.applyEstimatedUpdate(pen(1, 0, t: 0.004, force: 1, update: 1)) == nil)
+    }
+
     @Test func forceIsNormalizedAndClamped() {
         var stroke = LiveStroke(touch: pen(0, 0, t: 0), page: page, viewToPage: .identity)
         stroke.append(coalesced: [pen(0, 0, t: 0, force: 9), pen(1, 0, t: 0.01, force: 0)], predicted: [])
@@ -180,6 +218,8 @@ struct HeldStrokes {
         }
         #expect(held.touch == pencil)
         #expect(held.samples.count == 2)
+        #expect(!held.isAwaitingEstimates, "unpatched estimates are filled from the settled samples")
+        #expect(held.samples[1].force == held.samples[0].force)
         #expect(fresh.touch == TouchID(2))
         #expect(!tracker.hasFinishingStrokes)
         // The late update finds nothing to patch, and the deadline has nothing left to flush.

@@ -24,7 +24,8 @@ public struct InkInputTarget: Hashable, Sendable {
 /// while a Pencil is active). A stroke whose pen lifted while estimates are still pending is held
 /// until its updates arrive, ``flush(now:)`` passes ``estimateDeadline``, or the next drawing touch
 /// begins (fast writing re-touches inside the deadline: the held stroke ends first, so engines, which
-/// track one live stroke, never see its end land on the new one; its last few estimate patches are lost).
+/// track one live stroke, never see its end land on the new one). Estimates still pending when a held
+/// stroke ends are filled from neighbouring samples (``LiveStroke/resolvePendingEstimates()``).
 public struct InkInputTracker: Sendable {
     /// Output of the tracker.
     public enum Event: Sendable {
@@ -69,7 +70,7 @@ public struct InkInputTracker: Sendable {
         target: (CGPoint) -> InkInputTarget?
     ) -> [Event] {
         guard policy.began(touch) == .draw else { return [] }
-        var events: [Event] = finishing.map { .ended($0.stroke) }
+        var events: [Event] = finishing.map { .ended(Self.resolved($0.stroke)) }
         finishing = []
         if let current = active {
             guard touch.kind == .pencil, current.device == .direct else { return [] }
@@ -142,9 +143,15 @@ public struct InkInputTracker: Sendable {
         var events: [Event] = []
         finishing.removeAll { entry in
             guard now - entry.endedAt >= estimateDeadline else { return false }
-            events.append(.ended(entry.stroke))
+            events.append(.ended(Self.resolved(entry.stroke)))
             return true
         }
         return events
+    }
+
+    private static func resolved(_ stroke: LiveStroke) -> LiveStroke {
+        var stroke = stroke
+        stroke.resolvePendingEstimates()
+        return stroke
     }
 }
