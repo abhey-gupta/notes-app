@@ -70,10 +70,13 @@ extension NotebookSession {
                 .compactMap { residency.pageIDs.indices.contains($0) ? residency.pageIDs[$0] : nil }
             awaitingSharpInk = Set(visible)
 
+            let extensions = PageExtension(left: leftExtension, right: size.width - Notebook.a4Portrait.width - leftExtension)
+            // Before the pages widen, so imported artwork (#119) redraws in place on the original page.
+            artworkPlacement.pageExtension = extensions
             residency.setPageGeometry(size: size, leftExtension: leftExtension)
             host.finishSideGrab(
                 layout: PageLayout(pageIDs: residency.pageIDs, pageSize: size, footer: CanvasHostView.footerHeight),
-                extensions: PageExtension(left: leftExtension, right: size.width - Notebook.a4Portrait.width - leftExtension)
+                extensions: extensions
             )
             if shift != 0 {
                 try await shiftInk(by: shift, store: store, residency: residency)

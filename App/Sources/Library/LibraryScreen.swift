@@ -2,12 +2,15 @@ import DesignSystem
 import Library
 import os
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Library (mock §01): serif title, glass search/settings/New, "Continue" recents, folder chips, covers grid.
 struct LibraryScreen: View {
     let library: any LibraryModel
     let zoom: Namespace.ID
     @Binding var showsNewNotebook: Bool
+    /// A PDF waiting in the import sheet: picked here, or opened in Notespace from Files / the share sheet.
+    @Binding var pdfImport: PDFImportRequest?
     /// DEBUG: DesignSystem gallery toggle, surfaced in Settings.
     let showsGallery: Binding<Bool>?
     let open: (EditorRoute) -> Void
@@ -17,6 +20,7 @@ struct LibraryScreen: View {
     @State private var sort = LibrarySort.recent
     @State private var showsSettings = false
     @State private var isCreating = false
+    @State private var showsPDFPicker = false
     @State private var prompt: LibraryPrompt?
     @Namespace private var chipSelection
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -45,6 +49,11 @@ struct LibraryScreen: View {
             .padding(.bottom, 60)
         }
         .scrollDismissesKeyboard(.immediately)
+        // One presentation per view: the import sheet sits on the scroll view, the new-notebook sheet on the screen.
+        .pdfImport($pdfImport, folder: folder, library: library) { notebook in
+            query = ""
+            open(EditorRoute(id: notebook.id, source: .cover))
+        }
         .background { Rectangle().fill(Tokens.Colors.libraryBackground).ignoresSafeArea() }
         .safeAreaBar(edge: .top) { header }
         .toolbar(.hidden, for: .navigationBar)
@@ -70,9 +79,11 @@ struct LibraryScreen: View {
                 HStack(spacing: Tokens.Spacing.m) {
                     searchField
                     settingsButton
-                    newButton
                 }
             }
+            // Outside the glass container: its menu morphs out of the pill, and inside the container
+            // the pill's glass kept taps from the menu's first row.
+            newButton
         }
         .padding(.leading, margin)
         .padding(.trailing, margin - 4)
@@ -123,20 +134,32 @@ struct LibraryScreen: View {
         }
     }
 
+    /// "+" menu: New Notebook, Import PDF… (#119, the Files picker feeds the import sheet).
     private var newButton: some View {
-        Button {
-            showsNewNotebook = true
+        Menu {
+            Button("New Notebook", systemImage: "square.and.pencil") { showsNewNotebook = true }
+                .accessibilityIdentifier("newNotebookItem")
+            Button("Import PDF…", systemImage: "doc.richtext") { showsPDFPicker = true }
+                .accessibilityIdentifier("importPDFItem")
         } label: {
             Label("New", systemImage: Symbol.add.name)
                 .font(.chromeTitle)
                 .foregroundStyle(Tokens.Colors.libraryBackground)
-                .padding(.horizontal, 2)
-                .frame(minHeight: 28)
+                .padding(.horizontal, Tokens.Spacing.l)
+                .frame(minHeight: 40)
+                .contentShape(.capsule)
         }
-        .buttonStyle(.glassProminent)
-        .tint(Tokens.Colors.textPrimary.color)
+        .menuIndicator(.hidden)
+        // A plain label in dark glass (the title menu's pattern), kept out of `GlassChrome`: a glass button
+        // style, or a glass container around the menu, swallowed taps on the menu's first row.
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(Tokens.Colors.textPrimary.color).interactive(), in: .capsule)
         .fixedSize()
+        .accessibilityLabel("New")
         .accessibilityIdentifier("newNotebook")
+        .fileImporter(isPresented: $showsPDFPicker, allowedContentTypes: [.pdf]) { result in
+            pdfImport = PDFInbox.stage(result)
+        }
     }
 
     // MARK: Continue
@@ -306,5 +329,6 @@ extension LibraryScreen {
 #Preview("Library") {
     @Previewable @Namespace var zoom
     @Previewable @State var showsNew = false
-    LibraryScreen(library: SampleLibrary(), zoom: zoom, showsNewNotebook: $showsNew, showsGallery: nil) { _ in }
+    @Previewable @State var pdfImport: PDFImportRequest?
+    LibraryScreen(library: SampleLibrary(), zoom: zoom, showsNewNotebook: $showsNew, pdfImport: $pdfImport, showsGallery: nil) { _ in }
 }

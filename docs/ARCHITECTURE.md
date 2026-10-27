@@ -198,6 +198,7 @@ A notebook is a directory package, exported UTType `com.abhey.notespace.notebook
     <pageID>.heic        page thumbnail, 176×228 pt @2x
     cover.heic           first page at 344×196 pt @2x for library "recents"
   backup-v1/             manifest.json + pages/ as they were before the v1 → v2 migration (§4.5)
+  backgrounds/<uuid>.pdf imported PDF (#119); its pages are PageBackground.pdf(file, page)
 ```
 
 Per-page files are deliberate: page-scoped loads (open page 1 without reading page 90), page-scoped autosave, page-scoped sync conflicts later.
@@ -232,7 +233,7 @@ Whole body after header compressed with `Compression` framework lz4 (`COMPRESSIO
 - Open refuses newer `formatVersion` with a clear message (not a crash).
 - Unknown JSON keys are preserved round-trip (`extra: [String: JSONValue]` on `Manifest` and `PageEntry`).
 - **Sync-ready without sync**: every entity has a stable ID (UUIDv7, time-ordered); per-notebook and per-page `rev` counters; edits are already an append-only journal of `PageEdit`s. Adding iCloud later means shipping the journal, not changing the model. No file paths stored anywhere; IDs only.
-- **PDF-import-ready**: `Page` gets an optional `background: PageBackground` later (`.template` today, `.pdf(file, pageIndex)` tomorrow); the Metal background pass becomes a texture draw. No model rewrite. The slot already exists on the manifest's `PageEntry` (omitted from JSON while `.template`).
+- **PDF import** (#119): `PageEntry.background` is `.template` (omitted from JSON) or `.pdf(file, page)` (`{"kind": "pdf", "file", "page"}`) naming a page of `backgrounds/<file>`. Import always makes a new notebook (`NotebookPackage.create(at:notebook:pdf:)`): the PDF is copied in, one blank-template page per PDF page, notebook page size = A4 wide with the first page's aspect (`PDFSource.notebookPageSize`, so widening (#129) keeps its A4 base; other pages are aspect-fitted, centered on white). No format bump: older builds refuse such a manifest (unknown background kind) rather than drop pages. The PDF stays vector: `PageArtwork` (InkModel) draws it; `InkEngine.pageArtwork` feeds the PencilKit engine, which draws it in a `CATiledLayer` under the template and ink (lazy, off main, sharp at every zoom) and in thumbnails; export draws the original page under the ink. Undoing a page delete restores its background.
 
 ## 5. Canvas: multi-page scroll, virtualization, tiles
 
@@ -398,4 +399,4 @@ Resolved:
 
 ## 16. Future (not Day 0, designed for)
 
-iCloud sync (ship the `PageEdit` journal; IDs and `rev`s already in place). PDF import/annotation (`PageBackground.pdf`, background texture pass). Handwriting search/OCR (Vision over `engine.render` output, index in `Library`). Infinite canvas (page layout is already frame-based; one unbounded page). Text boxes/shapes (new `PageItem` kinds alongside `Stroke`). Collaboration (journal + IDs again).
+iCloud sync (ship the `PageEdit` journal; IDs and `rev`s already in place). Handwriting search/OCR (Vision over `engine.render` output, index in `Library`). Infinite canvas (page layout is already frame-based; one unbounded page). Text boxes/shapes (new `PageItem` kinds alongside `Stroke`). Collaboration (journal + IDs again).

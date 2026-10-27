@@ -148,6 +148,7 @@ final class CanvasTests: XCTestCase {
         let new = app.buttons["newNotebook"]
         XCTAssertTrue(new.waitForExistence(timeout: 10))
         new.tap()
+        app.buttons["New Notebook"].tap()
         let title = app.textFields["notebookTitle"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         title.typeText("Scratch")
@@ -176,6 +177,7 @@ final class CanvasTests: XCTestCase {
         let new = app.buttons["newNotebook"]
         XCTAssertTrue(new.waitForExistence(timeout: 10))
         new.tap()
+        app.buttons["New Notebook"].tap()
         let title = app.textFields["notebookTitle"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         title.typeText("Pinch")

@@ -13,6 +13,13 @@ import UIKit
 /// at a time, nearest the viewport first; an edit changes the key, so the page re-renders and its
 /// previous rasters are dropped from the cache when the new one lands.
 extension PencilKitInkEngine {
+    /// Thumbnails and export fallback: paper + artwork + template + ink, drawn by PencilKit from the stored strokes.
+    public func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage? {
+        guard size.width > 0, size.height > 0, scale > 0, page.size.width > 0, page.size.height > 0 else { return nil }
+        let job = RenderJob(page: page, palette: palette, theme: theme, artwork: pageArtwork?(page.id))
+        return await Task.detached(priority: .userInitiated) { job.page(size: size, scale: scale) }.value
+    }
+
     /// Brings a page's ink raster up to date: snapshot strokes plus strokes still pending on the way to the
     /// document, rendered off main by PencilKit. Highlights are the view's own layers, not the raster's.
     func refreshInk(_ view: PageLayerView, snapshot: PageSnapshot, pixelScale: CGFloat) {

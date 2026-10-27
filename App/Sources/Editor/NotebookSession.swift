@@ -40,8 +40,13 @@ final class NotebookSession {
 
     let library: any LibraryModel
     private let initialPageCount: Int
+    private let initialPageSize: CGSize
     private var initialTheme: PaperTheme
     private(set) var store: DocumentStore?
+    /// Imported PDF pages by page ID (#119): the engine draws them under the ink, export flattens onto them.
+    var artwork: [PageID: any PageArtwork] = [:]
+    /// Where artwork sits on widened pages; follows the manifest (``refreshPages()``).
+    let artworkPlacement = ArtworkPlacement()
     private(set) var residency: PageResidency?
     /// Page thumbs + cover (`+Thumbnails`, §5.5): fed on every accepted edit, flushed with the store.
     private(set) var thumbnails: ThumbnailService?
@@ -72,6 +77,7 @@ final class NotebookSession {
         notebookID = notebook.id
         self.library = library
         initialPageCount = notebook.pageCount
+        initialPageSize = notebook.pageSize
         initialTheme = notebook.theme
         state = EditorState(startsFocused: startsFocused)
         state.onSelectionAction = { [weak self] in self?.performSelectionAction($0) }
@@ -104,6 +110,7 @@ final class NotebookSession {
             let store = try await Task.detached(priority: .userInitiated) { try DocumentStore(opening: url, options: options) }.value
             guard !isClosed else { return }
             let manifest = await store.manifest
+            await installArtwork(from: store)
             self.store = store
             let pages = manifest.pages.map { (id: $0.id, template: $0.template) }
             let residency = PageResidency(store: store, engine: engine, pageSize: manifest.notebook.pageSize, pages: pages)
@@ -253,7 +260,9 @@ final class NotebookSession {
         installPageImages(on: engine)
         let host = CanvasHostView(engine: engine)
         // Paper for every page from the first frame; real page IDs replace these when the manifest is read.
-        host.layout = PageLayout(pageIDs: (0 ..< initialPageCount).map { _ in PageID() }, footer: CanvasHostView.footerHeight)
+        host.layout = PageLayout(
+            pageIDs: (0 ..< initialPageCount).map { _ in PageID() }, pageSize: initialPageSize, footer: CanvasHostView.footerHeight
+        )
         host.accessibilityPageValue = { [weak self] in self?.currentPageDescription() }
         installAccessibilityActions(on: host)
         engine.delegate = self

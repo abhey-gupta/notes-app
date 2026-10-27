@@ -84,6 +84,25 @@ final class SampleLibrary: LibraryModel {
         return notebook
     }
 
+    /// A real PDF notebook in the scratch directory, so the editor shows the pages.
+    func importPDF(_ draft: PDFImportDraft) async throws -> NotebookSummary {
+        let notebook = draft.makeNotebook()
+        let url = scratch.appending(path: "\(notebook.id).\(NotebookPackage.pathExtension)", directoryHint: .isDirectory)
+        let (directory, pdf) = (scratch, draft.url)
+        let manifest = try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            return try NotebookPackage.create(at: url, notebook: notebook, pdf: pdf).manifest
+        }.value
+        packages[notebook.id] = url
+        let summary = NotebookSummary(
+            id: notebook.id, title: notebook.title, folderID: draft.folderID, cover: notebook.cover, paper: notebook.paper,
+            theme: notebook.theme, pageCount: manifest.pages.count, createdAt: notebook.createdAt, modifiedAt: notebook.modifiedAt,
+            pageSize: manifest.notebook.pageSize
+        )
+        notebooks.insert(summary, at: 0)
+        return summary
+    }
+
     func update(_ notebook: NotebookSummary) {
         guard let index = notebooks.firstIndex(where: { $0.id == notebook.id }) else { return }
         notebooks[index] = notebook
