@@ -22,7 +22,9 @@ public struct InkInputTarget: Hashable, Sendable {
 ///
 /// One stroke at a time. A Pencil touch cancels a finger stroke in progress (never draw with a finger
 /// while a Pencil is active). A stroke whose pen lifted while estimates are still pending is held
-/// until its updates arrive or ``flush(now:)`` passes ``estimateDeadline``.
+/// until its updates arrive, ``flush(now:)`` passes ``estimateDeadline``, or the next drawing touch
+/// begins (fast writing re-touches inside the deadline: the held stroke ends first, so engines, which
+/// track one live stroke, never see its end land on the new one; its last few estimate patches are lost).
 public struct InkInputTracker: Sendable {
     /// Output of the tracker.
     public enum Event: Sendable {
@@ -67,7 +69,8 @@ public struct InkInputTracker: Sendable {
         target: (CGPoint) -> InkInputTarget?
     ) -> [Event] {
         guard policy.began(touch) == .draw else { return [] }
-        var events: [Event] = []
+        var events: [Event] = finishing.map { .ended($0.stroke) }
+        finishing = []
         if let current = active {
             guard touch.kind == .pencil, current.device == .direct else { return [] }
             active = nil

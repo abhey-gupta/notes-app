@@ -190,9 +190,15 @@ final class SelectionLayers {
     let eraser = CAShapeLayer()
     /// PencilKit's image of the live stroke of a pen with pressure off (`+FlatPen`, #123).
     let flatPen = CALayer()
-    /// The stroke `flatPen` shows (ID, seed, rendering; its samples are the live ones).
+    /// The stroke `flatPen` draws the live samples as (ID, seed, rendering).
     var flatPenStroke: Stroke?
-    /// Canvas whose next render lets `flatPen` go (it has the committed stroke).
+    /// The live stroke, while the pen is down.
+    var flatPenLive: LiveStroke?
+    /// Committed strokes `flatPen` keeps showing until `flatPenCanvas` has drawn them.
+    var flatPenSettling: [Stroke] = []
+    /// Page of the settling strokes.
+    var flatPenSettlingPage: PageID?
+    /// Canvas whose next render lets the settling strokes go (it has them).
     weak var flatPenCanvas: PageCanvas?
     /// The preview `lifted` shows (kept after it ends until the canvas has redrawn the strokes).
     var preview: SelectionPreview?

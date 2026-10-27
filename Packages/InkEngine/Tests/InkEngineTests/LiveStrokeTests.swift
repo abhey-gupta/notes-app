@@ -154,3 +154,45 @@ struct EstimatedUpdates {
         #expect(!stroke.isAwaitingEstimates)
     }
 }
+
+/// A stroke held after pen-up for estimate updates ends when the next drawing touch begins.
+struct HeldStrokes {
+    func target(_: CGPoint) -> InkInputTarget? {
+        InkInputTarget(page: page, viewToPage: viewToPage)
+    }
+
+    @Test func nextTouchEndsTheHeldStroke() {
+        var tracker = InkInputTracker()
+        _ = tracker.began(pen(100, 50, t: 10), target: target)
+        let lift = tracker.ended(pen(120, 60, t: 10.02, update: 7, expecting: [.force]))
+        guard case .updated = lift.first else {
+            Issue.record("the lift holds the stroke for its force update: \(lift)")
+            return
+        }
+        #expect(tracker.hasFinishingStrokes)
+
+        let next = TouchRecord(id: TouchID(2), location: CGPoint(x: 140, y: 60), timestamp: 10.05)
+        let events = tracker.began(next, target: target)
+        #expect(events.count == 2)
+        guard case let .ended(held) = events[0], case let .began(fresh) = events[1] else {
+            Issue.record("the held stroke ends before the new one begins: \(events)")
+            return
+        }
+        #expect(held.touch == pencil)
+        #expect(held.samples.count == 2)
+        #expect(fresh.touch == TouchID(2))
+        #expect(!tracker.hasFinishingStrokes)
+        // The late update finds nothing to patch, and the deadline has nothing left to flush.
+        #expect(tracker.estimatedPropertiesUpdated(pen(120, 60, t: 10.02, force: 4, update: 7)).isEmpty)
+        #expect(tracker.flush(now: 20).isEmpty)
+    }
+
+    @Test func fingerNavigationLeavesTheHeldStrokeAlone() {
+        var tracker = InkInputTracker()
+        _ = tracker.began(pen(100, 50, t: 10), target: target)
+        _ = tracker.ended(pen(120, 60, t: 10.02, update: 7, expecting: [.force]))
+        let finger = TouchRecord(id: TouchID(3), kind: .direct, location: CGPoint(x: 300, y: 300), timestamp: 10.5)
+        #expect(tracker.began(finger, target: target).isEmpty)
+        #expect(tracker.hasFinishingStrokes)
+    }
+}

@@ -34,6 +34,10 @@ extension PencilKitInkEngine {
     }
 
     /// Draws the live stroke; commits it on lift.
+    ///
+    /// A committed stroke stays in the image until its canvas reports a render (`settling`), through the
+    /// next stroke too: fast writing re-touches before PencilKit has drawn the last stroke, and the image
+    /// must not drop it meanwhile (a blink at every quick lift).
     func drawFlatPen(_ event: InkInputTracker.Event) {
         guard let kind = tool.penKind else { return }
         CATransaction.begin()
@@ -41,49 +45,73 @@ extension PencilKitInkEngine {
         defer { CATransaction.commit() }
         switch event {
         case let .began(live):
-            selection.flatPenCanvas = nil
+            if selection.flatPenSettlingPage != live.page {
+                settleFlatPen() // one image, one page: strokes settling on another page go now
+            }
             selection.flatPenStroke = Self.flatStroke(kind, color: tool.color, width: tool.width, samples: [])
-            showFlatPen(live)
+            selection.flatPenLive = live
+            showFlatPen()
         case let .updated(live):
-            showFlatPen(live)
+            selection.flatPenLive = live
+            showFlatPen()
         case let .ended(live):
-            // The image stays until PencilKit has drawn the committed stroke beneath it (no gap at lift).
-            showFlatPen(live)
-            if let canvas = commitFlatPen(live) {
+            selection.flatPenLive = nil
+            if let (stroke, canvas) = commitFlatPen(live) {
+                selection.flatPenSettling.append(stroke)
+                selection.flatPenSettlingPage = live.page
                 selection.flatPenCanvas = canvas
                 DispatchQueue.main.asyncAfter(deadline: .now() + Self.flatPenRenderCap) { [weak self, weak canvas] in
                     guard let self, let canvas, selection.flatPenCanvas === canvas else { return }
-                    hideFlatPen()
+                    settleFlatPen()
                 }
-            } else {
-                hideFlatPen()
             }
+            selection.flatPenStroke = nil
+            showFlatPen()
         case .cancelled:
-            hideFlatPen()
+            selection.flatPenLive = nil
+            selection.flatPenStroke = nil
+            showFlatPen()
         }
     }
 
-    /// `canvas` finished a render: the committed stroke is on screen, so the live image can go.
+    /// `canvas` finished a render: the committed strokes are on screen, so the image can drop them.
     func flatPenCanvasDidRender(_ canvas: PageCanvas) {
         guard selection.flatPenCanvas === canvas else { return }
-        hideFlatPen()
+        settleFlatPen()
     }
 
-    /// Renders `live` (the samples so far, predicted ones too) as the stroke it will commit to, into
-    /// `selection.flatPen` over the visible part of its bounds.
-    private func showFlatPen(_ live: LiveStroke) {
-        guard let template = selection.flatPenStroke, let page = viewport.page(live.page) else { return }
-        let stroke = Self.flatStroke(template, samples: live.displaySamples)
+    private func settleFlatPen() {
+        selection.flatPenCanvas = nil
+        selection.flatPenSettling = []
+        selection.flatPenSettlingPage = nil
+        showFlatPen()
+    }
+
+    /// Renders the live stroke (the samples so far, predicted ones too) as the stroke it will commit to,
+    /// plus the committed strokes still settling, into `selection.flatPen` over the visible part of their
+    /// bounds; hides it when there is nothing to show.
+    private func showFlatPen() {
+        var strokes = selection.flatPenSettling
+        if let live = selection.flatPenLive, let template = selection.flatPenStroke {
+            strokes.append(Self.flatStroke(template, samples: live.displaySamples))
+        }
+        guard let pageID = selection.flatPenLive?.page ?? selection.flatPenSettlingPage, let page = viewport.page(pageID),
+              !strokes.isEmpty
+        else {
+            hideFlatPen()
+            return
+        }
         let onPage = CGRect(origin: .zero, size: page.frame.size)
         let visible = visibleRect.offsetBy(dx: -page.frame.minX, dy: -page.frame.minY).insetBy(dx: -8, dy: -8)
-        let rect = stroke.bounds.intersection(onPage).intersection(visible).integral
+        let bounds = strokes.reduce(CGRect.null) { $0.union($1.bounds) }
+        let rect = bounds.intersection(onPage).intersection(visible).integral
         guard !rect.isNull, !rect.isEmpty else {
             selection.flatPen.isHidden = true
             return
         }
         let screenScale = host.window?.screen.scale ?? host.traitCollection.displayScale
         let scale = min(max(screenScale, 1) * max(viewport.zoomScale, 0.25), maximumRasterDimension / max(rect.width, rect.height))
-        let drawing = PKDrawing(strokes: [PencilKitConversion.pkStroke(from: stroke, color: uiColor(stroke.color))])
+        let drawing = PKDrawing(strokes: strokes.map { PencilKitConversion.pkStroke(from: $0, color: uiColor($0.color)) })
         var image: CGImage?
         Self.lightTraits.performAsCurrent {
             image = drawing.image(from: rect, scale: scale).cgImage
@@ -94,17 +122,14 @@ extension PencilKitInkEngine {
     }
 
     private func hideFlatPen() {
-        selection.flatPenCanvas = nil
-        selection.flatPenStroke = nil
         selection.flatPen.isHidden = true
         selection.flatPen.contents = nil
     }
 
     /// Reports the finished stroke and shows it on its page's canvas (if it has one) as pending, like a
     /// stroke PencilKit drew, until the document echoes it back.
-    /// - Returns: The canvas now drawing it, if any.
-    @discardableResult
-    private func commitFlatPen(_ live: LiveStroke) -> PageCanvas? {
+    /// - Returns: The stroke and the canvas now drawing it; `nil` if nothing was committed or no canvas has it.
+    private func commitFlatPen(_ live: LiveStroke) -> (Stroke, PageCanvas)? {
         guard !live.samples.isEmpty, let template = selection.flatPenStroke else { return nil }
         let stroke = Self.flatStroke(template, samples: live.samples)
         let pk = PencilKitConversion.pkStroke(from: stroke, color: uiColor(stroke.color))
@@ -118,7 +143,7 @@ extension PencilKitInkEngine {
             drawnBy = canvas
         }
         delegate?.engine(self, didCommit: stroke, to: live.page)
-        return drawnBy
+        return drawnBy.map { (stroke, $0) }
     }
 
     /// The point every sample of a pressure-off stroke renders with: the pen's PencilKit width for the
