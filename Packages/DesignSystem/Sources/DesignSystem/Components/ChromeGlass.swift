@@ -30,6 +30,16 @@ public enum ChromeGlass: Hashable, Sendable {
         (self == .clear ? Tokens.Colors.chromeSmoke : Tokens.Colors.chromeTint).color
     }
 
+    /// Hairline that separates tinted chrome from a white page; the clear glass already contrasts with Night.
+    public var edge: Color? {
+        self == .tinted ? Tokens.Colors.chromeEdge.color : nil
+    }
+
+    /// Soft lift under tinted chrome, for the same reason as ``edge``.
+    public var shadowOpacity: Double {
+        self == .tinted ? 0.14 : 0
+    }
+
     /// Wash laid over a popover's system glass.
     public var popoverTint: Color {
         (self == .clear ? Tokens.Colors.popoverSmoke : Tokens.Colors.popoverTint).color
@@ -76,5 +86,11 @@ private struct ChromeGlassEffect<S: Shape>: ViewModifier {
                     shape.fill(chrome.backing)
                 }
             }
+            .overlay {
+                if let edge = chrome?.edge {
+                    shape.stroke(edge, lineWidth: 1)
+                }
+            }
+            .shadow(color: .black.opacity(chrome?.shadowOpacity ?? 0), radius: 10, y: 3)
     }
 }

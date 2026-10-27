@@ -26,6 +26,7 @@ public enum Tokens {
         /// float over the desk too, so they carry more of their own color than popovers, which sit on the page.
         public static let chromeTint = DynamicColor(RGBA(0xFCFBF8, alpha: 0.86))
         public static let chromeSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.82))
+        public static let chromeEdge = DynamicColor(RGBA(0x000000, alpha: 0.10))
         public static let popoverTint = DynamicColor(RGBA(0xFCFBF8, alpha: 0.55))
         public static let popoverSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.45))
 
