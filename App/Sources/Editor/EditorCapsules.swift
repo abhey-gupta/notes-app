@@ -14,55 +14,49 @@ struct NavCapsule: View {
     private var maxWidth: CGFloat = .infinity
 
     @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var width: CGFloat = 0
-    @State private var titleWidth: CGFloat = 0
-
-    /// Shortest the title truncates to; past that the capsule overflows `maxWidth` (the toolbar drops a row).
-    private static let minTitleWidth: CGFloat = 96
 
     var body: some View {
         let scale = typeSize.chromeScale
-        // Everything but the title (back button, chevron, padding) is fixed; the title takes what's left (#176).
-        let titleCap = max(min(220 * scale, maxWidth - (width - titleWidth)), Self.minTitleWidth * scale)
-        GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
-            ToolButton(.back, "Library", action: onBack)
-            Menu {
-                Picker("Paper", selection: $paper) {
-                    ForEach(PaperTheme.allCases) { theme in
-                        Text(theme.displayName).tag(theme)
+        // The title takes what the budget leaves (#176): 96-220 pt, tail-truncated. Below 96 the capsule
+        // overflows its budget and a top-docked toolbar drops a row.
+        WidthLimit(max: maxWidth) {
+            GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
+                ToolButton(.back, "Library", action: onBack)
+                Menu {
+                    Picker("Paper", selection: $paper) {
+                        ForEach(PaperTheme.allCases) { theme in
+                            Text(theme.displayName).tag(theme)
+                        }
                     }
-                }
-                Picker("Template", selection: $pattern) {
-                    ForEach(PaperPattern.allCases) { pattern in
-                        Text(pattern.displayName).tag(pattern)
+                    Picker("Template", selection: $pattern) {
+                        ForEach(PaperPattern.allCases) { pattern in
+                            Text(pattern.displayName).tag(pattern)
+                        }
                     }
+                    if paper == .night {
+                        Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        WidthLimit(min: 96 * scale, max: 220 * scale) {
+                            Text(title)
+                                .font(.chromeTitle)
+                                .foregroundStyle(Tokens.Colors.textPrimary)
+                                .lineLimit(1)
+                        }
+                        Image(systemName: Symbol.disclosure.name)
+                            .scaledFont(size: 11, weight: .semibold)
+                            .foregroundStyle(Tokens.Colors.textTertiary)
+                    }
+                    .frame(height: Tokens.Size.toolButton.height * scale)
+                    .contentShape(.rect)
                 }
-                if paper == .night {
-                    Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(.chromeTitle)
-                        .foregroundStyle(Tokens.Colors.textPrimary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: titleCap, alignment: .leading)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .onGeometryChange(for: CGFloat.self, of: \.size.width) { titleWidth = $0 }
-                    Image(systemName: Symbol.disclosure.name)
-                        .scaledFont(size: 11, weight: .semibold)
-                        .foregroundStyle(Tokens.Colors.textTertiary)
-                }
-                .frame(height: Tokens.Size.toolButton.height * scale)
-                .contentShape(.rect)
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(title), notebook options")
+                .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
             }
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(title), notebook options")
-            .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
         }
-        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
     }
 
     /// Caps the capsule at `width` by tail-truncating the title (#176).
@@ -70,6 +64,32 @@ struct NavCapsule: View {
         var capsule = self
         capsule.maxWidth = width
         return capsule
+    }
+}
+
+/// Lays its child out at its ideal width if that's within `min...max` (and the proposal), else squeezed to the
+/// clamped width (a title tail-truncates), unless even squeezed it won't fit: then whole, overflowing.
+/// Unlike `frame(maxWidth:)` it never grows past what the child wants.
+private struct WidthLimit: Layout {
+    var min: CGFloat = 0
+    var max: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        return child.sizeThatFits(limited(proposal, child))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        guard let child = subviews.first else { return }
+        child.place(at: bounds.origin, proposal: limited(proposal, child))
+    }
+
+    private func limited(_ proposal: ProposedViewSize, _ child: LayoutSubview) -> ProposedViewSize {
+        let width = Swift.max(Swift.min(proposal.width ?? max, max), min)
+        let whole = ProposedViewSize(width: nil, height: proposal.height)
+        let squeezed = ProposedViewSize(width: width, height: proposal.height)
+        let fits = { (size: ProposedViewSize) in child.sizeThatFits(size).width <= width }
+        return !fits(whole) && fits(squeezed) ? squeezed : whole
     }
 }
 
