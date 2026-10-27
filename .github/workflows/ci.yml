@@ -1,6 +1,7 @@
 name: CI
 
-# PR-only: squash merges of green PRs don't re-run on main (single shared runner).
+# PR gate on the single self-hosted runner: one job (no queueing between jobs), no XCUI tests (ui.yml).
+# PR-only: squash merges of green PRs don't re-run on main.
 on:
   pull_request:
     paths-ignore: ["docs/**", "design/**", "**/*.md"]
@@ -15,30 +16,20 @@ env:
   DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
 
 jobs:
-  lint:
+  ci:
     runs-on: [self-hosted, macOS, xcode27]
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - run: export PATH="$PATH_PREFIX:$PATH" && make lint
-
-  packages:
-    runs-on: [self-hosted, macOS, xcode27]
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - run: export PATH="$PATH_PREFIX:$PATH" && make test-packages
-
-  ios:
-    runs-on: [self-hosted, macOS, xcode27]
-    timeout-minutes: 50
-    steps:
-      - uses: actions/checkout@v4
-      - name: Test on iPad simulator
+      - name: Lint
+        run: export PATH="$PATH_PREFIX:$PATH" && make lint
+      - name: Headless packages
+        run: export PATH="$PATH_PREFIX:$PATH" && make test-packages
+      - name: Simulator tests (no UI tests)
         run: |
           export PATH="$PATH_PREFIX:$PATH"
           SIM=$(scripts/ci-sim.sh CI-iPad)
-          make test SIM="$SIM"
+          make test-unit SIM="$SIM"
       # Idle iOS 27 sims burn ~3-4 cores (SpringBoard/widgets); never leave one booted.
       - name: Shut down simulator
         if: always()

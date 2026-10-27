@@ -3,7 +3,7 @@ DEST := platform=iOS Simulator,name=$(SIM)
 HEADLESS := InkModel InkGeometry Document Library Tools Editing Export Fixtures Canvas
 XCB := $(shell command -v xcbeautify >/dev/null && echo "| xcbeautify" )
 
-.PHONY: gen lint format test-packages build device ipa test perf perf-device perf-gate perf-baseline fixtures open clean
+.PHONY: gen lint format test-packages build device ipa test test-unit test-ui perf perf-device perf-gate perf-baseline fixtures open clean
 
 gen:
 	xcodegen generate --quiet
@@ -55,6 +55,16 @@ TIMEOUTS := -test-timeouts-enabled YES -default-test-execution-time-allowance 30
 
 test: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(TESTFLAGS) $(TIMEOUTS) $(XCB)
+
+# PR gate: everything in the scheme but the XCUI tests (simulator-only package tests: InkEnginePencilKit, InkEngineMetal).
+test-unit: gen
+	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' \
+		-skip-testing:NotespaceUITests -collect-test-diagnostics never $(TIMEOUTS) $(XCB)
+
+# XCUI tests only (slow, gesture-flaky): nightly and on PRs that touch the app (ui.yml).
+test-ui: gen
+	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' \
+		-only-testing:NotespaceUITests $(TESTFLAGS) $(TIMEOUTS) $(XCB)
 
 perf: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme NotespacePerf -destination '$(DEST)' $(XCB)
