@@ -34,10 +34,13 @@ public struct LiveStroke: Sendable {
 
     private var pending: [Int: Pending] = [:]
     private let rotation: Float
+    /// Samples carry the Pencil's force; off (pressure toggle, #123) records ``InkModel/Sample/neutralForce``.
+    public let recordsForce: Bool
 
     /// Starts a stroke at `touch` (its timestamp is `t = 0`) on `page`. Append the first event's
     /// touches with ``append(coalesced:predicted:)``.
-    public init(touch: TouchRecord, page: PageID, viewToPage: CGAffineTransform) {
+    /// - Parameter recordsForce: `false` flattens every sample's force to ``InkModel/Sample/neutralForce``.
+    public init(touch: TouchRecord, page: PageID, viewToPage: CGAffineTransform, recordsForce: Bool = true) {
         self.touch = touch.id
         device = touch.kind
         self.page = page
@@ -45,6 +48,7 @@ public struct LiveStroke: Sendable {
         startTimestamp = touch.timestamp
         latestTimestamp = touch.timestamp
         rotation = Float(atan2(viewToPage.b, viewToPage.a))
+        self.recordsForce = recordsForce
     }
 
     /// Some samples still carry estimated values awaiting an update.
@@ -103,7 +107,7 @@ public struct LiveStroke: Sendable {
         return Sample(
             x: Float(p.x),
             y: Float(p.y),
-            force: r.kind == .pencil ? r.normalizedForce : Sample.neutralForce,
+            force: recordsForce && r.kind == .pencil ? r.normalizedForce : Sample.neutralForce,
             altitude: r.kind == .pencil ? Float(r.altitude) : Sample.perpendicularAltitude,
             azimuth: Float(r.azimuth) + rotation,
             t: Float(r.timestamp - startTimestamp)

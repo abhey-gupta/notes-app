@@ -20,13 +20,17 @@ public struct ToolConfiguration: Hashable, Sendable {
     public var width: Float
     /// "Draw with finger" setting (off by default, ARCHITECTURE.md §15.4). See ``InputPolicy``.
     public var allowsFingerDrawing: Bool
+    /// Pressure modulates pen width (the pen popover's toggle, #123). Off: every sample is recorded at
+    /// ``InkModel/Sample/neutralForce`` and the live stroke draws at constant width.
+    public var pressure: Bool
 
     /// Creates a configuration.
-    public init(tool: Tool, color: InkColor = .primary, width: Float = 2, allowsFingerDrawing: Bool = false) {
+    public init(tool: Tool, color: InkColor = .primary, width: Float = 2, allowsFingerDrawing: Bool = false, pressure: Bool = true) {
         self.tool = tool
         self.color = color
         self.width = width
         self.allowsFingerDrawing = allowsFingerDrawing
+        self.pressure = pressure
     }
 
     /// Primary ballpoint, 2 pt.

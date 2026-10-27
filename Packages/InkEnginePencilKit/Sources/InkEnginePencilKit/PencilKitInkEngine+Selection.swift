@@ -35,6 +35,7 @@ extension PencilKitInkEngine {
         selection.lasso.lineJoin = .round
         selection.lasso.lineDashPattern = [5, 4]
         selection.view.layer.addSublayer(selection.lasso)
+        setUpFlatPen()
         setUpEraserCursor()
     }
 
@@ -187,6 +188,12 @@ final class SelectionLayers {
     let lasso = CAShapeLayer()
     /// Eraser reach under the tip (`+EraserCursor`).
     let eraser = CAShapeLayer()
+    /// PencilKit's image of the live stroke of a pen with pressure off (`+FlatPen`, #123).
+    let flatPen = CALayer()
+    /// The stroke `flatPen` shows (ID, seed, rendering; its samples are the live ones).
+    var flatPenStroke: Stroke?
+    /// Canvas whose next render lets `flatPen` go (it has the committed stroke).
+    weak var flatPenCanvas: PageCanvas?
     /// The preview `lifted` shows (kept after it ends until the canvas has redrawn the strokes).
     var preview: SelectionPreview?
     /// Strokes left out of the canvas while the preview draws them.

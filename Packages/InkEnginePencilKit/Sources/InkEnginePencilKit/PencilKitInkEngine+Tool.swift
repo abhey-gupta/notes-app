@@ -3,13 +3,15 @@ import InkModel
 import PencilKit
 import UIKit
 
-/// Tool state on the canvases: pens map to PencilKit inking tools, eraser and lasso go to the input view.
+/// Tool state on the canvases: pens map to PencilKit inking tools; eraser, lasso and pens with pressure off
+/// (`+FlatPen`, #123) go to the input view.
 extension PencilKitInkEngine {
     // MARK: Tool
 
     func applyTool() {
         input.allowsFingerDrawing = tool.allowsFingerDrawing
-        input.isHidden = tool.penKind != nil
+        input.recordsForce = tool.pressure
+        input.isHidden = tool.penKind != nil && !usesFlatPen
         if tool.tool != .eraser {
             hideEraserCursor()
         }
@@ -21,10 +23,10 @@ extension PencilKitInkEngine {
     func applyTool(to canvas: PageCanvas) {
         canvas.view.drawingPolicy = tool.allowsFingerDrawing && !hasSeenPencil ? .anyInput : .pencilOnly
         switch tool.tool {
-        case let .pen(kind):
+        case let .pen(kind) where !usesFlatPen:
             canvas.view.tool = PencilKitConversion.inkingTool(kind, color: uiColor(tool.color), width: tool.width)
             canvas.view.isUserInteractionEnabled = true
-        case .eraser, .lasso:
+        case .pen, .eraser, .lasso:
             canvas.view.isUserInteractionEnabled = false
         }
     }

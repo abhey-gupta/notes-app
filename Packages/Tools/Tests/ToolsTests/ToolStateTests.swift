@@ -211,6 +211,8 @@ struct ToolStateTests {
         state.pen.widthIndex = 3
         state.pen.color = .semantic(.blue)
         #expect(state.active == .ink(.brush, color: .semantic(.blue), width: 6))
+        state.pen.pressure = false
+        #expect(state.active == .ink(.brush, color: .semantic(.blue), width: 6, pressure: false)) // #123
         state.highlighter.color = .semantic(.accent)
         state.select(.highlighter)
         #expect(state.active == .ink(.highlighter, color: .semantic(.accent), width: 16))

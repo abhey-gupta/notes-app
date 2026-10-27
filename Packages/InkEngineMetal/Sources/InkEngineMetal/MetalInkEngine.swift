@@ -148,6 +148,7 @@ public final class MetalInkEngine: InkEngine {
         }
         self.tool = tool
         hostView.input.allowsFingerDrawing = tool.allowsFingerDrawing
+        hostView.input.recordsForce = tool.pressure
     }
 
     public func setTheme(_ theme: PaperTheme) {
