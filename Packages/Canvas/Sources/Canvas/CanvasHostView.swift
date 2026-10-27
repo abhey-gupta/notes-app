@@ -88,8 +88,10 @@
         /// `addPageButton`'s size: `intrinsicContentSize` re-resolves its configuration (≈30 % of a scroll
         /// frame, #44), so measure once per text size.
         private var addPageButtonSize: CGSize?
-        /// Zoom gesture tracking (`CanvasHostView+Zoom.swift`).
-        var isPinching = false, engineIsZooming = false
+        /// Zoom gesture tracking (`CanvasHostView+Zoom.swift`): a pinch, the engine's last word, the snap
+        /// to fit width after a pinch (#130).
+        var isPinching = false, engineIsZooming = false, isSnapping = false
+        let snapHaptic = UIImpactFeedbackGenerator(style: .light)
         private let dismissGestures = DismissGestureClaim()
 
         /// Creates a host around `engine`.
@@ -266,7 +268,7 @@
         }
 
         /// Content view bounds = layout size (unzoomed); its frame and the content size scale with zoom.
-        private func sizeContent() {
+        func sizeContent() {
             let size = layout.contentSize
             let z = scrollView.zoomScale
             contentView.bounds = CGRect(origin: .zero, size: size)
@@ -274,25 +276,25 @@
             scrollView.contentSize = CGSize(width: size.width * z, height: size.height * z)
         }
 
-        /// Centers narrow content horizontally; top/bottom clear the chrome.
+        /// Centers narrow content horizontally (none at fit width: edge to edge, #130); top/bottom clear
+        /// the chrome.
         func updateInsets() {
             guard !isUpdatingInsets else { return }
             isUpdatingInsets = true
             defer { isUpdatingInsets = false }
             let width = layout.contentSize.width * scrollView.zoomScale
-            let side = max((bounds.width - width) / 2, margins.left)
             let insets = UIEdgeInsets(
                 top: safeAreaInsets.top + margins.top,
-                left: side,
+                left: PageLayout.sideInset(contentWidth: width, viewWidth: bounds.width, margin: margins.left),
                 bottom: safeAreaInsets.bottom + margins.bottom,
-                right: max((bounds.width - width) / 2, margins.right)
+                right: PageLayout.sideInset(contentWidth: width, viewWidth: bounds.width, margin: margins.right)
             )
             if scrollView.contentInset != insets {
                 scrollView.contentInset = insets
             }
         }
 
-        private func centeredOffsetX() -> CGFloat {
+        func centeredOffsetX() -> CGFloat {
             let width = layout.contentSize.width * scrollView.zoomScale
             return (width - bounds.width) / 2
         }

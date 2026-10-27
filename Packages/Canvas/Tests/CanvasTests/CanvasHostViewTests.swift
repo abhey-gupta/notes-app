@@ -55,6 +55,24 @@
             #expect(try #require(recorder.windows.last).visible.contains(6))
         }
 
+        /// At fit width the page covers the view edge to edge: no side inset, offset at the page's left
+        /// edge, and the engine sees a content rect exactly one page wide (#130).
+        @Test func fitWidthCoversTheWholeView() throws {
+            let fill = host.fillZoom
+            #expect(fill == host.bounds.width / host.layout.pageSize.width)
+            host.animateZoom(to: fill, duration: 0)
+            let scroll = host.canvasScrollView
+            #expect(scroll.zoomScale == fill)
+            #expect(scroll.contentInset.left == 0)
+            #expect(scroll.contentInset.right == 0)
+            #expect(scroll.contentOffset.x == 0)
+            #expect(scroll.contentSize.width == host.bounds.width)
+            let viewport = try #require(engine.viewports.last)
+            #expect(viewport.zoomScale == fill)
+            #expect(viewport.contentOffset.x == 0)
+            #expect(abs(viewport.size.width / viewport.zoomScale - host.layout.pageSize.width) < 0.001)
+        }
+
         /// The engine's view sits inside the zoomed content: content-sized, in page points.
         @Test func engineViewIsContentSized() {
             #expect(engine.view.bounds.size == host.layout.contentSize)

@@ -181,6 +181,33 @@ struct PageWindowTests {
         #expect(pin(700) == 616)
     }
 
+    // MARK: Fit width (#130)
+
+    @Test func fillZoomSpansTheView() {
+        #expect(PageLayout.fillZoom(pageWidth: 595, viewWidth: 1190) == 2)
+        #expect(PageLayout.fillZoom(pageWidth: 0, viewWidth: 1190) == 1)
+    }
+
+    /// A pinch ending within 5 % of fit width snaps to it; farther out, or already there, it stays put.
+    @Test func pinchNearFitWidthSnaps() {
+        #expect(PageLayout.snapZoom(1.92, fill: 2) == 2)
+        #expect(PageLayout.snapZoom(2.09, fill: 2) == 2)
+        #expect(PageLayout.snapZoom(1.85, fill: 2) == nil)
+        #expect(PageLayout.snapZoom(2.15, fill: 2) == nil)
+        #expect(PageLayout.snapZoom(2, fill: 2) == nil)
+        #expect(PageLayout.snapZoom(1.9, fill: 2, threshold: 0.02) == nil)
+    }
+
+    /// Narrow content is centered, fit-width content has no inset at all (edge to edge), wider content
+    /// gets the desk margin, grown in over the first margin's worth of overflow.
+    @Test func sideInsetVanishesAtFitWidth() {
+        #expect(PageLayout.sideInset(contentWidth: 600, viewWidth: 1000, margin: 16) == 200)
+        #expect(PageLayout.sideInset(contentWidth: 1000, viewWidth: 1000, margin: 16) == 0)
+        #expect(PageLayout.sideInset(contentWidth: 1016, viewWidth: 1000, margin: 16) == 8)
+        #expect(PageLayout.sideInset(contentWidth: 1032, viewWidth: 1000, margin: 16) == 16)
+        #expect(PageLayout.sideInset(contentWidth: 1600, viewWidth: 1000, margin: 16) == 16)
+    }
+
     /// The scroll view's bounds (zoomed points, origin = content offset) map to the content rect the engine
     /// and page window use; the pages it shows are the same at any zoom, and rubber-banding past the top
     /// (negative offset) just shows less of page 1.

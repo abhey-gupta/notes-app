@@ -137,10 +137,10 @@ public struct PageLayout: Hashable, Sendable {
     }
 }
 
-extension PageLayout {
+public extension PageLayout {
     /// The content-space rect (unzoomed points) a scroll view shows: its `bounds` (origin = content offset,
     /// in zoomed points) divided by `zoom`. The engine's canvases and the page window come from it.
-    public static func contentRect(visible bounds: CGRect, zoom: CGFloat) -> CGRect {
+    static func contentRect(visible bounds: CGRect, zoom: CGFloat) -> CGRect {
         guard zoom > 0 else { return .null }
         return CGRect(x: bounds.minX / zoom, y: bounds.minY / zoom, width: bounds.width / zoom, height: bounds.height / zoom)
     }
@@ -148,11 +148,34 @@ extension PageLayout {
     /// Horizontal scroll offset clamped to the content's edges (insets included): with content narrower
     /// than the view (and insets that center it) the only valid offset is the centered one. Applied while
     /// zooming so a narrow page stays centered through a pinch instead of rubber-banding sideways.
-    static func pinnedOffsetX(
+    internal static func pinnedOffsetX(
         _ x: CGFloat, contentWidth: CGFloat, viewWidth: CGFloat, leftInset: CGFloat, rightInset: CGFloat
     ) -> CGFloat {
         let minX = -leftInset
         let maxX = max(contentWidth + rightInset - viewWidth, minX)
         return min(max(x, minX), maxX)
+    }
+
+    /// Zoom at which the page is exactly as wide as the view (edge to edge; #130).
+    static func fillZoom(pageWidth: CGFloat, viewWidth: CGFloat) -> CGFloat {
+        guard pageWidth > 0, viewWidth > 0 else { return 1 }
+        return viewWidth / pageWidth
+    }
+
+    /// Where a pinch that ended at `zoom` settles: `fill` when it is within `threshold` (a fraction of
+    /// `fill`, 5 %) of it, so a page pinched to about the screen's width lands exactly on it (#130);
+    /// `nil` when it should stay put (out of the band, or already there).
+    static func snapZoom(_ zoom: CGFloat, fill: CGFloat, threshold: CGFloat = 0.05) -> CGFloat? {
+        guard fill > 0, zoom > 0, abs(zoom - fill) > 0.0005 else { return nil }
+        return abs(zoom / fill - 1) <= threshold ? fill : nil
+    }
+
+    /// Horizontal inset either side of the content: centers content narrower than the view, nothing at
+    /// all at exactly the view's width (the fit-width page covers the screen edge to edge, #130), and a
+    /// desk `margin` once the content is wider, grown in over the first `margin` points of overflow so a
+    /// pinch through fit width never jumps sideways.
+    internal static func sideInset(contentWidth: CGFloat, viewWidth: CGFloat, margin: CGFloat) -> CGFloat {
+        let overflow = contentWidth - viewWidth
+        return overflow <= 0 ? -overflow / 2 : min(margin, overflow / 2)
     }
 }
