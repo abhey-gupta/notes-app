@@ -20,6 +20,10 @@
         func canvasHostDidLiftAllTouches(_: CanvasHostView) {}
     }
 
+    final class Target {
+        var undone = 0
+    }
+
     /// The canvas host and page residency through the engine seam, with a recording engine.
     @MainActor
     @Suite(.timeLimit(.minutes(1)))
@@ -76,6 +80,46 @@
         /// The engine's view sits inside the zoomed content: content-sized, in page points.
         @Test func engineViewIsContentSized() {
             #expect(engine.view.bounds.size == host.layout.contentSize)
+        }
+
+        /// Two- and three-finger taps (#121) undo and redo through the delegate (the default goes to the
+        /// host's undo manager); off with the setting and while fingers ink. While on, the system's
+        /// three-finger editing gestures are off.
+        @Test func fingerTapsUndoAndRedo() {
+            let target = Target()
+            let undo = host.editUndoManager
+            undo.groupsByEvent = false
+            func register() {
+                undo.beginUndoGrouping()
+                undo.registerUndo(withTarget: target) { $0.undone += 1 }
+                undo.endUndoGrouping()
+            }
+            register()
+            #expect(host.editingInteractionConfiguration == .none)
+            host.fingersTapped(2)
+            #expect(target.undone == 1)
+
+            register()
+            host.allowsTapUndo = false
+            host.fingersTapped(2)
+            #expect(target.undone == 1, "setting off")
+            #expect(host.editingInteractionConfiguration == .default)
+
+            host.allowsTapUndo = true
+            host.allowsFingerDrawing = true
+            host.fingersTapped(2)
+            #expect(target.undone == 1, "one finger inks")
+            host.allowsFingerDrawing = false
+            host.fingersTapped(4)
+            #expect(target.undone == 1, "four fingers: nothing")
+            host.fingersTapped(2)
+            #expect(target.undone == 2)
+        }
+
+        /// No tap recognizers on the scroll view: even a disabled one slowed its pan enough to swallow a
+        /// fast flick (the fixture scroll UI test caught it).
+        @Test func scrollViewHasNoTapRecognizers() {
+            #expect(!(host.canvasScrollView.gestureRecognizers ?? []).contains { $0 is UITapGestureRecognizer })
         }
 
         /// Residency on iOS feeds the engine: page snapshots for the engine window, accepted edits as edits.

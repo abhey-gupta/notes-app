@@ -14,6 +14,10 @@
         func canvasHostDidRequestNewPage(_ host: CanvasHostView)
         /// The last touch on the canvas lifted (end of a Pencil gesture: eraser undo grouping, focus mode).
         func canvasHostDidLiftAllTouches(_ host: CanvasHostView)
+        /// Two fingers tapped the canvas (#121, while ``CanvasHostView/allowsTapUndo``).
+        func canvasHostDidRequestUndo(_ host: CanvasHostView)
+        /// Three fingers tapped the canvas.
+        func canvasHostDidRequestRedo(_ host: CanvasHostView)
         /// A finger took hold of a page edge (#129): find how far ink reaches across the notebook and
         /// answer with ``CanvasHostView/setInkExtent(_:)``, so the edge can't be dragged over ink.
         func canvasHostDidBeginSideGrab(_ host: CanvasHostView)
@@ -24,6 +28,14 @@
     }
 
     public extension CanvasHostViewDelegate {
+        func canvasHostDidRequestUndo(_ host: CanvasHostView) {
+            host.editUndoManager.undo()
+        }
+
+        func canvasHostDidRequestRedo(_ host: CanvasHostView) {
+            host.editUndoManager.redo()
+        }
+
         func canvasHostDidBeginSideGrab(_ host: CanvasHostView) {
             host.setInkExtent(nil)
         }
@@ -203,12 +215,17 @@
 
     /// Watches touches on the canvas without taking part in recognition (never recognizes, never delays or
     /// cancels touches, can't be prevented): reports Pencil contact, so the host can hand one-finger
-    /// scrolling back to the scroll view, and the moment the last touch lifts.
+    /// scrolling back to the scroll view, the moment the last touch lifts, and multi-finger taps
+    /// (``FingerTap``, fingers only, not near Pencil contact: ``PalmGuard``).
     @MainActor
     final class TouchObserver: UIGestureRecognizer {
         var onPencil: (() -> Void)?
         var onAllLifted: (() -> Void)?
         var onBegan: (() -> Void)?
+        /// Fingers that tapped together (2, 3, …).
+        var onFingerTap: ((Int) -> Void)?
+        private var palmGuard = PalmGuard()
+        private var fingerTap = FingerTap()
         private var active: Set<ObjectIdentifier> = []
 
         override init(target: Any?, action: Selector?) {
@@ -229,27 +246,64 @@
             }
             for touch in touches {
                 active.insert(ObjectIdentifier(touch))
+                switch touch.type {
+                case .pencil:
+                    palmGuard.pencilBegan()
+                    fingerTap.invalidate()
+                case .direct:
+                    fingerTap.began(key(touch), at: touch.location(in: nil), time: touch.timestamp)
+                    if !palmGuard.allowsTap(at: touch.timestamp) {
+                        fingerTap.invalidate()
+                    }
+                default:
+                    break
+                }
+            }
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with _: UIEvent) {
+            for touch in touches where touch.type == .direct {
+                fingerTap.moved(key(touch), to: touch.location(in: nil))
             }
         }
 
         override func touchesEnded(_ touches: Set<UITouch>, with _: UIEvent) {
+            var tapped: Int?
+            for touch in touches where touch.type == .direct {
+                tapped = fingerTap.ended(key(touch), at: touch.location(in: nil), time: touch.timestamp) ?? tapped
+            }
             lifted(touches)
+            if let tapped {
+                onFingerTap?(tapped)
+            }
         }
 
         override func touchesCancelled(_ touches: Set<UITouch>, with _: UIEvent) {
+            for touch in touches where touch.type == .direct {
+                fingerTap.cancelled(key(touch))
+            }
             lifted(touches)
         }
 
         override func reset() {
             super.reset()
             active = []
+            fingerTap = FingerTap()
+        }
+
+        private func key(_ touch: UITouch) -> Int {
+            ObjectIdentifier(touch).hashValue
         }
 
         private func lifted(_ touches: Set<UITouch>) {
             for touch in touches {
                 active.remove(ObjectIdentifier(touch))
+                if touch.type == .pencil {
+                    palmGuard.pencilEnded(at: touch.timestamp)
+                }
             }
             guard active.isEmpty else { return }
+            palmGuard.allLifted()
             onAllLifted?()
             state = .failed
         }

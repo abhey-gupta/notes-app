@@ -20,6 +20,10 @@
     ///
     /// The host is first responder with its own `UndoManager`, so ⌘Z and the system three-finger
     /// undo/redo gestures reach the notebook's history (`UndoManagerBridge` attaches to ``editUndoManager``).
+    /// With ``allowsTapUndo`` a two-finger tap undoes and a three-finger tap redoes instead of the system
+    /// gestures (#121): `TouchObserver` spots them without joining gesture recognition, so scrolling and
+    /// pinching are untouched; fingers touching down during or just after Pencil contact don't count,
+    /// nor do taps while fingers ink. No feedback: the ink changing is the feedback.
     @MainActor
     public final class CanvasHostView: UIView {
         /// Zoom range (scale of page points).
@@ -34,7 +38,7 @@
         public let state = CanvasViewportState()
         /// Callbacks.
         public weak var delegate: (any CanvasHostViewDelegate)?
-        /// Undo manager for ⌘Z and the three-finger gestures while the canvas is first responder.
+        /// Undo manager for ⌘Z and the system's three-finger gestures while the canvas is first responder.
         public let editUndoManager = UndoManager()
 
         /// Page frames. Set it when pages are added, removed or moved; the scroll offset is kept.
@@ -62,6 +66,9 @@
         public var allowsFingerDrawing = false {
             didSet { updateNavigationGestures() }
         }
+
+        /// Two-finger tap undoes, three-finger tap redoes (#121; Settings → "Tap to undo").
+        public var allowsTapUndo = true
 
         /// The add-page button can be hidden (e.g. read-only previews).
         public var showsAddPage = true {
@@ -164,6 +171,7 @@
             scrollView.addGestureRecognizer(touchObserver)
             scrollView.pinchGestureRecognizer?.addTarget(scrollView, action: #selector(CanvasScrollView.applyPinch(_:)))
             scrollView.pinchGestureRecognizer?.addTarget(self, action: #selector(pinchChanged(_:)))
+            touchObserver.onFingerTap = { [weak self] fingers in self?.fingersTapped(fingers) }
             updateNavigationGestures()
             installSideGrab()
         }
@@ -212,6 +220,12 @@
 
         override public var undoManager: UndoManager? {
             editUndoManager
+        }
+
+        /// While tap undo is on, the system's three-finger editing gestures are off for the canvas: their tap
+        /// pops the undo bar, which would land on every redo. ⌘Z keeps working.
+        override public var editingInteractionConfiguration: UIEditingInteractionConfiguration {
+            allowsTapUndo ? .none : .default
         }
 
         override public func didMoveToWindow() {
@@ -349,7 +363,22 @@
             scrollView.panGestureRecognizer.allowedTouchTypes = [direct, pointer]
             scrollView.pinchGestureRecognizer?.allowedTouchTypes = [direct, pointer]
             // Matches InputPolicy: fingers ink only while no Pencil has been seen.
-            scrollView.panGestureRecognizer.minimumNumberOfTouches = allowsFingerDrawing && !hasSeenPencil ? 2 : 1
+            scrollView.panGestureRecognizer.minimumNumberOfTouches = fingersInk ? 2 : 1
+        }
+
+        /// Fingers ink while "draw with finger" is on and no Pencil has been seen (InputPolicy).
+        var fingersInk: Bool {
+            allowsFingerDrawing && !hasSeenPencil
+        }
+
+        /// Two fingers undo, three redo (#121).
+        func fingersTapped(_ fingers: Int) {
+            guard allowsTapUndo, !fingersInk else { return }
+            switch fingers {
+            case 2: delegate?.canvasHostDidRequestUndo(self)
+            case 3: delegate?.canvasHostDidRequestRedo(self)
+            default: break
+            }
         }
 
         private func pencilSeen() {
