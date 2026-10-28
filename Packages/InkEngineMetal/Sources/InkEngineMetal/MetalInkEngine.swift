@@ -42,6 +42,7 @@ public final class MetalInkEngine: InkEngine {
     public var selectionColor: UIColor = .systemBlue
     /// Unused: pages draw from geometry at once, with no thumbnail phase.
     public var thumbnailURL: ((PageID) -> URL?)?
+    public var imageURL: ((ImageAssetID) -> URL?)?
 
     /// Pen-to-pixel latency (touch timestamp → presented time), also shown in the debug HUD.
     public let latency = LatencyProbe()

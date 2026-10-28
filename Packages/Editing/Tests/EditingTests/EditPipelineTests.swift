@@ -181,7 +181,7 @@ struct EditPipelineTests {
         let h = try Harness(pages: [Page(strokes: [stroke]), Page()])
         var seen: (String?, Page?) = (nil, nil)
         h.pipeline.edit("Recolor", on: h.first, make: { page in
-            try (page.recolorEdit([stroke.id], to: .custom(RGBA8(rgba: 0xFF00_00FF))), "done")
+            try ([page.recolorEdit([stroke.id], to: .custom(RGBA8(rgba: 0xFF00_00FF)))], "done")
         }, then: { seen = ($0, $1) })
         await h.pipeline.drain()
         #expect(seen.0 == "done")
@@ -189,7 +189,7 @@ struct EditPipelineTests {
         #expect(h.pipeline.history.undoActionName == "Recolor")
 
         var ran = false
-        h.pipeline.edit("Nothing", on: h.first, make: { _ -> (PageEdit, Int)? in nil }, then: { result, page in
+        h.pipeline.edit("Nothing", on: h.first, make: { _ -> ([PageEdit], Int)? in nil }, then: { result, page in
             ran = result == nil && page == nil
         })
         await h.pipeline.drain()
@@ -205,8 +205,8 @@ struct EditPipelineTests {
         h.pipeline.read(h.first) { page = $0 }
         await h.pipeline.drain()
         let stale = try #require(page)
-        h.pipeline.edit("Delete", on: h.first, make: { try ($0.removeEdit([stroke.id]), ()) })
-        h.pipeline.edit("Delete again", on: h.first, make: { _ in try (stale.removeEdit([stroke.id]), ()) })
+        h.pipeline.edit("Delete", on: h.first, make: { try ([$0.removeEdit([stroke.id])], ()) })
+        h.pipeline.edit("Delete again", on: h.first, make: { _ in try ([stale.removeEdit([stroke.id])], ()) })
         await h.pipeline.drain()
         #expect(h.mirror.reloads == [h.first])
         #expect(h.pipeline.history.undoCount == 1)

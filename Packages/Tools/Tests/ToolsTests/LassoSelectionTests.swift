@@ -102,8 +102,8 @@ struct LassoSelectionTests {
         let other = line(300, 400, y: 400)
         var page = Page(strokes: [a, other])
         let selection = try #require(LassoSelection(lasso: square(90, 90, 210, 110), on: page))
-        #expect(try selection.transformEdit(.identity, on: page) == nil)
-        let edit = try #require(try selection.transformEdit(CGAffineTransform(translationX: 30, y: -10), on: page))
+        #expect(try selection.transformEdits(.identity, on: page).isEmpty)
+        let edit = try #require(try selection.transformEdits(CGAffineTransform(translationX: 30, y: -10), on: page).first)
         let before = page
         try page.apply(edit)
         #expect(page.strokes[0].samples.first?.x == 130 && page.strokes[0].samples.first?.y == 90)
@@ -122,7 +122,7 @@ struct LassoSelectionTests {
             dragging: .bottomRight,
             by: CGSize(width: selection.bounds.width, height: selection.bounds.height)
         )
-        try page.apply(#require(try selection.transformEdit(t, on: page)))
+        try page.apply(#require(try selection.transformEdits(t, on: page).first))
         #expect(abs(page.strokes[0].width - 4) < 1e-4, "2× resize doubles the base width")
     }
 
@@ -146,7 +146,7 @@ struct LassoSelectionTests {
         var page = Page(strokes: [a, b, c])
         let selection = try #require(LassoSelection([c.id, a.id], on: page))
         #expect(selection.strokeIDs == [a.id, c.id], "z-order")
-        try page.apply(selection.removeEdit(on: page))
+        try page.apply(#require(selection.removeEdits(on: page).first))
         #expect(page.strokes.map(\.id) == [b.id])
         #expect(LassoSelection(selection.strokeIDs, on: page) == nil)
     }
@@ -162,7 +162,8 @@ struct LassoSelectionTests {
         let b = line(100, 200, y: 140)
         var page = Page(strokes: [a, b])
         let selection = try #require(LassoSelection([a.id, b.id], on: page))
-        let (edit, copies) = try #require(selection.duplicateEdit(on: page))
+        let (edits, copies) = try #require(selection.duplicateEdits(on: page))
+        let edit = try #require(edits.first)
         try page.apply(edit)
         #expect(page.strokes.count == 4)
         let added = Array(page.strokes[2...])
@@ -190,13 +191,14 @@ struct LassoSelectionTests {
             try page.apply(edit)
             stack.record(edit, on: page.id)
         }
-        try run(selection.transformEdit(CGAffineTransform(translationX: 10, y: 10), on: page))
+        try run(selection.transformEdits(CGAffineTransform(translationX: 10, y: 10), on: page).first)
         selection = try #require(LassoSelection(selection.strokeIDs, on: page))
-        try run(selection.transformEdit(selection.resizeTransform(dragging: .topLeft, by: CGSize(width: -20, height: -20)), on: page))
+        try run(selection.transformEdits(selection.resizeTransform(dragging: .topLeft, by: CGSize(width: -20, height: -20)), on: page)
+            .first)
         try run(selection.recolorEdit(to: .semantic(.blue), on: page))
-        let duplicate = try #require(selection.duplicateEdit(on: page))
-        try run(duplicate.edit)
-        try run(duplicate.selection.removeEdit(on: page))
+        let duplicate = try #require(selection.duplicateEdits(on: page))
+        try run(duplicate.edits.first)
+        try run(duplicate.selection.removeEdits(on: page).first)
         #expect(stack.undoCount == 5)
         while let entry = stack.undo() {
             for step in entry.steps {
@@ -217,5 +219,68 @@ struct LassoSelectionTests {
             j = i
         }
         return inside
+    }
+
+    // MARK: Images (#157)
+
+    private func photo(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat = 100, _ h: CGFloat = 60) -> PageImage {
+        PageImage(asset: ImageAssetID(), frame: CGRect(x: x, y: y, width: w, height: h))
+    }
+
+    @Test func lassoSelectsImagesByCenterAlongsideStrokes() throws {
+        let inside = photo(120, 120, 50, 50) // center (145, 145)
+        let edge = photo(180, 180, 100, 100) // center (230, 230): out
+        let ink = line(110, 190, y: 150)
+        let page = Page(strokes: [ink], images: [inside, edge])
+        let selection = try #require(LassoSelection(lasso: square(100, 100, 200, 200), on: page))
+        #expect(selection.strokeIDs == [ink.id])
+        #expect(selection.imageIDs == [inside.id])
+        #expect(selection.hasInk)
+        #expect(selection.bounds.contains(CGRect(x: 120, y: 120, width: 50, height: 50)))
+    }
+
+    @Test func imageOnlySelectionHasHullAroundTheFrame() throws {
+        let image = photo(100, 200, 300, 150)
+        let page = Page(images: [image])
+        let selection = try #require(LassoSelection([], images: [image.id], on: page))
+        #expect(!selection.hasInk)
+        #expect(selection.imageIDs == [image.id])
+        let expected = image.frame.insetBy(dx: -LassoSelection.padding, dy: -LassoSelection.padding)
+        #expect(abs(selection.bounds.minX - expected.minX) < 0.01 && abs(selection.bounds.maxY - expected.maxY) < 0.01)
+        #expect(LassoSelection(placing: image, on: page.id).bounds == selection.bounds)
+        #expect(try selection.recolorEdit(to: .semantic(.blue), on: page) == nil)
+    }
+
+    @Test func mixedSelectionActionsMakeOneEditPerKind() throws {
+        let ink = line(100, 200, y: 100)
+        let image = photo(100, 120)
+        var page = Page(strokes: [ink], images: [image])
+        let selection = try #require(LassoSelection([ink.id], images: [image.id], on: page))
+
+        let moves = try selection.transformEdits(CGAffineTransform(translationX: 10, y: 20), on: page)
+        #expect(moves.count == 2)
+        for edit in moves {
+            try page.apply(edit)
+        }
+        #expect(page.images[0].frame.origin == CGPoint(x: 110, y: 140))
+        #expect(page.strokes[0].samples[0].y == 120)
+
+        let moved = try #require(LassoSelection(selection.strokeIDs, images: selection.imageIDs, on: page))
+        let (copies, copySelection) = try #require(moved.duplicateEdits(on: page))
+        #expect(copies.count == 2)
+        for edit in copies {
+            try page.apply(edit)
+        }
+        #expect(page.images.count == 2 && page.images[1].asset == image.asset && page.images[1].id != image.id)
+        #expect(page.images[1].frame.origin == CGPoint(x: 130, y: 160))
+        #expect(copySelection.imageIDs == [page.images[1].id] && copySelection.strokeIDs == [page.strokes[1].id])
+
+        let removes = try copySelection.removeEdits(on: page)
+        #expect(removes.count == 2)
+        for edit in removes {
+            try page.apply(edit)
+        }
+        #expect(page.images.map(\.id) == [image.id] && page.strokes.map(\.id) == [ink.id])
+        #expect(LassoSelection(copySelection.strokeIDs, images: copySelection.imageIDs, on: page) == nil)
     }
 }

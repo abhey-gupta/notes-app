@@ -163,7 +163,7 @@ struct SelectionMachineTests {
         let s = try await SelectionHarness()
         await s.select()
         _ = s.machine.beginDrag(from: nil)
-        s.h.pipeline.edit("Delete", on: s.h.first, make: { page in try (page.removeEdit([s.a.id]), ()) })
+        s.h.pipeline.edit("Delete", on: s.h.first, make: { page in try ([page.removeEdit([s.a.id])], ()) })
         s.machine.endDrag(CGAffineTransform(translationX: 5, y: 5))
         await s.h.pipeline.drain()
         let page = try await s.page()

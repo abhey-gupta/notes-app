@@ -18,9 +18,18 @@ struct RenderJob: Sendable {
         static let all: Layers = [.highlights, .ink]
     }
 
+    /// A decoded photo and where it draws (page space), for ``page(size:scale:)`` (#157).
+    struct Photo: Sendable {
+        let image: CGImage
+        let frame: CGRect
+    }
+
     let page: PageSnapshot
     let palette: any InkPalette
     let theme: PaperTheme
+    /// The page's photos, bottom to top, drawn over the template (thumbnails and export fallback only;
+    /// a page view draws its own photo layers).
+    var photos: [Photo] = []
     /// Ink strokes on the canvas not yet in `page` (drawn last, as on the canvas).
     var pending: [PKStroke] = []
     /// Highlights committed but not yet in `page` (drawn after the page's).
@@ -109,6 +118,9 @@ struct RenderJob: Sendable {
                 line: palette.templateLine(theme).cgColor,
                 in: cg
             )
+            for photo in photos {
+                UIImage(cgImage: photo.image).draw(in: photo.frame)
+            }
             Highlight.draw(highlights, color: highlightColor, in: cg)
             inkImage?.draw(in: CGRect(origin: .zero, size: page.size))
         }

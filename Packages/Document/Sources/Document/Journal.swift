@@ -15,11 +15,13 @@ import InkModel
 ///          replace 2:        placed(old) | placed(new)
 ///          transform 3:      u32 n | n × u128 id | f64 × 6 forward (a b c d tx ty) | f64 × 6 backward
 ///          recolor 4:        u32 n | n × (u128 id | color from | color to)
-/// placed:  u32 n | n × (u32 index | stroke)             stroke and color as in ``StrokeCodec``
+///          addImages 5, removeImages 6 (v3):  u32 n | n × (u32 index | image)
+///          transformImages 7 (v3):            u32 n | n × u128 id | f64 × 6 forward | f64 × 6 backward
+/// placed:  u32 n | n × (u32 index | stroke)             stroke, color and image as in ``StrokeCodec``
 /// ```
 /// Strokes in records use the ``StrokeCodec`` layout of the same version (version 2 adds the rendering
-/// block). Version 1 journals replay; ``DocumentStore`` folds them into a stroke file at once, so new
-/// records never land in an old-format journal.
+/// block; version 3 the image kinds, #157). Older journals replay; ``DocumentStore`` folds them into a
+/// stroke file at once, so new records never land in an old-format journal.
 ///
 /// The header names the stroke file the journal applies on top of (`baseLength`, `baseCRC`: see
 /// ``StrokesIdentity``). Checkpoints rewrite the stroke file before deleting the journal, so a journal
@@ -31,7 +33,7 @@ import InkModel
 enum Journal {
     static let magic: [UInt8] = Array("INKW".utf8)
     /// Version written to, and the newest accepted from, the header.
-    static let formatVersion: UInt16 = 2
+    static let formatVersion: UInt16 = 3
     static let headerLength = 32
     static let recordHeaderLength = 8
     /// Largest record payload accepted; bounds allocations driven by a (possibly damaged) length.
@@ -137,6 +139,8 @@ enum Journal {
                 w.append(change.from)
                 w.append(change.to)
             }
+        case .addImages, .removeImages, .transformImages:
+            appendImageEdit(edit, to: &w)
         }
         let payloadLength = w.bytes.count - recordHeaderLength
         guard payloadLength <= maxPayloadLength else { throw JournalTooLarge() }
@@ -161,6 +165,8 @@ enum Journal {
         case let .replace(old, new): 9 + size(old) + size(new)
         case let .transform(ids, _, _): 9 + 4 + ids.count * 16 + 96
         case let .recolor(changes): 9 + 4 + changes.count * 26
+        case let .addImages(p), let .removeImages(p): 9 + 4 + p.count * (4 + StrokeCodec.imageLength)
+        case let .transformImages(ids, _, _): 9 + 4 + ids.count * 16 + 96
         }
     }
 
@@ -251,6 +257,7 @@ extension Journal {
         case 2: readReplaceEdit(&r, version: version)
         case 3: readTransformEdit(&r)
         case 4: readRecolorEdit(&r)
+        case 5 ... 7 where version >= 3: readImageEdit(kind: kind, &r)
         default: nil
         }
     }
@@ -280,7 +287,7 @@ extension Journal {
     }
 
     /// Reads a `u32` count, rejecting counts that cannot fit in what remains at `itemSize` bytes each.
-    private static func readCount(_ r: inout ByteReader, itemSize: Int) -> Int? {
+    static func readCount(_ r: inout ByteReader, itemSize: Int) -> Int? {
         guard r.remaining >= 4 else { return nil }
         let n = Int(UInt32(littleEndian: r.read(UInt32.self)))
         return n <= r.remaining / itemSize ? n : nil
@@ -305,80 +312,11 @@ extension Journal {
     }
 
     /// Caller guarantees 48 bytes remain.
-    private static func readTransform(_ r: inout ByteReader) -> CGAffineTransform {
+    static func readTransform(_ r: inout ByteReader) -> CGAffineTransform {
         func f() -> CGFloat {
             CGFloat(Double(bitPattern: UInt64(littleEndian: r.read(UInt64.self))))
         }
         return CGAffineTransform(a: f(), b: f(), c: f(), d: f(), tx: f(), ty: f())
-    }
-}
-
-// MARK: Replay
-
-extension Journal {
-    /// What to do with the journal file after ``recover(_:identity:journal:)``.
-    enum Disposition: Hashable {
-        /// No journal on disk.
-        case none
-        /// Keep the first `length` bytes (truncate if the file is longer) and append after them.
-        case keep(length: Int)
-        /// Delete it: header unusable, or already folded into the stroke file.
-        case discard
-    }
-
-    /// Result of replaying a journal over a freshly loaded page.
-    struct Recovery {
-        /// The page with every valid record applied.
-        var page: Page
-        /// Journal header when kept (the base for further appends).
-        var header: Header?
-        var disposition: Disposition
-        /// Records applied.
-        var replayed: Int
-        /// Why replay stopped short of end of file, if it did.
-        var damage: Damage?
-        /// The journal is stale: a checkpoint already wrote its edits into the stroke file.
-        var stale: Bool
-        /// Whether the page differs from what the manifest + stroke file say (needs a checkpoint).
-        var isDirty: Bool
-    }
-
-    /// Replays `journal` (the `.wal` bytes, `nil` if absent) over `page`, which was loaded from a stroke
-    /// file with `identity`. Pure: no I/O. Idempotent: the same inputs give the same page.
-    static func recover(_ page: Page, identity: StrokesIdentity, journal: Data?) throws(DocumentError) -> Recovery {
-        guard let journal else {
-            return Recovery(page: page, disposition: .none, replayed: 0, stale: false, isDirty: false)
-        }
-        let scan = try scan(journal)
-        guard let header = scan.header else {
-            return Recovery(page: page, disposition: .discard, replayed: 0, damage: scan.damage, stale: false, isDirty: false)
-        }
-        guard header.base == identity else {
-            // A checkpoint wrote the stroke file but crashed before deleting the journal. The manifest
-            // may still hold the older rev; adopt the journal's last one so revs never go backwards.
-            let rev = max(page.rev, scan.records.last?.rev ?? header.baseRev)
-            let adopted = Page(id: page.id, template: page.template, strokes: page.strokes, rev: rev)
-            return Recovery(page: adopted, disposition: .discard, replayed: 0, stale: true, isDirty: rev != page.rev)
-        }
-        var current = page
-        var replayed = 0
-        var damage = scan.damage
-        var length = headerLength
-        for (record, end) in zip(scan.records, scan.recordEnds) {
-            do {
-                try current.apply(record.edit)
-            } catch {
-                damage = Damage(kind: .invalidRecord, offset: length)
-                break
-            }
-            current = Page(id: current.id, template: current.template, strokes: current.strokes, rev: record.rev)
-            replayed += 1
-            length = end
-        }
-        return Recovery(
-            page: current, header: header, disposition: .keep(length: length), replayed: replayed,
-            damage: damage, stale: false, isDirty: replayed > 0
-        )
     }
 }
 

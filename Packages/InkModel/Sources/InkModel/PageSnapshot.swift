@@ -31,6 +31,11 @@ public struct PageSnapshot: Hashable, Sendable, Identifiable {
         page.strokes
     }
 
+    /// Images beneath the strokes, bottom to top (#157).
+    public var images: [PageImage] {
+        page.images
+    }
+
     /// Page revision.
     public var rev: UInt64 {
         page.rev

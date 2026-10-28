@@ -40,6 +40,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// `thumbs/<page>.heic` for a page, shown scaled up while its strokes load or its first raster
     /// renders (#43, #70). `nil`: the page shows flat paper meanwhile.
     public var thumbnailURL: ((PageID) -> URL?)?
+    public var imageURL: ((ImageAssetID) -> URL?)?
     /// Thumbnail → raster crossfade, seconds (the app sets `Tokens.Motion.thumbnailCrossfadeDuration`).
     public var crossfadeDuration: TimeInterval = 0.12 {
         didSet {
@@ -57,6 +58,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     let input = InkInputView()
     /// Ink rasters of recently shown pages, per zoom bucket, and decoded thumbnails.
     let rasters = InkRasterCache()
+    /// Decoded photos by asset (`+Photos`, #157).
+    let photos = PhotoCache()
     /// Off-main raster renders, nearest the viewport first.
     let renderQueue = RasterRenderQueue()
     /// Thumbnails being decoded, and pages that have none on disk.
@@ -107,6 +110,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     @objc private func didReceiveMemoryWarning() {
         rasters.removeAll()
+        photos.removeAll()
     }
 
     // MARK: InkEngine
@@ -181,6 +185,11 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             Self.log.error("apply failed on \(page, privacy: .public): \(String(describing: error), privacy: .public)")
             return
         }
+        if edit.touchesImagesOnly {
+            // Photos are the page views' own layers: nothing for the canvas to redo.
+            layoutPages()
+            return
+        }
         var echoedOnly = false
         if case let .add(placed) = edit {
             let ids = Set(placed.map(\.stroke.id))
@@ -206,13 +215,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             strokes.map { PencilKitConversion.pkStroke(from: $0, color: UIColor(palette.ink($0.color, on: theme))) }
         }.value
         strokeCache.insert(strokes, pks, on: page.id, generation: generation)
-    }
-
-    /// Thumbnails and export fallback: paper + template + ink, drawn by PencilKit from the stored strokes.
-    public func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage? {
-        guard size.width > 0, size.height > 0, scale > 0, page.size.width > 0, page.size.height > 0 else { return nil }
-        let job = RenderJob(page: page, palette: palette, theme: theme)
-        return await Task.detached(priority: .userInitiated) { job.page(size: size, scale: scale) }.value
     }
 
     // MARK: Canvases

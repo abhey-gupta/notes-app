@@ -36,6 +36,8 @@ public protocol InkEngine: AnyObject {
     /// `thumbs/<page>.heic` for a page: what an engine that draws ink asynchronously shows while a page's
     /// strokes load or its first raster renders. `nil`: flat paper meanwhile. Engines that draw at once ignore it.
     var thumbnailURL: ((PageID) -> URL?)? { get set }
+    /// `images/<asset>.heic` for an image placed on a page (#157); `nil`: the image can't be shown.
+    var imageURL: ((ImageAssetID) -> URL?)? { get set }
     /// Applies an edit the document already accepted (commit echo, undo/redo, lasso, erase).
     func apply(_ edit: PageEdit, to page: PageID)
     /// Lasso drag preview: lifts the strokes and draws them transformed; `nil` puts them back (call it

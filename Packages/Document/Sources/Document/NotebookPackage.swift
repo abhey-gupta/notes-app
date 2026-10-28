@@ -9,6 +9,7 @@ import InkModel
 ///   pages/<pageID>.strokes   StrokeCodec file; absent = page has no strokes yet
 ///   pages/<pageID>.wal       autosave journal, reserved for the WAL (§4.4)
 ///   thumbs/<pageID>.heic     page thumbnail;  thumbs/cover.heic  library cover
+///   images/<assetID>.heic    photo bytes placed on pages (#157); written once, never rewritten
 ///   backup-v1/               manifest.json + pages/ as they were before the v1 → v2 migration
 /// ```
 ///
@@ -126,14 +127,15 @@ public struct NotebookPackage: Sendable {
         do {
             try fm.createDirectory(at: stagingPages, withIntermediateDirectories: true)
             try fm.createDirectory(at: staging.appending(path: "thumbs"), withIntermediateDirectories: false)
+            try fm.createDirectory(at: staging.appending(path: "images"), withIntermediateDirectories: false)
             var notebook = notebook
             var entries: [PageEntry] = []
             for page in pages {
                 entries.append(PageEntry(id: page.id, template: page.template, rev: page.rev))
-                guard !page.strokes.isEmpty else { continue }
+                guard !page.isEmpty else { continue }
                 let data: Data
                 do {
-                    data = try StrokeCodec.encode(page.strokes)
+                    data = try StrokeCodec.encode(PageContent(page))
                 } catch {
                     throw DocumentError.pageTooLarge(page.id)
                 }
@@ -204,15 +206,16 @@ public struct NotebookPackage: Sendable {
         } catch {
             throw .io(file, reason: "\(error)")
         }
-        let strokes: [Stroke]
+        let content: PageContent
         do {
-            strokes = try StrokeCodec.decode(data)
+            content = try StrokeCodec.decodeContent(data)
         } catch let .unsupportedVersion(found, supported) {
             throw .unsupportedFormatVersion(found: Int(found), supported: Int(supported))
         } catch {
             throw .corruptPage(id, error)
         }
-        return (Page(id: id, template: entry.template, strokes: strokes, rev: entry.rev), StrokesIdentity(data))
+        let page = Page(id: id, template: entry.template, strokes: content.strokes, images: content.images, rev: entry.rev)
+        return (page, StrokesIdentity(data))
     }
 
     /// Loads the page at `index` in page order.
@@ -251,7 +254,7 @@ public struct NotebookPackage: Sendable {
             entry.template = page.template
             try next.updateEntry(entry)
             do {
-                try files.append((strokesURL(for: page.id), StrokeCodec.encode(page.strokes)))
+                try files.append((strokesURL(for: page.id), StrokeCodec.encode(PageContent(page))))
             } catch {
                 throw .pageTooLarge(page.id)
             }
@@ -284,7 +287,8 @@ public struct NotebookPackage: Sendable {
         return id
     }
 
-    /// Removes a page from the manifest, then deletes its stroke file, journal and thumbnail.
+    /// Removes a page from the manifest, then deletes its stroke file, journal and thumbnail. Its image
+    /// assets stay (undo brings the page back with them; they are small and shared).
     /// A crash in between leaves only unreferenced files, never a dangling reference.
     public mutating func deletePage(_ id: PageID) throws(DocumentError) {
         var next = manifest

@@ -1,6 +1,7 @@
 import Document
 import Export
 import Foundation
+import InkEnginePencilKit
 import InkModel
 
 extension NotebookSession {
@@ -30,7 +31,10 @@ extension NotebookSession {
             progress(Self.loadShare * Double(n + 1) / Double(range.count))
         }
         let options = PDFExportOptions(notebook: manifest.notebook, exportsAsShown: asShown)
-        return try await PDFExporter(palette: DesignSystemPDFPalette()).exportPDF(pages: pages, options: options) { fraction in
+        let exporter = PDFExporter(palette: DesignSystemPDFPalette()) { asset in
+            PhotoCache.decode(store.imageURL(for: asset))
+        }
+        return try await exporter.exportPDF(pages: pages, options: options) { fraction in
             progress(Self.loadShare + (1 - Self.loadShare) * fraction)
         }
     }

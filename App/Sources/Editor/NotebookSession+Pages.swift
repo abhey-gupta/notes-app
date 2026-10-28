@@ -44,11 +44,11 @@ extension NotebookSession {
         edits?.movePage(from: source, to: destination)
     }
 
-    /// Whether any of `ids` has strokes; pages not in memory are read and released again.
+    /// Whether any of `ids` has strokes or photos; pages not in memory are read and released again.
     func pagesHaveInk(_ ids: [PageID]) async -> Bool {
         guard let residency else { return false }
         for id in ids {
-            if let page = try? await residency.peek(id), !page.strokes.isEmpty {
+            if let page = try? await residency.peek(id), !page.isEmpty {
                 return true
             }
         }

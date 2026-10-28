@@ -60,12 +60,12 @@ struct MigrationTests {
             #expect(try Data(contentsOf: backup.appending(path: "pages/\(old.pages[0]).strokes")) == strokes0)
             #expect(try Data(contentsOf: backup.appending(path: "pages/\(old.pages[0]).wal")) == journal0)
 
-            // Everything on disk is v2; the journal is folded in and gone.
+            // Everything on disk is current (manifest v2, stroke files v3); the journal is folded in and gone.
             #expect(try Manifest.decode(Data(contentsOf: package.manifestURL)).sourceFormatVersion == 2)
             #expect(!fileExists(package.journalURL(for: old.pages[0])))
             #expect(!fileExists(package.strokesURL(for: old.pages[2])))
             for id in old.pages.prefix(2) {
-                #expect(try StrokeCodec.version(of: Data(contentsOf: package.strokesURL(for: id))) == 2)
+                #expect(try StrokeCodec.version(of: Data(contentsOf: package.strokesURL(for: id))) == StrokeCodec.formatVersion)
                 let page = try package.loadPage(id)
                 #expect(page.strokes == old.expected[id])
                 #expect(page.strokes.allSatisfy { $0.rendering == nil })
@@ -131,11 +131,11 @@ struct MigrationTests {
         try await session(old.url) { store in
             #expect(try await store.page(id).strokes == old.expected[id])
             let strokes = try Data(contentsOf: old.url.appending(path: "pages/\(id).strokes"))
-            #expect(StrokeCodec.version(of: strokes) == 2)
+            #expect(StrokeCodec.version(of: strokes) == StrokeCodec.formatVersion)
             try await store.apply(store.page(id).addEdit([added]), to: id)
         }
         let journal = try Data(contentsOf: old.url.appending(path: "pages/\(id).wal"))
-        #expect(try Journal.scan(journal).header?.version == 2)
+        #expect(try Journal.scan(journal).header?.version == Journal.formatVersion)
         try await session(old.url) { store in
             let strokes = try await store.page(id).strokes
             #expect(strokes == (old.expected[id] ?? []) + [added])

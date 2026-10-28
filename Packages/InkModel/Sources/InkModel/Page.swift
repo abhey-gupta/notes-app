@@ -1,6 +1,7 @@
 import CoreGraphics
 
-/// One page: template plus strokes in z-order (index 0 is bottom). Strokes change only via ``apply(_:)``.
+/// One page: template, images beneath, then strokes, each in z-order (index 0 is bottom). Content changes
+/// only via ``apply(_:)``.
 public struct Page: Hashable, Sendable, Codable, Identifiable {
     /// Stable identity (UUIDv7).
     public let id: PageID
@@ -8,20 +9,33 @@ public struct Page: Hashable, Sendable, Codable, Identifiable {
     public var template: PageTemplate
     /// Strokes, bottom to top.
     public private(set) var strokes: [Stroke]
+    /// Photos (#157), bottom to top; every image draws beneath every stroke.
+    public private(set) var images: [PageImage]
     /// Page revision, bumped by every successful ``apply(_:)``. For checkpoints and future sync.
     public private(set) var rev: UInt64
 
     /// Creates a page (e.g. when decoding a stroke file).
-    public init(id: PageID = PageID(), template: PageTemplate = .blank, strokes: [Stroke] = [], rev: UInt64 = 0) {
+    public init(id: PageID = PageID(), template: PageTemplate = .blank, strokes: [Stroke] = [], images: [PageImage] = [], rev: UInt64 = 0) {
         self.id = id
         self.template = template
         self.strokes = strokes
+        self.images = images
         self.rev = rev
+    }
+
+    /// No strokes and no images.
+    public var isEmpty: Bool {
+        strokes.isEmpty && images.isEmpty
     }
 
     /// Z-index of the stroke with `id`, if present. O(n).
     public func index(of id: StrokeID) -> Int? {
         strokes.firstIndex { $0.id == id }
+    }
+
+    /// The image with `id`, if present. O(n).
+    public func image(_ id: ImageID) -> PageImage? {
+        images.first { $0.id == id }
     }
 
     // MARK: Applying
@@ -31,6 +45,7 @@ public struct Page: Hashable, Sendable, Codable, Identifiable {
     @discardableResult
     public mutating func apply(_ edit: PageEdit) throws(PageEditError) -> CGRect {
         var working = strokes
+        var workingImages = images
         var dirty = CGRect.null
         switch edit {
         case let .add(placed):
@@ -51,8 +66,11 @@ public struct Page: Hashable, Sendable, Codable, Identifiable {
                 dirty = dirty.union(working[i].bounds)
                 working[i].color = change.to
             }
+        case .addImages, .removeImages, .transformImages:
+            try Self.applyImageEdit(edit, to: &workingImages, dirty: &dirty)
         }
         strokes = working
+        images = workingImages
         rev &+= 1
         return dirty
     }
@@ -112,6 +130,26 @@ public struct Page: Hashable, Sendable, Codable, Identifiable {
         try .recolor(zip(ids, Self.indices(of: ids, in: strokes)).map { ColorChange(id: $0, from: strokes[$1].color, to: color) })
     }
 
+    // MARK: Image edit factories (#157)
+
+    /// Edit that places `images` on top of the page's images (still beneath every stroke), in order.
+    public func addImagesEdit(_ images: [PageImage]) -> PageEdit {
+        .addImages(images.enumerated().map { PlacedImage(index: self.images.count + $0.offset, image: $0.element) })
+    }
+
+    /// Edit that removes the images with `ids`.
+    public func removeImagesEdit(_ ids: some Sequence<ImageID>) throws(PageEditError) -> PageEdit {
+        try .removeImages(Self.imageIndices(of: Array(ids), in: images).sorted().map { PlacedImage(index: $0, image: images[$0]) })
+    }
+
+    /// Edit that bakes `transform` into the frames of the images with `ids` (move/resize).
+    public func transformImagesEdit(_ ids: [ImageID], by transform: CGAffineTransform) throws(PageEditError) -> PageEdit {
+        _ = try Self.imageIndices(of: ids, in: images)
+        let det = transform.a * transform.d - transform.b * transform.c
+        guard det != 0, det.isFinite else { throw .nonInvertibleTransform }
+        return .transformImages(ids, forward: transform, backward: transform.inverted())
+    }
+
     // MARK: Private
 
     private static func indices(of ids: [StrokeID], in strokes: [Stroke]) throws(PageEditError) -> [Int] {
@@ -156,6 +194,68 @@ public struct Page: Hashable, Sendable, Codable, Identifiable {
         }
         for p in placed.reversed() {
             dirty = dirty.union(strokes.remove(at: p.index).bounds)
+        }
+    }
+
+    // MARK: Private (images)
+
+    private static func applyImageEdit(_ edit: PageEdit, to images: inout [PageImage], dirty: inout CGRect) throws(PageEditError) {
+        switch edit {
+        case let .addImages(placed):
+            try insertImages(placed, into: &images, dirty: &dirty)
+        case let .removeImages(placed):
+            try removeImages(placed, from: &images, dirty: &dirty)
+        case let .transformImages(ids, forward, _):
+            for i in try imageIndices(of: ids, in: images) {
+                dirty = dirty.union(images[i].bounds)
+                images[i] = images[i].transformed(by: forward)
+                dirty = dirty.union(images[i].bounds)
+            }
+        case .add, .remove, .replace, .transform, .recolor:
+            break
+        }
+    }
+
+    private static func imageIndices(of ids: [ImageID], in images: [PageImage]) throws(PageEditError) -> [Int] {
+        var lookup: [ImageID: Int] = [:]
+        lookup.reserveCapacity(images.count)
+        for (i, image) in images.enumerated() {
+            lookup[image.id] = i
+        }
+        var seen = Set<ImageID>()
+        var out: [Int] = []
+        out.reserveCapacity(ids.count)
+        for id in ids {
+            guard seen.insert(id).inserted else { throw .duplicateImage(id) }
+            guard let i = lookup[id] else { throw .unknownImage(id) }
+            out.append(i)
+        }
+        return out
+    }
+
+    private static func insertImages(_ placed: [PlacedImage], into images: inout [PageImage], dirty: inout CGRect) throws(PageEditError) {
+        for (a, b) in zip(placed, placed.dropFirst()) where a.index >= b.index {
+            throw .unsortedIndices
+        }
+        var ids = Set(images.map(\.id))
+        for p in placed {
+            guard ids.insert(p.image.id).inserted else { throw .duplicateImage(p.image.id) }
+            guard p.index >= 0, p.index <= images.count else { throw .indexOutOfRange(p.index) }
+            images.insert(p.image, at: p.index)
+            dirty = dirty.union(p.image.bounds)
+        }
+    }
+
+    private static func removeImages(_ placed: [PlacedImage], from images: inout [PageImage], dirty: inout CGRect) throws(PageEditError) {
+        for (a, b) in zip(placed, placed.dropFirst()) where a.index >= b.index {
+            throw .unsortedIndices
+        }
+        for p in placed {
+            guard p.index >= 0, p.index < images.count else { throw .indexOutOfRange(p.index) }
+            guard images[p.index].id == p.image.id else { throw .imageIndexMismatch(index: p.index, expected: p.image.id) }
+        }
+        for p in placed.reversed() {
+            dirty = dirty.union(images.remove(at: p.index).bounds)
         }
     }
 }

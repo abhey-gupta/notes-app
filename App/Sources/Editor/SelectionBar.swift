@@ -4,7 +4,8 @@ import SwiftUI
 import Tools
 
 /// Lasso context bar (§6): a Liquid Glass capsule over the selection with the quick colors, the full
-/// palette, duplicate and delete. Hidden while the selection is dragged. Each button is one undo step.
+/// palette (ink only; a photo-only selection shows neither, #157), duplicate and delete. Hidden while the
+/// selection is dragged. Each button is one undo step.
 ///
 /// Positioned in screen space from ``EditorState/selectionFrame`` (the canvas fills the screen): centered
 /// above the selection, or below it when there's no room under the top chrome.
@@ -41,18 +42,20 @@ struct SelectionBar: View {
 
     private var bar: some View {
         GlassCapsule {
-            ForEach(Array(tools.quickColors.enumerated()), id: \.offset) { _, color in
-                ColorSwatch(color.color(on: paper), label: color.label) {
-                    state.perform(.recolor(color))
+            if state.selectionHasInk {
+                ForEach(Array(tools.quickColors.enumerated()), id: \.offset) { _, color in
+                    ColorSwatch(color.color(on: paper), label: color.label) {
+                        state.perform(.recolor(color))
+                    }
                 }
+                ToolButton(.palette, "Colors", size: Tokens.Size.compactToolButton) {
+                    showsPalette.toggle()
+                }
+                .popover(isPresented: $showsPalette) {
+                    palette
+                }
+                ChromeSeparator()
             }
-            ToolButton(.palette, "Colors", size: Tokens.Size.compactToolButton) {
-                showsPalette.toggle()
-            }
-            .popover(isPresented: $showsPalette) {
-                palette
-            }
-            ChromeSeparator()
             ToolButton(.duplicate, "Duplicate", size: Tokens.Size.compactToolButton) {
                 state.perform(.duplicate)
             }

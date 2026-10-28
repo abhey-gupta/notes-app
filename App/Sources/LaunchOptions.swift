@@ -15,6 +15,8 @@ import Tools
 /// - `-openNotebook <title>`: start in the editor for that notebook (`first` = most recent).
 /// - `-focusMode YES`: with `-openNotebook`, start with the chrome collapsed.
 /// - `-pagesOverview YES`: with `-openNotebook`, open the pages overview a few seconds after the notebook.
+/// - `-insertSamplePhoto YES`: with `-openNotebook`, place a generated photo on the page once the notebook is
+///   up, as the toolbar flyout would (#157; the system picker can't be driven by UI tests).
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
 /// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
@@ -35,6 +37,11 @@ enum LaunchOptions {
     /// With `-openNotebook`: open the pages overview once the notebook is up (screenshots, timing).
     static var showsPagesOverview: Bool {
         flag("pagesOverview")
+    }
+
+    /// With `-openNotebook`: insert a generated photo once the notebook is up (#157 UI tests).
+    static var insertsSamplePhoto: Bool {
+        flag("insertSamplePhoto")
     }
 
     /// One-time hints may show (off under `-resetToolState`, i.e. in UI tests).

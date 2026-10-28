@@ -75,6 +75,7 @@ final class NotebookSession {
         initialTheme = notebook.theme
         state = EditorState(startsFocused: startsFocused)
         state.onSelectionAction = { [weak self] in self?.performSelectionAction($0) }
+        state.onInsertPhoto = { [weak self] in self?.insertPhoto($0) }
         state.onKeepsExactColors = { [weak self] in self?.setKeepsExactColors($0) }
         state.onExportPDF = { [weak self] selection, asShown, progress in
             guard let self else { throw CancellationError() }

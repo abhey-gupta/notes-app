@@ -73,9 +73,9 @@ struct PageStructureEditTests {
 
     private func apply(_ edit: PageStructureEdit, to order: inout [PageID]) throws {
         switch edit {
-        case let .insert(id, index, _, _):
+        case let .insert(id, index, _, _, _):
             order.insert(id, at: index)
-        case let .delete(id, index, _, _):
+        case let .delete(id, index, _, _, _):
             #expect(order[index] == id)
             order.remove(at: index)
         case let .move(from, to):
@@ -87,7 +87,7 @@ struct PageStructureEditTests {
 private extension PageStructureEdit {
     var index: Int? {
         switch self {
-        case let .insert(_, index, _, _), let .delete(_, index, _, _): index
+        case let .insert(_, index, _, _, _), let .delete(_, index, _, _, _): index
         case .move: nil
         }
     }

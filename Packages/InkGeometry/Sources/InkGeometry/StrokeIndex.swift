@@ -115,7 +115,7 @@ public struct StrokeIndex: Sendable {
             for stroke in page.strokes where wanted.contains(stroke.id) {
                 insert(stroke)
             }
-        case .recolor:
+        case .recolor, .addImages, .removeImages, .transformImages:
             break
         }
     }

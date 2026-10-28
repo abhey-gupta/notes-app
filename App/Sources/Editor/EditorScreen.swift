@@ -71,6 +71,10 @@ struct EditorScreen: View {
                 session.state.offerWidenHint()
             }
             #if DEBUG
+                if LaunchOptions.insertsSamplePhoto {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    session.state.insertPhoto(PhotoImport.samplePhotoData())
+                }
                 if LaunchOptions.showsPagesOverview {
                     try? await Task.sleep(for: .seconds(4))
                     session.state.pages.present()

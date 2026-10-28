@@ -12,12 +12,13 @@ public protocol SelectionDisplay: AnyObject {
     func liftSelection(_ selection: LassoSelection?, transform: CGAffineTransform)
 }
 
-/// The lasso selection's one owner (ARCHITECTURE.md §6): which strokes are selected, whether they are being
-/// dragged or an action on them is being saved, and what the display shows.
+/// The lasso selection's one owner (ARCHITECTURE.md §6): which strokes and images are selected, whether
+/// they are being dragged or an action on them is being saved, and what the display shows.
 ///
 /// ```
 /// none ─lassoClosed─▶ resolving ─page read─▶ selected ─beginDrag─▶ dragging ─endDrag─▶ committing ─saved─▶ selected
-///                                               └──── recolor / duplicate / delete ──────▶ committing ─saved─▶ selected / none
+///      ─insert(image)─▶ committing ─saved─▶ selected          └──── recolor / duplicate / delete ──────▶ committing ─saved─▶ selected /
+/// none
 /// clear() from any state ─▶ none
 /// ```
 ///
@@ -72,6 +73,16 @@ public final class SelectionMachine {
         }
     }
 
+    /// Places `image` on `page` (one undo step, #157) and selects it once the edit has landed, so it can be
+    /// moved or resized at once.
+    public func insert(_ image: PageImage, on page: PageID) {
+        clear()
+        let placeholder = LassoSelection(placing: image, on: page)
+        commit("Add Photo", placeholder, showing: placeholder, lifted: false) { _, page in
+            ([page.addImagesEdit([image])], placeholder)
+        }
+    }
+
     /// Drops the selection (new gesture, tool change, undo/redo, tap outside, page off screen).
     public func clear() {
         generation += 1
@@ -119,7 +130,7 @@ public final class SelectionMachine {
         let dropped = selection.applying(transform)
         display?.showSelection(dropped)
         commit(corner == nil ? "Move" : "Resize", selection, showing: dropped, lifted: true) { selection, page in
-            try selection.transformEdit(transform, on: page).map { ($0, selection) }
+            try (selection.transformEdits(transform, on: page), selection)
         }
     }
 
@@ -132,43 +143,43 @@ public final class SelectionMachine {
 
     // MARK: Actions
 
-    /// Recolors the selected strokes (one undo step).
+    /// Recolors the selected strokes (one undo step); images keep their colors.
     public func recolor(to color: InkColor) {
         perform("Recolor") { selection, page in
-            try selection.recolorEdit(to: color, on: page).map { ($0, selection) }
+            try selection.recolorEdit(to: color, on: page).map { ([$0], selection) }
         }
     }
 
-    /// Copies the selected strokes 20 pt right and down (one undo step) and selects the copies.
+    /// Copies the selected strokes and images 20 pt right and down (one undo step) and selects the copies.
     public func duplicate() {
         perform("Duplicate") { selection, page in
-            selection.duplicateEdit(on: page).map { ($0.edit, $0.selection) }
+            selection.duplicateEdits(on: page).map { ($0.edits, $0.selection) }
         }
     }
 
-    /// Deletes the selected strokes (one undo step) and ends the selection.
+    /// Deletes the selected strokes and images (one undo step) and ends the selection.
     public func delete() {
         perform("Delete") { selection, page in
-            try (selection.removeEdit(on: page), nil)
+            try (selection.removeEdits(on: page), nil)
         }
     }
 
     // MARK: Private
 
-    private func perform(_ name: String, make: @escaping @MainActor (LassoSelection, Page) throws -> (PageEdit, LassoSelection?)?) {
+    private func perform(_ name: String, make: @escaping @MainActor (LassoSelection, Page) throws -> ([PageEdit], LassoSelection?)?) {
         guard case let .selected(selection) = state else { return }
         commit(name, selection, showing: selection, lifted: false, make: make)
     }
 
-    /// Saves one edit built from `selection` through the pipeline, then shows the selection `make` returned,
-    /// rebuilt from the edited page. Nothing done (or refused)? Then the original strokes, re-read from the
-    /// page, so the outline follows wherever the ink really is.
+    /// Saves the edits built from `selection` through the pipeline (one undo step), then shows the selection
+    /// `make` returned, rebuilt from the edited page. Nothing done (or refused)? Then the original items,
+    /// re-read from the page, so the outline follows wherever the ink really is.
     private func commit(
         _ name: String,
         _ selection: LassoSelection,
         showing: LassoSelection,
         lifted: Bool,
-        make: @escaping @MainActor (LassoSelection, Page) throws -> (PageEdit, LassoSelection?)?
+        make: @escaping @MainActor (LassoSelection, Page) throws -> ([PageEdit], LassoSelection?)?
     ) {
         state = .committing(showing)
         let generation = generation
@@ -177,7 +188,7 @@ public final class SelectionMachine {
             let current = self.generation == generation
             if current {
                 if let page, let next {
-                    show(next.flatMap { LassoSelection($0.strokeIDs, on: page) })
+                    show(next.flatMap { LassoSelection($0.strokeIDs, images: $0.imageIDs, on: page) })
                 } else {
                     reread(selection)
                 }
@@ -193,7 +204,7 @@ public final class SelectionMachine {
         let generation = generation
         edits.read(selection.pageID) { [weak self] page in
             guard let self, self.generation == generation else { return }
-            show(LassoSelection(selection.strokeIDs, on: page))
+            show(LassoSelection(selection.strokeIDs, images: selection.imageIDs, on: page))
         }
     }
 
