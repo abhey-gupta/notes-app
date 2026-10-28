@@ -17,28 +17,31 @@ struct NavCapsule: View {
 
     var body: some View {
         let scale = typeSize.chromeScale
-        // The title takes what the budget leaves (#176): 96-220 pt, tail-truncated. Below 96 the capsule
-        // overflows its budget and a top-docked toolbar drops a row.
+        // The title takes what the budget leaves (#176): 64-100 pt (~10 characters), tail-truncated. Below 64
+        // the capsule overflows its budget and a top-docked toolbar drops a row.
         WidthLimit(max: maxWidth) {
             GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
                 ToolButton(.back, "Library", action: onBack)
                 Menu {
-                    Picker("Paper", selection: $paper) {
-                        ForEach(PaperTheme.allCases) { theme in
-                            Text(theme.displayName).tag(theme)
+                    // Full title, since the pill truncates it (#176).
+                    Section(title) {
+                        Picker("Paper", selection: $paper) {
+                            ForEach(PaperTheme.allCases) { theme in
+                                Text(theme.displayName).tag(theme)
+                            }
                         }
-                    }
-                    Picker("Template", selection: $pattern) {
-                        ForEach(PaperPattern.allCases) { pattern in
-                            Text(pattern.displayName).tag(pattern)
+                        Picker("Template", selection: $pattern) {
+                            ForEach(PaperPattern.allCases) { pattern in
+                                Text(pattern.displayName).tag(pattern)
+                            }
                         }
-                    }
-                    if paper == .night {
-                        Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
+                        if paper == .night {
+                            Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
+                        }
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        WidthLimit(min: 96 * scale, max: 220 * scale) {
+                        WidthLimit(min: 64 * scale, max: 100 * scale) {
                             Text(title)
                                 .font(.chromeTitle)
                                 .foregroundStyle(Tokens.Colors.textPrimary)
