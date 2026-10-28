@@ -7,22 +7,11 @@ final class PhotoTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    /// Attaches a screenshot; with `TEST_RUNNER_SCREENSHOTS=YES` it is also written to the runner's temp
-    /// directory as `<name>.png` (path logged as `SCREENSHOT <path>`, for a look during development).
     private func attachScreenshot(_ app: XCUIApplication, _ name: String) {
-        let screenshot = app.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        guard ProcessInfo.processInfo.environment["SCREENSHOTS"] == "YES" else { return }
-        let url = FileManager.default.temporaryDirectory.appending(path: "\(name).png")
-        do {
-            try screenshot.pngRepresentation.write(to: url)
-            print("SCREENSHOT \(url.path)")
-        } catch {
-            print("SCREENSHOT failed: \(error)")
-        }
     }
 
     @MainActor

@@ -66,7 +66,9 @@ enum PhotoImport {
             format.opaque = true
             let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
                 let cg = context.cgContext
-                let colors = [UIColor(red: 0.50, green: 0.70, blue: 0.84, alpha: 1).cgColor, UIColor(red: 0.94, green: 0.79, blue: 0.53, alpha: 1).cgColor]
+                let sky = UIColor(red: 0.50, green: 0.70, blue: 0.84, alpha: 1).cgColor
+                let sand = UIColor(red: 0.94, green: 0.79, blue: 0.53, alpha: 1).cgColor
+                let colors = [sky, sand]
                 if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1]) {
                     cg.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
                 }
