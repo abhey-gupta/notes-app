@@ -98,52 +98,95 @@ private struct WidthLimit: Layout {
 }
 
 /// Pages, share, more (mock §02, right). DEBUG adds a dock picker to the menu.
+///
+/// Compact chrome (#118): pages · ⋯ only; Share and Add Photo move into ⋯ and open from it, and focus mode
+/// (regular chrome only) leaves the menu.
 struct PagesCapsule: View {
     let tools: ToolState
     let state: EditorState
     /// Current page (1-based) and page count, for export.
     let page: (current: Int, total: Int)
     let paper: PaperTheme
+    var isCompact = false
 
     @State private var showsShare = false
+    @State private var showsPhotos = false
     @State private var presenter = ActivityPresenter()
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let scale = typeSize.chromeScale
         GlassCapsule {
             ToolButton(.pages, "Pages") { state.pages.present() }
                 .accessibilityHint("Shows all pages")
-            ToolButton(.share, "Share") { showsShare.toggle() }
-                .background(ActivityAnchor(presenter: presenter))
-                .popover(isPresented: $showsShare) {
-                    SharePopover(state: state, page: page, isNight: paper.isDark) { url in
-                        showsShare = false
-                        // Present once SwiftUI has started dismissing the popover.
-                        Task {
-                            try? await Task.sleep(for: .milliseconds(50))
-                            presenter.share(url)
+            if isCompact {
+                more
+                    .background(ActivityAnchor(presenter: presenter))
+                    .popover(isPresented: $showsShare) { sharePopover }
+                    .background {
+                        Color.clear.popover(isPresented: $showsPhotos) {
+                            PhotoFlyout(paper: paper) { data in
+                                showsPhotos = false
+                                state.insertPhoto(data)
+                            }
                         }
                     }
-                    .chromePopover(for: paper)
-                }
-            Menu {
-                Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
-                #if DEBUG
-                    Picker("Toolbar dock (debug)", selection: dockBinding) {
-                        ForEach(ToolbarDock.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                    }
-                #endif
-            } label: {
-                Image(systemName: Symbol.more.name)
-                    .font(.system(size: Tokens.Size.toolIcon * scale))
-                    .foregroundStyle(Tokens.Colors.icon)
-                    .frame(width: Tokens.Size.toolButton.width * scale, height: Tokens.Size.toolButton.height * scale)
-                    .contentShape(.capsule)
+            } else {
+                ToolButton(.share, "Share") { showsShare.toggle() }
+                    .background(ActivityAnchor(presenter: presenter))
+                    .popover(isPresented: $showsShare) { sharePopover }
+                more
             }
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .accessibilityLabel("More")
+        }
+    }
+
+    private var sharePopover: some View {
+        SharePopover(state: state, page: page, isNight: paper.isDark) { url in
+            showsShare = false
+            // Present once SwiftUI has started dismissing the popover.
+            Task {
+                try? await Task.sleep(for: .milliseconds(50))
+                presenter.share(url)
+            }
+        }
+        .chromePopover(for: paper)
+        .presentationCompactAdaptation(.popover)
+    }
+
+    private var more: some View {
+        let scale = typeSize.chromeScale
+        return Menu {
+            if isCompact {
+                Button("Share", systemImage: Symbol.share.name) { showsShare = true }
+                Button("Add Photo", systemImage: Symbol.photo.name) { showsPhotos = true }
+                Toggle("Laser Pointer", systemImage: Symbol.laser.name, isOn: laserBinding)
+            } else {
+                Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
+            }
+            #if DEBUG
+                Picker("Toolbar dock (debug)", selection: dockBinding) {
+                    ForEach(ToolbarDock.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+            #endif
+        } label: {
+            Image(systemName: Symbol.more.name)
+                .font(.system(size: Tokens.Size.toolIcon * scale))
+                .foregroundStyle(Tokens.Colors.icon)
+                .frame(width: Tokens.Size.toolButton.width * scale, height: Tokens.Size.toolButton.height * scale)
+                .contentShape(.capsule)
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel("More")
+    }
+
+    /// Off goes back to the tool before the laser.
+    private var laserBinding: Binding<Bool> {
+        Binding { tools.tool == .laser } set: { on in
+            if on {
+                _ = tools.select(.laser)
+            } else if tools.tool == .laser {
+                tools.switchToPrevious()
+            }
         }
     }
 
@@ -168,6 +211,9 @@ struct EditorToolbarContent: View {
     let axis: Axis
     /// Popover edge carrying the arrow (faces the dock).
     let arrowEdge: Edge
+    /// Compact chrome's bottom bar (#118): tools, quick colors, undo. Photos are in ⋯; redo is the
+    /// three-finger tap.
+    var isCompact = false
     /// Tap on the already-current tool.
     let onReselect: (Tool) -> Void
     /// Each tool button's frame in ``ToolbarHost/capsuleSpace`` (popover anchors).
@@ -180,8 +226,9 @@ struct EditorToolbarContent: View {
 
     var body: some View {
         let ink = tools.currentColor.color(on: paper)
-        ForEach(Tool.allCases, id: \.self) { tool in
-            ToolButton(tool.symbol, tool.label, isActive: tools.tool == tool, ink: ink) {
+        let toolSize = isCompact ? Tokens.Size.compactToolButton : Tokens.Size.toolButton
+        ForEach(isCompact ? Self.compactTools : Tool.allCases, id: \.self) { tool in
+            ToolButton(tool.symbol, tool.label, isActive: tools.tool == tool, ink: ink, size: toolSize) {
                 if tools.select(tool) {
                     onReselect(tool)
                 }
@@ -190,17 +237,19 @@ struct EditorToolbarContent: View {
             .accessibilityValue(tools.accessibilityValue(of: tool))
             .accessibilityHint(tools.tool == tool && tool != .lasso ? "Shows \(tool.label.lowercased()) options" : "")
         }
-        ToolButton(.photo, "Photo", isActive: showsPhotos, ink: ink, showsDot: false) {
-            showsPhotos.toggle()
-        }
-        .popover(isPresented: $showsPhotos, arrowEdge: arrowEdge) {
-            PhotoFlyout(paper: paper) { data in
-                showsPhotos = false
-                state.insertPhoto(data)
+        if !isCompact {
+            ToolButton(.photo, "Photo", isActive: showsPhotos, ink: ink, showsDot: false) {
+                showsPhotos.toggle()
             }
+            .popover(isPresented: $showsPhotos, arrowEdge: arrowEdge) {
+                PhotoFlyout(paper: paper) { data in
+                    showsPhotos = false
+                    state.insertPhoto(data)
+                }
+            }
+            .accessibilityIdentifier("photoButton")
+            .accessibilityHint("Shows recent photos to add to the page")
         }
-        .accessibilityIdentifier("photoButton")
-        .accessibilityHint("Shows recent photos to add to the page")
         ChromeSeparator(axis: axis)
         ForEach(Array(tools.quickColors.enumerated()), id: \.offset) { index, color in
             ColorSwatch(color.color(on: paper), label: color.label, isSelected: tools.activeQuickColor == index) {
@@ -220,12 +269,46 @@ struct EditorToolbarContent: View {
         ChromeSeparator(axis: axis)
         ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
             .disabled(!state.canUndo)
-        ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
-            .disabled(!state.canRedo)
+        if !isCompact {
+            ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
+                .disabled(!state.canRedo)
+        }
     }
+
+    /// A phone-width bar has no room for the laser pointer: it's in ⋯ (``PagesCapsule``).
+    static let compactTools = Tool.allCases.filter { $0 != .laser }
 
     private func assign(_ index: Int) {
         tools.setQuickColor(tools.pen.color, at: index)
         assigned[index] += 1
+    }
+}
+
+/// "3 / 12" at the bottom trailing corner; dimmed in focus mode. Compact chrome (#118): above the bottom bar,
+/// which takes the whole row on a phone.
+struct PageIndicator: View {
+    let page: (current: Int, total: Int)
+    let isFocused: Bool
+    let isCompactChrome: Bool
+    let onSize: (CGSize) -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        GlassPill.pageIndicator(current: page.current, total: page.total)
+            .onGeometryChange(for: CGSize.self, of: \.size) { onSize($0) }
+            .opacity(isFocused ? 0.7 : 1)
+            .accessibilityIdentifier("pageIndicator")
+            .accessibilityHint("Current page")
+            .padding(.bottom, bottom)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+    }
+
+    /// Past the glass blend distance, so the pill doesn't melt into the bar.
+    private static let barGap = Tokens.Spacing.glassBlend + Tokens.Spacing.xs
+
+    private var bottom: CGFloat {
+        let inset = Tokens.Spacing.chromeInset
+        return isCompactChrome ? inset + Tokens.Size.capsuleHeight * typeSize.chromeScale + Self.barGap : inset
     }
 }

@@ -27,6 +27,7 @@ import Tools
 /// - `-allowFingerDrawing YES`: fingers ink (one finger draws, two scroll) — the simulator has no Pencil.
 /// - `-fixtureNotebook <pages>`: add a FixtureGen notebook ("Fixture <pages>p · seed 1") to the on-disk
 ///   library after launch (generated once; the package ID is deterministic).
+/// - `-compactChrome YES`: compact (iPhone / narrow window) chrome at any width (#118 UI tests).
 /// - `-DesignSystemGallery YES`: DesignSystem gallery (#12).
 @MainActor
 enum LaunchOptions {
@@ -51,6 +52,11 @@ enum LaunchOptions {
     /// With `-openNotebook`: insert a generated photo once the notebook is up (#157 UI tests).
     static var insertsSamplePhoto: Bool {
         flag("insertSamplePhoto")
+    }
+
+    /// Compact chrome whatever the window width (#118; the UI tests run on an iPad simulator).
+    static var forcesCompactChrome: Bool {
+        flag("compactChrome")
     }
 
     /// One-time hints may show (off under `-resetToolState`, i.e. in UI tests).

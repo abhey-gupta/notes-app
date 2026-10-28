@@ -45,6 +45,8 @@ struct RootView: View {
                 }
             }
         }
+        // Compact chrome and room for the window controls (#118).
+        .readsChromeLayout()
         // Library and editor chrome follow Dynamic Type up to AX1; capsules grow with it (#45).
         .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
         // After the first frame: finish a slow/rebuilding index load, purge old trash, warm up the canvas.
