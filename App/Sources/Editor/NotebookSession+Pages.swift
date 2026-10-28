@@ -15,15 +15,17 @@ extension NotebookSession {
     func installPages() {
         let pages = state.pages
         pages.onShow = { [weak self] in self?.showPage($0) }
+        pages.capturePage = { [weak self] index, afterUpdates in
+            self?.host.capturePage(index, afterScreenUpdates: afterUpdates)
+        }
         pages.onInsert = { [weak self] index, style in self?.insertPage(after: index, template: style.defaultTemplate) }
         pages.onMove = { [weak self] from, to in self?.movePage(from: from, to: to) }
         pages.onDelete = { [weak self] in self?.deletePages($0) }
         pages.hasInk = { [weak self] ids in await self?.pagesHaveInk(ids) ?? false }
     }
 
-    /// Closes the overview and puts the page at `index` on screen.
+    /// Puts the page at `index` on screen (under the overview, which flies it up and then dismisses).
     func showPage(_ index: Int) {
-        state.pages.dismiss()
         guard host.layout.pageIDs.indices.contains(index) else { return }
         host.scrollToPage(index, animated: false)
     }

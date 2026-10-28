@@ -15,13 +15,18 @@ struct PageThumb: View {
     let paper: DesignSystem.PaperTheme
     /// Thumbnail cache key.
     let version: Date
+    /// Off while the page flies between the canvas and this cell (#124): the flyer shows the same pixels.
+    var showsContent = true
+    /// Ring and number: they fade in as the page lands and out as it takes off (`chromeAnimation`).
+    var showsChrome = true
+    var chromeAnimation: Animation?
 
     private static let size = Tokens.Size.pageThumb
     /// Template spacing scaled from page points to thumb points.
     private static let spacing = Tokens.Size.templateSpacing * Tokens.Size.pageThumb.width / Tokens.Size.pageA4.width
 
     var body: some View {
-        let ringed = isSelecting ? isSelected : isCurrent
+        let ringed = (isSelecting ? isSelected : isCurrent) && showsChrome
         VStack(spacing: 10) {
             ZStack {
                 Rectangle().fill(paper.paper.color)
@@ -37,6 +42,7 @@ struct PageThumb: View {
                     .strokeBorder(Tokens.Colors.selection, lineWidth: Tokens.Size.pageThumbRing)
                     .padding(-Tokens.Size.pageThumbRing)
                     .opacity(ringed ? 1 : 0)
+                    .animation(chromeAnimation, value: ringed)
             }
             .overlay(alignment: .topTrailing) {
                 if isSelecting {
@@ -48,9 +54,12 @@ struct PageThumb: View {
             }
             .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
             .shadow(Tokens.Shadows.thumb)
+            .opacity(showsContent ? 1 : 0)
             Text("\(number)")
                 .scaledFont(size: 12.5, weight: isCurrent ? .semibold : .medium)
                 .foregroundStyle(isCurrent ? Tokens.Colors.selection.color : Tokens.Colors.textSecondary.color)
+                .opacity(showsChrome ? 1 : 0)
+                .animation(chromeAnimation, value: showsChrome)
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)

@@ -12,6 +12,12 @@ import SwiftUI
 /// - Select: multi-select, Delete asks first only if a selected page has ink.
 ///
 /// Undo and redo sit in the header; ⌘Z and the three-finger gestures reach the same history.
+///
+/// Opening and closing are one spatial flight (#124, `PageFlightView`): the page as seen on the canvas
+/// shrinks into its cell while the scrim, the other cells (rippling out from it), the header and the
+/// capsule fade in on `FlightTiming` segments of the same 350 ms; closing plays it backwards, from
+/// the tapped cell. The grid is scrolled to the current cell first (invisibly) when it starts off
+/// screen; with Reduce Motion, or when a flight end is unavailable, everything crossfades instead.
 struct PagesOverview: View {
     let model: PagesModel
     let state: EditorState
@@ -19,33 +25,35 @@ struct PagesOverview: View {
     let title: String
     let paper: DesignSystem.PaperTheme
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isSelecting = false
     @State private var selected: Set<PageID> = []
     @State private var confirmsDelete = false
     @State private var drag: Drag?
-    /// Visible cells' frames in ``gridSpace`` (drop targets).
-    @State private var frames: [Int: CGRect] = [:]
+    @State private var flight: PagesFlight
 
-    private struct Drag: Equatable {
-        var index: Int
-        var translation: CGSize = .zero
-        var target: Int?
+    init(model: PagesModel, state: EditorState, viewport: CanvasViewportState, title: String, paper: DesignSystem.PaperTheme) {
+        self.model = model
+        self.state = state
+        self.viewport = viewport
+        self.title = title
+        self.paper = paper
+        _flight = State(initialValue: PagesFlight(model: model, paper: paper.paper.uiColor))
     }
-
-    private nonisolated static let gridSpace = "pagesGrid"
-    private static let columns = [
-        GridItem(
-            .adaptive(minimum: Tokens.Size.pageThumb.width, maximum: Tokens.Size.pageThumb.width),
-            spacing: Tokens.Size.pageThumbGap, alignment: .top
-        ),
-    ]
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Rectangle().fill(.regularMaterial).ignoresSafeArea()
-            Rectangle().fill(Tokens.Colors.libraryBackground.color.opacity(0.55)).ignoresSafeArea()
+            Group {
+                Rectangle().fill(.regularMaterial).ignoresSafeArea()
+                Rectangle().fill(Tokens.Colors.libraryBackground.color.opacity(0.55)).ignoresSafeArea()
+            }
+            .opacity(flight.isOpen ? 1 : 0)
+            .animation(segment(0, 0.6), value: flight.isOpen)
             VStack(spacing: 0) {
                 header
+                    .opacity(flight.isOpen ? 1 : 0)
+                    .offset(y: flight.isOpen ? 0 : 6)
+                    .animation(segment(0.4, 1), value: flight.isOpen)
                 grid
             }
             if !isSelecting {
@@ -54,12 +62,16 @@ struct PagesOverview: View {
                 }
                 .padding(.bottom, Tokens.Spacing.xxl)
                 .transition(.opacity)
+                .opacity(flight.isOpen ? 1 : 0)
+                .offset(y: flight.isOpen ? 0 : 6)
+                .animation(segment(0.4, 1), value: flight.isOpen)
             }
+            PageFlightHost(view: flight.view)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
         }
         .animation(Tokens.Motion.reducedMorph, value: isSelecting)
-        .onAppear {
-            FrameAfter.next { model.didRenderFirstFrame() }
-        }
+        .allowsHitTesting(!flight.isLeaving)
         .onChange(of: model.entries) { _, entries in
             let ids = Set(entries.map(\.id))
             selected = selected.filter(ids.contains)
@@ -73,7 +85,11 @@ struct PagesOverview: View {
         .accessibilityIdentifier("pagesOverview")
         // VoiceOver stays in the overlay; two-finger scrub leaves select mode, then the overview.
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { isSelecting ? endSelecting() : model.dismiss() }
+        .accessibilityAction(.escape) { isSelecting ? endSelecting() : flight.close(
+            to: nil,
+            current: currentIndex,
+            reduceMotion: reduceMotion
+        ) }
         .accessibilityValue(model.openMilliseconds.map { String(format: "%.1f ms", $0) } ?? "")
     }
 
@@ -107,7 +123,7 @@ struct PagesOverview: View {
                 onSelect: { isSelecting = true },
                 onDelete: requestDelete,
                 onCancel: endSelecting,
-                onDone: model.dismiss
+                onDone: { flight.close(to: nil, current: currentIndex, reduceMotion: reduceMotion) }
             )
         }
         .padding(.horizontal, Tokens.Spacing.libraryMargin)
@@ -118,22 +134,30 @@ struct PagesOverview: View {
     // MARK: Grid
 
     private var grid: some View {
-        ScrollView {
-            LazyVGrid(columns: Self.columns, alignment: .leading, spacing: Tokens.Spacing.xxl) {
-                ForEach(Array(model.entries.enumerated()), id: \.element.id) { index, entry in
-                    cell(entry, at: index)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: Self.columns, alignment: .leading, spacing: Tokens.Spacing.xxl) {
+                    ForEach(Array(model.entries.enumerated()), id: \.element.id) { index, entry in
+                        cell(entry, at: index)
+                    }
                 }
+                .padding(.horizontal, Tokens.Spacing.libraryMargin)
+                .padding(.top, Tokens.Spacing.s)
+                .padding(.bottom, Tokens.Size.templateCapsuleHeight + 2 * Tokens.Spacing.xxl)
             }
-            .padding(.horizontal, Tokens.Spacing.libraryMargin)
-            .padding(.top, Tokens.Spacing.s)
-            .padding(.bottom, Tokens.Size.templateCapsuleHeight + 2 * Tokens.Spacing.xxl)
+            .coordinateSpace(.named(Self.gridSpace))
+            .scrollIndicators(.hidden)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { flight.geometry.scroll = $0 }
+            .onAppear {
+                FrameAfter.next { flight.arrive(proxy, current: currentIndex, reduceMotion: reduceMotion) }
+            }
         }
-        .coordinateSpace(.named(Self.gridSpace))
-        .scrollIndicators(.hidden)
     }
 
     private func cell(_ entry: PagesModel.Entry, at index: Int) -> some View {
         let dragging = drag?.index == index
+        let isAnchor = index == flight.anchorIndex(current: currentIndex)
+        let settled = isAnchor || flight.isOpen
         return PageThumb(
             entry: entry,
             number: index + 1,
@@ -142,7 +166,10 @@ struct PagesOverview: View {
             isSelecting: isSelecting,
             isSelected: selected.contains(entry.id),
             paper: paper,
-            version: model.thumbnailVersion(entry.id)
+            version: model.thumbnailVersion(entry.id),
+            showsContent: !(isAnchor && flight.hidesAnchorContent),
+            showsChrome: !isAnchor || flight.isOpen,
+            chromeAnimation: isAnchor ? segment(0.7, 1) : nil
         )
         .overlay(alignment: dropEdge(for: index)) {
             if drag?.target == index, !dragging {
@@ -152,11 +179,14 @@ struct PagesOverview: View {
                     .offset(x: dropEdge(for: index) == .leading ? -Tokens.Size.pageThumbGap / 2 : Tokens.Size.pageThumbGap / 2)
             }
         }
-        .scaleEffect(dragging ? 1.04 : 1)
+        .scaleEffect(dragging ? 1.04 : settled ? 1 : 0.96)
+        .opacity(settled ? 1 : 0)
         .offset(dragging ? drag?.translation ?? .zero : .zero)
         .zIndex(dragging ? 1 : 0)
         .animation(.snappy(duration: 0.18), value: dragging)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { frames[index] = $0 }
+        .animation(isAnchor ? nil : rippleSegment(index, anchor: flight.anchorIndex(current: currentIndex)), value: flight.isOpen)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { flight.geometry.cells[index] = $0 }
+        .onDisappear { flight.geometry.cells[index] = nil }
         .onTapGesture { tapped(entry, at: index) }
         .accessibilityAction { tapped(entry, at: index) }
         .gesture(isSelecting ? nil : reorderGesture(from: index))
@@ -176,8 +206,19 @@ struct PagesOverview: View {
         return index > drag.index ? .trailing : .leading
     }
 
-    private var currentIndex: Int {
+    var currentIndex: Int {
         min(viewport.currentPage, max(model.entries.count - 1, 0))
+    }
+
+    // MARK: Flight timing
+
+    private func segment(_ from: Double, _ to: Double) -> Animation {
+        FlightTiming.segment(from, to, opening: flight.isOpen, reduceMotion: reduceMotion)
+    }
+
+    private func rippleSegment(_ index: Int, anchor: Int) -> Animation {
+        let delay = flight.rippleDelay(index: index, anchor: anchor)
+        return segment(0.25 + delay, 0.85 + delay)
     }
 
     // MARK: Actions
@@ -188,7 +229,7 @@ struct PagesOverview: View {
                 selected.insert(entry.id)
             }
         } else {
-            model.onShow(index)
+            flight.close(to: index, current: currentIndex, reduceMotion: reduceMotion)
         }
     }
 
@@ -216,7 +257,7 @@ struct PagesOverview: View {
 
     /// The visible cell under `point`, if any other than the dragged one.
     private func target(at point: CGPoint, from index: Int) -> Int? {
-        frames.first { $0.key != index && $0.key < model.entries.count && $0.value.contains(point) }?.key
+        flight.geometry.cells.first { $0.key != index && $0.key < model.entries.count && $0.value.contains(point) }?.key
     }
 
     private func requestDelete() {
@@ -249,4 +290,20 @@ struct PagesOverview: View {
         isSelecting = false
         selected = []
     }
+}
+
+private extension PagesOverview {
+    struct Drag: Equatable {
+        var index: Int
+        var translation: CGSize = .zero
+        var target: Int?
+    }
+
+    nonisolated static let gridSpace = "pagesGrid"
+    static let columns = [
+        GridItem(
+            .adaptive(minimum: Tokens.Size.pageThumb.width, maximum: Tokens.Size.pageThumb.width),
+            spacing: Tokens.Size.pageThumbGap, alignment: .top
+        ),
+    ]
 }

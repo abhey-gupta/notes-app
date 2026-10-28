@@ -21,6 +21,7 @@ struct EditorScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(notebook: NotebookSummary, library: any LibraryModel, tools: ToolState, startsFocused: Bool = false) {
         self.library = library
@@ -38,32 +39,42 @@ struct EditorScreen: View {
             Rectangle().fill(Tokens.Colors.desk).ignoresSafeArea()
             CanvasView(host: session.host)
                 .ignoresSafeArea()
-            if session.state.pages.isPresented {
-                PagesOverview(
-                    model: session.state.pages, state: session.state, viewport: viewport, title: notebook.title, paper: notebook.theme.style
-                )
-                .transition(.opacity)
-                .zIndex(1)
-            } else {
-                ToolbarHost(
-                    tools: tools,
-                    state: session.state,
-                    title: notebook.title,
-                    paper: paperBinding,
-                    pattern: patternBinding,
-                    page: (min(viewport.currentPage + 1, max(viewport.pageCount, 1)), viewport.pageCount),
-                    onBack: { dismiss() }
-                )
-                SelectionBar(tools: tools, state: session.state, paper: notebook.theme.style)
-                if session.state.showsWidenHint {
-                    WidenHint()
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                        .zIndex(2)
+            let pages = session.state.pages
+            let chromeHidden = pages.phase == .opening || pages.phase == .open
+            // The chrome fades out in the first 100 ms of the pages flight and back in during its last 100 ms
+            // (#124); it leaves the hierarchy meanwhile, so the overview's buttons are the only ones.
+            Group {
+                if !chromeHidden {
+                    Group {
+                        ToolbarHost(
+                            tools: tools,
+                            state: session.state,
+                            title: notebook.title,
+                            paper: paperBinding,
+                            pattern: patternBinding,
+                            page: (min(viewport.currentPage + 1, max(viewport.pageCount, 1)), viewport.pageCount),
+                            onBack: { dismiss() }
+                        )
+                        SelectionBar(tools: tools, state: session.state, paper: notebook.theme.style)
+                        if session.state.showsWidenHint {
+                            WidenHint()
+                                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                                .zIndex(2)
+                        }
+                    }
+                    .transition(.opacity)
                 }
+            }
+            .animation(FlightTiming.segment(0, 0.3, opening: chromeHidden, reduceMotion: reduceMotion), value: chromeHidden)
+            if pages.isPresented {
+                PagesOverview(
+                    model: pages, state: session.state, viewport: viewport, title: notebook.title, paper: notebook.theme.style
+                )
+                .transition(.identity)
+                .zIndex(1)
             }
         }
         .animation(Tokens.Motion.morph, value: session.state.showsWidenHint)
-        .animation(Tokens.Motion.reducedMorph, value: session.state.pages.isPresented)
         .toolbar(.hidden, for: .navigationBar)
         .persistentSystemOverlays(session.state.isFocused ? .hidden : .automatic)
         .task {

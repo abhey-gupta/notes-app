@@ -1,3 +1,4 @@
+import Canvas
 import DesignSystem
 import Foundation
 import InkModel
@@ -18,15 +19,28 @@ final class PagesModel {
         var thumbnail: URL?
     }
 
-    private(set) var isPresented = false
+    /// Opening and closing fly the page between the canvas and its cell (#124, `PageFlightView`); the
+    /// overlay is on screen for every phase but `.closed`, the chrome for `.closed` and `.closing`.
+    enum Phase: Equatable {
+        case closed, opening, open, closing
+    }
+
+    private(set) var phase: Phase = .closed
+    var isPresented: Bool {
+        phase != .closed
+    }
+
     private(set) var entries: [Entry] = []
     /// Cache key per page: changes when the page's thumbnail file was rewritten while the overview is up.
     private(set) var thumbnailVersions: [PageID: Date] = [:]
     /// Pages tap → the overlay's first frame, for the < 100 ms budget (`page.overview` signpost).
     private(set) var openMilliseconds: Double?
 
-    /// Dismiss and scroll the canvas to the page (0-based).
+    /// Put the page (0-based) on screen, under the overlay; the overlay then flies it up and dismisses.
     @ObservationIgnored var onShow: (Int) -> Void = { _ in }
+    /// The page (0-based) as drawn right now, frames in window coordinates; `true` waits for a pending
+    /// layout (after ``onShow``). `nil`: no flight, crossfade instead.
+    @ObservationIgnored var capturePage: (Int, _ afterScreenUpdates: Bool) -> PageCapture? = { _, _ in nil }
     /// Insert a page with the template after the index (`nil` appends).
     @ObservationIgnored var onInsert: (Int?, PaperStyle) -> Void = { _, _ in }
     @ObservationIgnored var onMove: (_ from: Int, _ to: Int) -> Void = { _, _ in }
@@ -39,12 +53,24 @@ final class PagesModel {
     private static let log = Logger(subsystem: Signpost.subsystem, category: "page")
 
     func present() {
-        guard !isPresented else { return }
+        guard phase == .closed else { return }
         openMilliseconds = nil
         openedAt = Date()
         thumbnailVersions = [:]
         opening = (Signpost.pagesOverview.begin(), .now)
-        isPresented = true
+        phase = .opening
+    }
+
+    /// The page landed in its cell (or crossfaded): the overview takes input.
+    func didOpen() {
+        guard phase == .opening else { return }
+        phase = .open
+    }
+
+    /// The flight back started: the chrome fades in under the overlay.
+    func willDismiss() {
+        guard phase == .open else { return }
+        phase = .closing
     }
 
     /// The overlay drew its first frame.
@@ -59,10 +85,11 @@ final class PagesModel {
         Self.log.notice("pages.overview firstFrame \(ms, format: .fixed(precision: 1), privacy: .public) ms, \(count) pages")
     }
 
+    /// The overlay leaves (the page is back on the canvas).
     func dismiss() {
         opening?.interval.end()
         opening = nil
-        isPresented = false
+        phase = .closed
     }
 
     func setEntries(_ entries: [Entry]) {
