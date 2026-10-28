@@ -9,7 +9,7 @@ final class TapUndoTests: XCTestCase {
 
     @MainActor
     private func waitForIndicator(_ app: XCUIApplication, timeout: TimeInterval = 10, where match: @escaping (String) -> Bool) -> String? {
-        let pill = app.buttons["pageIndicator"]
+        let pill = app.staticTexts["pageIndicator"]
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if pill.exists, match(pill.label) {
@@ -55,7 +55,7 @@ final class TapUndoTests: XCTestCase {
         app.scrollViews["canvas"].tap(withNumberOfTaps: 1, numberOfTouches: 2)
         RunLoop.current.run(until: Date().addingTimeInterval(1.5))
         // Page count only: the simulator's synthesized two-finger tap may also scroll (as on main).
-        XCTAssertTrue(app.buttons["pageIndicator"].label.hasSuffix(" of 12"), "setting off: no undo")
+        XCTAssertTrue(app.staticTexts["pageIndicator"].label.hasSuffix(" of 12"), "setting off: no undo")
     }
 
     @MainActor

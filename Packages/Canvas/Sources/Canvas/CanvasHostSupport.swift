@@ -8,11 +8,9 @@
     public protocol CanvasHostViewDelegate: AnyObject {
         /// The visible pages moved to a new ``PageWindow`` (not called for scrolls within the same pages).
         func canvasHost(_ host: CanvasHostView, didChange window: PageWindow)
-        /// A finger started scrolling or zooming (focus mode restores the chrome, §7).
-        func canvasHostWillBeginNavigating(_ host: CanvasHostView)
         /// The add-page button under the last page was tapped.
         func canvasHostDidRequestNewPage(_ host: CanvasHostView)
-        /// The last touch on the canvas lifted (end of a Pencil gesture: eraser undo grouping, focus mode).
+        /// The last touch on the canvas lifted (end of a Pencil gesture: eraser undo grouping).
         func canvasHostDidLiftAllTouches(_ host: CanvasHostView)
         /// Two fingers tapped the canvas (#121, while ``CanvasHostView/allowsTapUndo``).
         func canvasHostDidRequestUndo(_ host: CanvasHostView)

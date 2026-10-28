@@ -13,12 +13,11 @@ import Tools
 ///   instead of the container's. Perf tests point it at fixture libraries the test runner builds (#15).
 /// - `-seedNotebooks <n>`: if the on-disk library is empty, fill it with n mock-shaped notebooks.
 /// - `-openNotebook <title>`: start in the editor for that notebook (`first` = most recent).
-/// - `-focusMode YES`: with `-openNotebook`, start with the chrome collapsed.
+/// - `-focusMode YES`: with `-openNotebook`, start in focus mode (compact pill, other chrome hidden).
 /// - `-pagesOverview YES`: with `-openNotebook`, open the pages overview a few seconds after the notebook.
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
 /// - `-importSamplePDF YES`: start with the import sheet up on a generated 24-page PDF (#119).
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
-/// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
 /// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests); also silences
 ///   one-time hints (the "hold a page edge to widen" caption, #129) so screenshots stay deterministic.
 /// - `-penKind fountain|ballpoint|brush`, `-penSize <mm>`: pen family and size (UI tests).
@@ -105,7 +104,7 @@ enum LaunchOptions {
         #endif
     }
 
-    /// Persisted `ToolState` with app defaults; DEBUG launch arguments override dock and compact.
+    /// Persisted `ToolState` with app defaults; DEBUG launch arguments override dock and tools.
     static func makeToolState() -> ToolState {
         #if DEBUG
             let defaults = UserDefaults.standard
@@ -116,9 +115,6 @@ enum LaunchOptions {
             let arguments = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
             if let raw = arguments["toolbarDock"] as? String, let dock = ToolbarDock(rawValue: raw) {
                 tools.dock = dock
-            }
-            if arguments["toolbarCompact"] != nil {
-                tools.isCompact = flag("toolbarCompact")
             }
             // No pen-family or width picker yet (#26): UI tests choose them here.
             if let raw = arguments["penKind"] as? String, let kind = PenSettings.kinds.first(where: { raw == "\($0)" }) {

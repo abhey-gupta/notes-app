@@ -23,7 +23,7 @@ struct ToolStateTests {
         let initial = ToolSettings(quickColors: [.custom(RGBA8(r: 1, g: 2, b: 3)), .primary, .semantic(.accent)])
         let state = try makeState(makeDefaults(), initial: initial)
         #expect(state.settings == initial)
-        #expect(state.dock == .top && !state.isCompact && state.tool == .pen)
+        #expect(state.dock == .top && state.tool == .pen)
     }
 
     @Test func everySettingSurvivesRelaunch() throws {
@@ -41,12 +41,11 @@ struct ToolStateTests {
         state.eraser.autoDeselect = false
         state.setQuickColor(.custom(RGBA8(r: 0x7E, g: 0x4F, b: 0xD8)), at: 2)
         state.dock = .left
-        state.isCompact = true
         state.flush()
 
         let relaunched = makeState(defaults)
         #expect(relaunched.settings == state.settings)
-        #expect(relaunched.tool == .eraser && relaunched.dock == .left && relaunched.isCompact)
+        #expect(relaunched.tool == .eraser && relaunched.dock == .left)
         #expect(relaunched.pen.kind == .brush && relaunched.pen.size == InkSize(12, saved: [6, 10, 18]))
         #expect(relaunched.pen.sizes[.ballpoint] == PenSettings.defaultSize(for: .ballpoint), "other families keep theirs")
         #expect(relaunched.highlighter.size.millimetres == 3)
@@ -91,11 +90,10 @@ struct ToolStateTests {
         let defaults = try makeDefaults()
         let json = #"{"tool":"lasso","dock":"diagonal","pen":{"kind":3,"sizes":[],"color":"blue","pressure":true}}"#
         defaults.set(Data(json.utf8), forKey: "tools")
-        let initial = ToolSettings(dock: .right, isCompact: true)
+        let initial = ToolSettings(dock: .right)
         let state = makeState(defaults, initial: initial)
         #expect(state.tool == .lasso)
         #expect(state.dock == .right, "unknown dock → initial")
-        #expect(state.isCompact, "missing → initial")
         #expect(state.pen.kind == .ballpoint, "highlighter is not a pen kind")
         #expect(state.pen.color == .semantic(.blue))
         #expect(state.quickColors == initial.quickColors)
@@ -268,7 +266,6 @@ struct ToolStateTests {
         state.highlighter.size.millimetres = 3
         state.setQuickColor(.semantic(.accent), at: 1)
         state.dock = .left
-        state.isCompact = true
         #expect(state.active == eraser)
         state.eraser.mode = .partial
         #expect(state.active != eraser, "the eraser's own mode does")

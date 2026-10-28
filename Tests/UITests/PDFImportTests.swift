@@ -45,7 +45,7 @@ final class PDFImportTests: XCTestCase {
             app.buttons["Lecture 4 — Thermodynamics, notebook options"].waitForExistence(timeout: 10),
             "import opens the editor"
         )
-        let indicator = app.buttons["pageIndicator"]
+        let indicator = app.staticTexts["pageIndicator"]
         XCTAssertTrue(indicator.waitForExistence(timeout: 5))
         XCTAssertEqual(indicator.label, "1 of 24")
         RunLoop.current.run(until: Date().addingTimeInterval(1))

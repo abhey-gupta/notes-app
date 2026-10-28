@@ -42,7 +42,7 @@ final class LaunchPerfTests: XCTestCase {
         let app = try makeApp(notebooks: 200)
         warmUp(app)
         let cover = app.buttons[PerfLibrary.largeFixtureCover]
-        let editor = app.buttons["pageIndicator"]
+        let editor = app.staticTexts["pageIndicator"]
         let open = {
             cover.tap()
             XCTAssertTrue(editor.waitForExistence(timeout: Self.timeout))

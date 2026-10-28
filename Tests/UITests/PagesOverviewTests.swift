@@ -41,7 +41,7 @@ final class PagesOverviewTests: XCTestCase {
         let cover = app.buttons["cover-Thermodynamics"]
         XCTAssertTrue(cover.waitForExistence(timeout: 15))
         cover.tap()
-        XCTAssertTrue(app.buttons["pageIndicator"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["pageIndicator"].waitForExistence(timeout: 10))
 
         _ = openOverview(app)
         XCTAssertTrue(waitForCount(11, in: app))
@@ -88,7 +88,7 @@ final class PagesOverviewTests: XCTestCase {
         // Tap a thumb: closes and scrolls there.
         app.descendants(matching: .any)["page-4"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["pagesOverview"].waitForNonExistence(timeout: 3))
-        let pill = app.buttons["pageIndicator"]
+        let pill = app.staticTexts["pageIndicator"]
         XCTAssertTrue(pill.waitForExistence(timeout: 5))
         XCTAssertEqual(pill.label, "4 of 12")
     }
@@ -103,7 +103,7 @@ final class PagesOverviewTests: XCTestCase {
         let cover = app.buttons["cover-Fixture 300p · seed 1"]
         XCTAssertTrue(cover.waitForExistence(timeout: 600), "fixture notebook generated")
         cover.tap()
-        XCTAssertTrue(app.buttons["pageIndicator"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts["pageIndicator"].waitForExistence(timeout: 30))
         RunLoop.current.run(until: Date().addingTimeInterval(2))
 
         let overview = openOverview(app)

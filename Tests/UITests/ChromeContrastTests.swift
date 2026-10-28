@@ -35,12 +35,12 @@ final class ChromeContrastTests: XCTestCase {
     func testCompactPillOverEachPaper() {
         for (title, name) in [("Thermodynamics", "white-dots"), ("Launch Plan", "night")] {
             let app = XCUIApplication()
-            app.launchArguments += ["-sampleLibrary", "YES", "-openNotebook", title, "-resetToolState", "YES", "-toolbarCompact", "YES"]
+            app.launchArguments += ["-sampleLibrary", "YES", "-openNotebook", title, "-resetToolState", "YES", "-focusMode", "YES"]
             app.launch()
             let pill = app.descendants(matching: .any).matching(identifier: "focusPill").firstMatch
             XCTAssertTrue(pill.waitForExistence(timeout: 10))
             save(app, "\(name)-pill")
-            pill.tap()
+            app.buttons["Show toolbar"].tap()
             XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "toolbar").firstMatch.waitForExistence(timeout: 3))
             save(app, "\(name)-expanded")
             app.terminate()

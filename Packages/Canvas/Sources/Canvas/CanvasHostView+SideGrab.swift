@@ -100,7 +100,6 @@
             scroll.pinchGestureRecognizer?.isEnabled = false
             snapHaptic.impactOccurred()
             grabHaptic.prepare()
-            delegate?.canvasHostWillBeginNavigating(self)
             layoutPreview()
             delegate?.canvasHostDidBeginSideGrab(self)
             return true
