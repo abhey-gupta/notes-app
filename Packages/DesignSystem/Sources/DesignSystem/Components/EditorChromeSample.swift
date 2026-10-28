@@ -16,7 +16,7 @@ public struct EditorChromeSample: View {
     }
 
     private static let tools: [(Symbol, String)] = [
-        (.pen, "Pen"), (.highlighter, "Highlighter"), (.eraser, "Eraser"), (.lasso, "Lasso"),
+        (.pen, "Pen"), (.highlighter, "Highlighter"), (.eraser, "Eraser"), (.lasso, "Lasso"), (.laser, "Laser"),
     ]
 
     public init(isFocused: Binding<Bool>, title: String, paper: PaperTheme) {

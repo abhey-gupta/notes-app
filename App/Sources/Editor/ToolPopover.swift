@@ -6,7 +6,7 @@ import Tools
 
 /// Tool options (mock §03), opened by tapping the active tool. Pen: family, live stroke preview, size in mm
 /// (#168), palette + custom color, pressure. Highlighter: preview, size, colors. Eraser: mode, 3 sizes,
-/// switch back after erasing.
+/// switch back after erasing. Laser: trail or dot (#159).
 /// Every control writes straight to `ToolState`, which the editor pushes to the engine, so the next stroke
 /// already uses it.
 struct ToolPopover: View {
@@ -23,6 +23,7 @@ struct ToolPopover: View {
             case .highlighter: highlighter
             case .eraser: eraser
             case .lasso: EmptyView()
+            case .laser: laser
             }
         }
         .padding(Tokens.Size.popoverPadding)
@@ -89,6 +90,21 @@ struct ToolPopover: View {
         }
         settingToggle("Switch back after erasing", isOn: $tools.eraser.autoDeselect)
             .accessibilityIdentifier("eraserAutoDeselectToggle")
+    }
+
+    // MARK: Laser
+
+    @ViewBuilder private var laser: some View {
+        let mode = tools.laser.mode
+        SegmentedChoice(LaserSettings.Mode.allCases, selection: $tools.laser.mode, title: \.displayName)
+            .accessibilityIdentifier("laserMode")
+        Text(mode.caption)
+            .scaledFont(size: 13)
+            .foregroundStyle(Tokens.Colors.textSecondary)
+            .contentTransition(.opacity)
+            .animation(Tokens.Motion.inkCrossfade, value: mode)
+            .padding(.top, Tokens.Spacing.m)
+            .padding(.horizontal, Tokens.Spacing.xs)
     }
 
     // MARK: Pieces

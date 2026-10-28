@@ -1,9 +1,9 @@
 import Foundation
 import InkModel
 
-/// The four editor tools (ARCHITECTURE.md §6).
+/// The editor tools (ARCHITECTURE.md §6), in toolbar order.
 public enum Tool: String, CaseIterable, Hashable, Sendable, Codable {
-    case pen, highlighter, eraser, lasso
+    case pen, highlighter, eraser, lasso, laser
 
     /// Puts ink down (counts toward focus mode, takes a color).
     public var inks: Bool {
@@ -203,6 +203,22 @@ public struct EraserSettings: Hashable, Sendable, Codable {
     }
 }
 
+/// Laser pointer settings (#159): a fading trail behind the tip, or just a dot under it. Red, fixed width.
+public struct LaserSettings: Hashable, Sendable, Codable {
+    /// Trail or dot.
+    public enum Mode: String, CaseIterable, Hashable, Sendable, Codable {
+        case trail, dot
+    }
+
+    /// Trail or dot.
+    public var mode: Mode
+
+    /// Creates laser settings.
+    public init(mode: Mode = .trail) {
+        self.mode = mode
+    }
+}
+
 /// Everything ``ToolState`` persists, as one Codable blob.
 ///
 /// Decoding is lenient: missing or invalid fields fall back to the defaults passed to ``ToolState``, so
@@ -219,6 +235,8 @@ public struct ToolSettings: Hashable, Sendable, Codable {
     public var highlighter: HighlighterSettings
     /// Eraser settings.
     public var eraser: EraserSettings
+    /// Laser pointer settings.
+    public var laser: LaserSettings
     /// Quick-color slots, always ``quickColorCount`` long.
     public var quickColors: [InkColor] {
         didSet { quickColors = Self.normalized(quickColors) }
@@ -233,6 +251,7 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         pen: PenSettings = PenSettings(),
         highlighter: HighlighterSettings = HighlighterSettings(),
         eraser: EraserSettings = EraserSettings(),
+        laser: LaserSettings = LaserSettings(),
         quickColors: [InkColor] = [.semantic(.primary), .semantic(.blue), .semantic(.red)],
         dock: ToolbarDock = .top
     ) {
@@ -241,6 +260,7 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         self.pen = PenSettings(kind: pen.kind, sizes: pen.sizes, color: pen.color, pressure: pen.pressure)
         self.highlighter = HighlighterSettings(size: highlighter.size, color: highlighter.color)
         self.eraser = EraserSettings(mode: eraser.mode, widthIndex: eraser.widthIndex, autoDeselect: eraser.autoDeselect)
+        self.laser = laser
         self.quickColors = Self.normalized(quickColors)
         self.dock = dock
     }
@@ -262,6 +282,7 @@ extension ToolSettings {
             pen: stored.pen ?? defaults.pen,
             highlighter: stored.highlighter ?? defaults.highlighter,
             eraser: stored.eraser ?? defaults.eraser,
+            laser: stored.laser ?? defaults.laser,
             quickColors: stored.quickColors ?? defaults.quickColors,
             dock: stored.dock ?? defaults.dock
         )
@@ -274,11 +295,12 @@ private struct StoredToolSettings: Decodable {
     var pen: PenSettings?
     var highlighter: HighlighterSettings?
     var eraser: EraserSettings?
+    var laser: LaserSettings?
     var quickColors: [InkColor]?
     var dock: ToolbarDock?
 
     private enum CodingKeys: String, CodingKey {
-        case tool, pen, highlighter, eraser, quickColors, dock
+        case tool, pen, highlighter, eraser, laser, quickColors, dock
     }
 
     init(from decoder: any Decoder) throws {
@@ -290,6 +312,7 @@ private struct StoredToolSettings: Decodable {
         pen = field(.pen)
         highlighter = field(.highlighter)
         eraser = field(.eraser)
+        laser = field(.laser)
         quickColors = field(.quickColors)
         dock = field(.dock)
     }

@@ -104,7 +104,7 @@ private struct ToolButtonPreview: View {
         PreviewDesk {
             GlassChrome {
                 GlassCapsule {
-                    ForEach([Symbol.pen, .highlighter, .eraser, .lasso], id: \.self) { symbol in
+                    ForEach([Symbol.pen, .highlighter, .eraser, .lasso, .laser], id: \.self) { symbol in
                         ToolButton(symbol, symbol.rawValue, isActive: tool == symbol, ink: Tokens.Colors.inkBlue.color) {
                             tool = symbol
                         }

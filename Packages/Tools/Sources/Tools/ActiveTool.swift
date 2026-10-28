@@ -10,6 +10,8 @@ public enum ActiveTool: Hashable, Sendable {
     case eraser(EraserSettings)
     /// Lasso selection.
     case lasso
+    /// Laser pointer (#159): drawn and faded by the engine, never saved.
+    case laser(LaserSettings.Mode)
 
     /// Erasing (either mode).
     public var isEraser: Bool {
@@ -29,6 +31,7 @@ public extension ToolSettings {
         case .highlighter: .ink(.highlighter, color: highlighter.color, width: highlighter.width)
         case .eraser: .eraser(eraser)
         case .lasso: .lasso
+        case .laser: .laser(laser.mode)
         }
     }
 }

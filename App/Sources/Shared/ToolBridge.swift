@@ -6,7 +6,7 @@ import Tools
 
 extension ActiveTool {
     /// What the engine needs (§6): a pen profile (the highlighter is one) with its color and width, the
-    /// eraser's diameter, or the lasso. Stroke vs partial erase stays with the session.
+    /// eraser's diameter, the lasso, or the laser's mode. Stroke vs partial erase stays with the session.
     func configuration(allowsFingerDrawing: Bool) -> ToolConfiguration {
         switch self {
         case let .ink(kind, color, width, pressure):
@@ -15,6 +15,8 @@ extension ActiveTool {
             ToolConfiguration(tool: .eraser, width: eraser.width, allowsFingerDrawing: allowsFingerDrawing)
         case .lasso:
             ToolConfiguration(tool: .lasso, allowsFingerDrawing: allowsFingerDrawing)
+        case let .laser(mode):
+            ToolConfiguration(tool: .laser(trail: mode == .trail), allowsFingerDrawing: allowsFingerDrawing)
         }
     }
 }
@@ -99,6 +101,7 @@ extension Tool {
         case .highlighter: .highlighter
         case .eraser: .eraser
         case .lasso: .lasso
+        case .laser: .laser
         }
     }
 
@@ -108,7 +111,8 @@ extension Tool {
 }
 
 extension ToolState {
-    /// VoiceOver value of `tool`'s button (#45): "Fountain pen, Black, 0.5 mm", "Stroke eraser, size 16".
+    /// VoiceOver value of `tool`'s button (#45): "Fountain pen, Black, 0.5 mm", "Stroke eraser, size 16",
+    /// "Trail laser".
     func accessibilityValue(of tool: Tool) -> String {
         switch tool {
         case .pen:
@@ -119,6 +123,8 @@ extension ToolState {
             "\(eraser.mode.displayName) eraser, size \(eraser.width.formatted())"
         case .lasso:
             ""
+        case .laser:
+            "\(laser.mode.displayName) laser"
         }
     }
 }

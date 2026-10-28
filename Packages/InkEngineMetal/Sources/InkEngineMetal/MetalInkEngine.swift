@@ -369,6 +369,8 @@ extension MetalInkEngine: InkInputViewDelegate {
             if ended {
                 delegate?.engine(self, didReceiveLasso: stroke.samples.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }, to: stroke.page)
             }
+        case .laser:
+            break
         }
         if ended {
             live = nil

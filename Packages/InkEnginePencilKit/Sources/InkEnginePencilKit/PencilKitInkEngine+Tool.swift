@@ -3,7 +3,7 @@ import InkModel
 import PencilKit
 import UIKit
 
-/// Tool state on the canvases: pens map to PencilKit inking tools; eraser, lasso, the highlighter
+/// Tool state on the canvases: pens map to PencilKit inking tools; eraser, lasso, laser, the highlighter
 /// (`+Highlighter`, #120) and pens with pressure off (`+FlatPen`, #123) go to the input view.
 extension PencilKitInkEngine {
     // MARK: Tool
@@ -20,6 +20,9 @@ extension PencilKitInkEngine {
         if tool.tool != .eraser {
             hideEraserCursor()
         }
+        if !usesLaser {
+            laser.clear()
+        }
         for canvas in canvases {
             applyTool(to: canvas)
         }
@@ -31,7 +34,7 @@ extension PencilKitInkEngine {
         case let .pen(kind) where !drawsThroughInput:
             canvas.view.tool = PencilKitConversion.inkingTool(kind, color: uiColor(tool.color), width: tool.width)
             canvas.view.isUserInteractionEnabled = true
-        case .pen, .eraser, .lasso:
+        case .pen, .eraser, .lasso, .laser:
             canvas.view.isUserInteractionEnabled = false
         }
     }
