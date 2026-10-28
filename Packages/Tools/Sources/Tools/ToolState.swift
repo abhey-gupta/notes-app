@@ -41,6 +41,11 @@ public final class ToolState {
         didSet { changed(eraser != oldValue) }
     }
 
+    /// Laser pointer settings.
+    public var laser: LaserSettings {
+        didSet { changed(laser != oldValue) }
+    }
+
     /// Quick-color slots (always ``ToolSettings/quickColorCount``). Change with ``setQuickColor(_:at:)``.
     public private(set) var quickColors: [InkColor] {
         didSet { changed(quickColors != oldValue) }
@@ -74,6 +79,7 @@ public final class ToolState {
         pen = settings.pen
         highlighter = settings.highlighter
         eraser = settings.eraser
+        laser = settings.laser
         quickColors = settings.quickColors
         dock = settings.dock
     }
@@ -85,6 +91,7 @@ public final class ToolState {
             pen: pen,
             highlighter: highlighter,
             eraser: eraser,
+            laser: laser,
             quickColors: quickColors,
             dock: dock
         )

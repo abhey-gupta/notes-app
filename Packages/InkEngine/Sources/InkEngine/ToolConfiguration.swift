@@ -2,7 +2,8 @@ import InkModel
 
 /// What the Pencil does right now.
 public struct ToolConfiguration: Hashable, Sendable {
-    /// Tool family. Engines draw pens and report eraser/lasso input; `Tools` interprets the latter.
+    /// Tool family. Engines draw pens and report eraser/lasso input; `Tools` interprets the latter. The
+    /// laser is drawn and faded by the engine alone.
     public enum Tool: Hashable, Sendable {
         /// Ink with a pen profile.
         case pen(PenKind)
@@ -10,6 +11,8 @@ public struct ToolConfiguration: Hashable, Sendable {
         case eraser
         /// Lasso selection path.
         case lasso
+        /// Laser pointer (#159): a fading trail behind the tip, or (`trail` off) just a dot. Never committed.
+        case laser(trail: Bool)
     }
 
     /// Tool family.

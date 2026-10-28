@@ -37,6 +37,7 @@ extension PencilKitInkEngine {
         selection.view.layer.addSublayer(selection.lasso)
         setUpFlatPen()
         setUpEraserCursor()
+        setUpLaser()
     }
 
     public func setSelectionPreview(_ preview: SelectionPreview?) {

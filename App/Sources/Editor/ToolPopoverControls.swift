@@ -252,3 +252,19 @@ extension EraserSettings.Mode {
         }
     }
 }
+
+extension LaserSettings.Mode {
+    var displayName: String {
+        switch self {
+        case .trail: "Trail"
+        case .dot: "Dot"
+        }
+    }
+
+    var caption: String {
+        switch self {
+        case .trail: "A red trail that fades behind the tip."
+        case .dot: "A red dot under the tip."
+        }
+    }
+}

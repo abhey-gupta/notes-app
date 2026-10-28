@@ -39,6 +39,7 @@ struct ToolStateTests {
         state.eraser.mode = .partial
         state.eraser.widthIndex = 2
         state.eraser.autoDeselect = false
+        state.laser.mode = .dot
         state.setQuickColor(.custom(RGBA8(r: 0x7E, g: 0x4F, b: 0xD8)), at: 2)
         state.dock = .left
         state.flush()
@@ -50,6 +51,21 @@ struct ToolStateTests {
         #expect(relaunched.pen.sizes[.ballpoint] == PenSettings.defaultSize(for: .ballpoint), "other families keep theirs")
         #expect(relaunched.highlighter.size.millimetres == 3)
         #expect(relaunched.eraser == EraserSettings(mode: .partial, widthIndex: 2, autoDeselect: false))
+        #expect(relaunched.laser.mode == .dot)
+    }
+
+    /// Settings saved before the laser (#159) keep everything else; the laser starts in trail mode.
+    @Test func settingsWithoutLaserKeepTheRest() throws {
+        let defaults = try makeDefaults()
+        let state = makeState(defaults)
+        state.eraser.mode = .partial
+        state.flush()
+        let data = try #require(defaults.data(forKey: "tools"))
+        var json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json["laser"] = nil
+        try defaults.set(JSONSerialization.data(withJSONObject: json), forKey: "tools")
+        let relaunched = makeState(defaults)
+        #expect(relaunched.eraser.mode == .partial && relaunched.laser == LaserSettings())
     }
 
     @Test func savesAreDebounced() async throws {
@@ -203,7 +219,7 @@ struct ToolStateTests {
         #expect(state.tool == .pen)
     }
 
-    @Test(arguments: [Tool.highlighter, .eraser, .lasso])
+    @Test(arguments: [Tool.highlighter, .eraser, .lasso, .laser])
     func quickColorSwitchesToPen(from tool: Tool) throws {
         let state = try makeState(makeDefaults())
         state.select(tool)
@@ -254,6 +270,10 @@ struct ToolStateTests {
         #expect(state.active == .eraser(EraserSettings(mode: .partial, widthIndex: 1)))
         state.select(.lasso)
         #expect(state.active == .lasso)
+        state.select(.laser)
+        #expect(state.active == .laser(.trail))
+        state.laser.mode = .dot
+        #expect(state.active == .laser(.dot))
     }
 
     /// Settings of other tools, quick colors and toolbar placement don't touch the active tool, so the

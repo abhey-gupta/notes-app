@@ -74,6 +74,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     var thumbnailMisses: Set<PageID> = []
     /// Above the canvases: the live lasso path and lifted (lasso-dragged) strokes (`+Selection`).
     let selection = SelectionLayers()
+    /// Laser pointer dot and trail, on the selection view (`+Laser`, #159).
+    let laser = LaserPointer()
 
     private(set) var viewport = Viewport.empty
     private(set) var snapshots: [PageID: PageSnapshot] = [:]

@@ -223,6 +223,9 @@ extension MetalInkEngine {
             var color = overlayInk.simd
             color.w *= 0.45
             return FrameShape(vertices: mesh.vertices, style: StrokeStyle(color: color), isHighlight: false)
+        case .laser:
+            // The laser pointer (#159) is drawn by the PencilKit engine only.
+            return nil
         }
     }
 }
