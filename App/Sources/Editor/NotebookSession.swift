@@ -323,7 +323,7 @@ extension NotebookSession: CanvasHostViewDelegate {
     }
 
     func canvasHostWillBeginNavigating(_: CanvasHostView) {
-        state.exitFocus()
+        state.cancelPendingFocus()
     }
 
     func canvasHostDidRequestNewPage(_: CanvasHostView) {

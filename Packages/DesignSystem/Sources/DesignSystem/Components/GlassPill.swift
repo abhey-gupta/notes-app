@@ -25,21 +25,21 @@ public struct GlassPill: View {
     }
 }
 
-/// Compact chrome while writing (mock §05): current tool, current color, expand.
+/// Compact chrome in focus mode (mock §05): current tool, current color, chevron to exit.
 /// Chain `.glassEffectID(_:in:)` with the tools capsule's ID so collapsing is a morph, not a fade.
 /// `axis: .vertical` stacks the same pieces for a side-docked toolbar.
 public struct FocusPill: View {
     private let axis: Axis
     private let tool: Symbol
     private let ink: Color
-    private let onTool: () -> Void
+    private let onTool: (() -> Void)?
     private let onExpand: () -> Void
 
     public init(
         axis: Axis = .horizontal,
         tool: Symbol,
         ink: Color,
-        onTool: @escaping () -> Void = {},
+        onTool: (() -> Void)? = nil,
         onExpand: @escaping () -> Void
     ) {
         self.axis = axis
@@ -71,7 +71,8 @@ public struct FocusPillContent: View {
     private let axis: Axis
     private let tool: Symbol
     private let ink: Color
-    private let onTool: () -> Void
+    /// `nil`: the tool icon is display only.
+    private let onTool: (() -> Void)?
     private let onExpand: () -> Void
     /// VoiceOver values: "Pen", "Blue".
     private let toolName: String?
@@ -83,7 +84,7 @@ public struct FocusPillContent: View {
         ink: Color,
         toolName: String? = nil,
         colorName: String? = nil,
-        onTool: @escaping () -> Void = {},
+        onTool: (() -> Void)? = nil,
         onExpand: @escaping () -> Void
     ) {
         self.axis = axis
@@ -111,15 +112,19 @@ public struct FocusPillContent: View {
                 size: horizontal ? button : CGSize(width: button.height, height: button.width),
                 iconSize: 17,
                 showsDot: false,
-                action: onTool
+                action: onTool ?? {}
             )
+            .allowsHitTesting(onTool != nil)
+            .tapAbsorbing()
             .accessibilityValue(toolName ?? "")
-            .accessibilityHint("Shows the toolbar")
+            .accessibilityHint(onTool == nil ? "" : "Shows the toolbar")
+            .accessibilityRemoveTraits(onTool == nil ? .isButton : [])
             ColorSwatch(ink, label: "Current color", isSelected: true, diameter: Tokens.Size.focusSwatch)
                 .allowsHitTesting(false)
                 .accessibilityValue(colorName ?? "")
                 .accessibilityRemoveTraits([.isButton, .isSelected])
                 .padding(along, Tokens.Spacing.xs)
+                .tapAbsorbing()
             ChromeSeparator(axis: axis, height: 18)
                 .padding(along, -Tokens.Spacing.xs)
             Button(action: onExpand) {
@@ -132,6 +137,14 @@ public struct FocusPillContent: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Show toolbar")
         }
+    }
+}
+
+private extension View {
+    /// A tap here does nothing. Without a target, SwiftUI's fuzzy hit-testing hands a tap on the tool or swatch
+    /// to the nearby chevron, which would exit focus mode (#158).
+    func tapAbsorbing() -> some View {
+        contentShape(.rect).onTapGesture {}
     }
 }
 

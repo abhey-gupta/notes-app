@@ -1,6 +1,6 @@
 import XCTest
 
-/// Dynamic toolbar (#26): drag to each dock, pinch to compact, tap to expand, persistence, quick colors.
+/// Dynamic toolbar (#26): drag to each dock, pinch into focus mode, chevron out (#158), persistence, quick colors.
 final class ToolbarTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -26,6 +26,14 @@ final class ToolbarTests: XCTestCase {
     @MainActor
     private func pill(_ app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: "focusPill").firstMatch
+    }
+
+    /// Taps the pill at `offset` along it (0 = tool end), off the chevron.
+    @MainActor
+    private func tapPill(_ app: XCUIApplication, at offset: CGFloat) {
+        let frame = pill(app).frame
+        let point = frame.width > frame.height ? CGVector(dx: offset, dy: 0.5) : CGVector(dx: 0.5, dy: offset)
+        pill(app).coordinate(withNormalizedOffset: point).tap()
     }
 
     /// Drags `element` from its centre to a normalized point of the window.
@@ -100,8 +108,9 @@ final class ToolbarTests: XCTestCase {
         XCTAssertTrue(waitUntil(bar, isAt: .top, in: app))
     }
 
+    /// Pinch in enters focus mode; touches, scrolls and a pinch out leave it; only the chevron exits (#158).
     @MainActor
-    func testPinchCompactsAndTapExpands() {
+    func testPinchEntersFocusModeUntilChevron() {
         let app = launch()
         let bar = toolbar(app)
         XCTAssertTrue(bar.waitForExistence(timeout: 5))
@@ -109,10 +118,21 @@ final class ToolbarTests: XCTestCase {
 
         XCTAssertTrue(pill(app).waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["Lasso"].exists)
-        XCTAssertTrue(app.buttons["Pages"].exists, "pinch compacts the tools only, not the other capsules")
+        XCTAssertTrue(app.buttons["Pages"].waitForNonExistence(timeout: 3), "pinch enters focus mode: other capsules hide")
 
-        pill(app).tap()
+        tapPill(app, at: 0.15)
+        tapPill(app, at: 0.5)
+        app.buttons["pageIndicator"].tap()
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)).tap()
+        app.windows.firstMatch.swipeUp()
+        pill(app).pinch(withScale: 2.5, velocity: 1)
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        XCTAssertTrue(pill(app).exists, "touches, scrolls and pinches don't exit focus mode")
+        XCTAssertFalse(app.buttons["Pages"].exists)
+
+        app.buttons["Show toolbar"].tap()
         XCTAssertTrue(app.buttons["Lasso"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Pages"].exists)
         XCTAssertTrue(waitUntil(toolbar(app), isAt: .top, in: app))
     }
 
@@ -129,7 +149,7 @@ final class ToolbarTests: XCTestCase {
     }
 
     @MainActor
-    func testDockCompactAndToolSurviveRelaunch() {
+    func testDockAndToolSurviveRelaunchFocusModeDoesNot() {
         var app = launch()
         let bar = toolbar(app)
         app.buttons["Highlighter"].tap()
@@ -142,9 +162,8 @@ final class ToolbarTests: XCTestCase {
         app.terminate()
 
         app = launch(reset: false)
-        XCTAssertTrue(waitUntil(pill(app), isAt: .right, in: app), "compact pill restored at right")
-        pill(app).tap()
-        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app))
+        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app), "expanded toolbar restored at right")
+        XCTAssertFalse(pill(app).exists, "focus mode isn't persisted")
         XCTAssertTrue(app.buttons["Highlighter"].isSelected)
     }
 
@@ -230,9 +249,13 @@ final class ToolbarTests: XCTestCase {
 
         bar.pinch(withScale: 0.4, velocity: -1)
         XCTAssertTrue(waitUntil(pill(app), isAt: .right, in: app))
-        app.buttons["Current tool"].tap()
-        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app), "any tap on the pill expands")
+        tapPill(app, at: 0.15)
+        tapPill(app, at: 0.5)
+        XCTAssertTrue(pill(app).exists, "a tap on the pill stays in focus mode")
         XCTAssertFalse(popover(app).exists, "the pill has no options popover")
+        app.buttons["Show toolbar"].tap()
+        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app))
+        XCTAssertFalse(popover(app).exists)
     }
 
     @MainActor

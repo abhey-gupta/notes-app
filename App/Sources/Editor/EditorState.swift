@@ -148,14 +148,22 @@ final class EditorState {
         }
     }
 
+    /// Menu "Focus mode" or a pinch in on the toolbar.
     func enterFocus() {
+        cancelPendingFocus()
         isFocused = true
     }
 
-    /// Tap on chrome, a scroll, or the pill restores the full toolbar.
-    func exitFocus() {
+    /// A scroll or zoom drops a pending auto-collapse; focus mode itself stays (#158).
+    func cancelPendingFocus() {
         focusTask?.cancel()
         sessionStart = nil
+    }
+
+    /// Focus mode stays through touches, ink, scrolls (#158): only the pill's chevron (or its VoiceOver
+    /// action) and a Pencil tool-options request exit.
+    func exitFocus() {
+        cancelPendingFocus()
         guard isFocused else { return }
         isFocused = false
     }

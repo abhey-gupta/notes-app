@@ -51,11 +51,6 @@ public final class ToolState {
         didSet { changed(dock != oldValue) }
     }
 
-    /// Toolbar pinched to the compact pill.
-    public var isCompact: Bool {
-        didSet { changed(isCompact != oldValue) }
-    }
-
     /// Debounce between the last change and the write.
     public let saveDelay: Duration
 
@@ -81,7 +76,6 @@ public final class ToolState {
         eraser = settings.eraser
         quickColors = settings.quickColors
         dock = settings.dock
-        isCompact = settings.isCompact
     }
 
     /// Snapshot of everything persisted.
@@ -92,8 +86,7 @@ public final class ToolState {
             highlighter: highlighter,
             eraser: eraser,
             quickColors: quickColors,
-            dock: dock,
-            isCompact: isCompact
+            dock: dock
         )
     }
 

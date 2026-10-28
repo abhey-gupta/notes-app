@@ -7,13 +7,13 @@ import Tools
 ///
 /// The toolbar docks top (default), bottom, left or right. Drag it with a finger and it follows with an
 /// interactive spring, rubber-banding at the screen edges, while a slot shows where it will land; release and
-/// it springs to the nearest dock, re-flowing between horizontal and vertical in place. Pinch in to collapse it
-/// to the compact pill at the same dock; tap (or pinch out on) the pill to expand. Focus mode shows the same
-/// pill. Dock and compact persist in `ToolState`.
+/// it springs to the nearest dock, re-flowing between horizontal and vertical in place. Pinch in to enter focus
+/// mode: the toolbar collapses to the compact pill at the same dock and the other capsules hide. Focus mode is
+/// the only compact state and stays through touches, ink and scrolls until the pill's chevron is tapped (#158).
+/// The dock persists in `ToolState`; focus mode doesn't.
 ///
 /// Tapping the active tool on the expanded toolbar opens its options popover (``ToolPopover``, #27),
-/// anchored to that button with the arrow toward the toolbar on every dock. Any tap on the compact pill
-/// expands; the pill has no popover.
+/// anchored to that button with the arrow toward the toolbar on every dock. The pill has no popover.
 struct ToolbarHost: View {
     let tools: ToolState
     let state: EditorState
@@ -64,16 +64,10 @@ struct ToolbarHost: View {
     private static let estimatedPillLength: CGFloat = 140
     /// Pinching below this collapses on release.
     private static let collapseMagnification: CGFloat = 0.85
-    /// Pinching the pill out past this expands it.
-    private static let expandMagnification: CGFloat = 1.15
     /// Toolbar hit area: the capsule's bounding box plus a 2 pt rim, so a pinch whose fingers start on the
     /// capsule's rounded ends or outline still lands on the toolbar instead of inking the canvas.
     private static var hitShape: some Shape {
         Rectangle().inset(by: -2)
-    }
-
-    private var isCompact: Bool {
-        state.isFocused || tools.isCompact
     }
 
     var body: some View {
@@ -109,7 +103,7 @@ struct ToolbarHost: View {
             .onGeometryChange(for: CGSize.self, of: \.size) { metrics.container = $0 }
             .padding(.horizontal, Tokens.Spacing.chromeInset)
         }
-        .animation(morphAnimation, value: isCompact)
+        .animation(morphAnimation, value: state.isFocused)
         .animation(dockAnimation, value: tools.dock)
         .chromeGlass(for: paper)
     }
@@ -122,7 +116,7 @@ struct ToolbarHost: View {
         reduceMotion ? .materialize : .matchedGeometry
     }
 
-    /// Reduce Motion: focus mode and compact ⇄ expanded swap at once, no morph or fade (#45).
+    /// Reduce Motion: focus mode swaps at once, no morph or fade (#45).
     private var morphAnimation: Animation? {
         reduceMotion ? nil : Tokens.Motion.morph
     }
@@ -151,7 +145,7 @@ struct ToolbarHost: View {
     /// contents cross-fade, so the glass itself morphs with the spring instead of swapping views. Glass doesn't
     /// follow `scaleEffect`, so pinch feedback squeezes the spacing instead and the capsule tracks it.
     private func toolbarBody(axis: Axis) -> some View {
-        let compact = isCompact
+        let compact = state.isFocused
         let ends = compact ? FocusPill.endPadding : Tokens.Spacing.s
         let squeeze = Tokens.Spacing.hairline - 40 * (1 - pinch)
         return GlassCapsule(
@@ -188,16 +182,15 @@ struct ToolbarHost: View {
         }
         .onChange(of: state.toolOptionsRequests) {
             // Pencil "show palette/ink attributes" (#24): the expanded toolbar's popover; the pill has none.
-            if !isCompact, tools.tool != .lasso {
+            if !state.isFocused, tools.tool != .lasso {
                 options = options == tools.tool ? nil : tools.tool
             }
         }
         .contentShape(Self.hitShape)
-        .gesture(TapGesture().onEnded(expand), isEnabled: compact)
         .chromeID(.tools, in: glass, transition: glassTransition)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(compact ? "focusPill" : "toolbar")
-        .accessibilityAction(named: compact ? "Show toolbar" : "Compact toolbar") {
+        .accessibilityAction(named: compact ? "Show toolbar" : "Focus mode") {
             compact ? expand() : collapse()
         }
         .gesture(FingerPan(onBegan: dragBegan, onChanged: dragChanged, onEnded: dragEnded))
@@ -211,7 +204,7 @@ struct ToolbarHost: View {
     private func measured(_ frame: CGRect) {
         guard drag == nil else { return }
         metrics.tools = frame
-        guard !isCompact else { return }
+        guard !state.isFocused else { return }
         if tools.dock.isVertical {
             metrics.verticalLength = frame.height
         } else {
@@ -253,24 +246,21 @@ struct ToolbarHost: View {
         }
     }
 
-    // MARK: Pinch / compact
+    // MARK: Pinch / focus
 
     /// The capsule shrinks with the fingers (damped), then morphs to the pill or springs back.
     private func pinchChanged(_ magnification: CGFloat) {
         options = nil
-        guard !isCompact else { return }
+        guard !state.isFocused else { return }
         withAnimation(Tokens.Motion.dragFollow) {
             pinch = DockGeometry.pinchScale(magnification)
         }
     }
 
-    /// Pinch in on the toolbar collapses it; pinch out on the pill expands it.
+    /// Pinch in on the toolbar enters focus mode. A pinch on the pill does nothing: only its chevron exits.
     private func pinchEnded(_ magnification: CGFloat) {
-        if isCompact {
-            if magnification > Self.expandMagnification {
-                expand()
-            }
-        } else if magnification < Self.collapseMagnification {
+        guard !state.isFocused else { return }
+        if magnification < Self.collapseMagnification {
             collapse()
         } else {
             withAnimation(.spring(duration: 0.3, bounce: 0.35)) {
@@ -282,29 +272,28 @@ struct ToolbarHost: View {
     private func collapse() {
         options = nil
         withAnimation(morphAnimation) {
-            tools.isCompact = true
+            state.enterFocus()
             pinch = 1
         }
     }
 
-    /// Pill tap / pinch-out, and the focus pill's tool and chevron buttons.
+    /// The focus pill's chevron: the only way out of focus mode (#158).
     private func expand() {
         options = nil
         withAnimation(morphAnimation) {
-            tools.isCompact = false
             state.exitFocus()
         }
     }
 
     private var pagePill: some View {
-        Button(action: state.exitFocus) {
+        Button {} label: {
             GlassPill.pageIndicator(current: page.current, total: page.total)
         }
         .buttonStyle(.plain)
         .onGeometryChange(for: CGSize.self, of: \.size) { metrics.pill = $0 }
-        .opacity(isCompact ? 0.7 : 1)
+        .opacity(state.isFocused ? 0.7 : 1)
         .accessibilityIdentifier("pageIndicator")
-        .accessibilityHint(state.isFocused ? "Shows the toolbar" : "Current page")
+        .accessibilityHint("Current page")
         .padding(.bottom, Tokens.Spacing.chromeInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
@@ -316,7 +305,7 @@ extension ToolbarHost {
     /// Expanded toolbar only: the pill never shows options.
     private var optionsPresented: Binding<Bool> {
         Binding {
-            !isCompact && options != nil && options == tools.tool
+            !state.isFocused && options != nil && options == tools.tool
         } set: { presented in
             if !presented {
                 options = nil
@@ -328,12 +317,12 @@ extension ToolbarHost {
         Binding { state.keepsExactColors } set: { state.onKeepsExactColors($0) }
     }
 
-    /// The compact pill: current tool and color (named for VoiceOver), expand.
+    /// The compact pill: current tool and color (named for VoiceOver, display only), chevron to exit.
     private func pillContent(axis: Axis) -> some View {
         FocusPillContent(
             axis: axis, tool: tools.tool.symbol, ink: ink,
             toolName: tools.tool.label, colorName: tools.currentColor.accessibilityName,
-            onTool: expand, onExpand: expand
+            onExpand: expand
         )
     }
 
@@ -358,9 +347,9 @@ extension ToolbarHost {
 extension ToolbarHost {
     // MARK: Placement
 
-    /// Length of the toolbar at rest on `axis` (compact or expanded).
+    /// Length of the toolbar at rest on `axis` (pill or expanded).
     private func restingLength(_ axis: Axis) -> CGFloat {
-        if isCompact {
+        if state.isFocused {
             return Self.estimatedPillLength
         }
         let measured = axis == .horizontal ? metrics.horizontalLength : metrics.verticalLength
@@ -373,7 +362,6 @@ extension ToolbarHost {
             nav: state.isFocused ? 0 : metrics.nav,
             pages: state.isFocused ? 0 : metrics.pages,
             pagePill: metrics.pill,
-            isCompact: isCompact,
             isFocused: state.isFocused,
             scale: typeSize.chromeScale
         )
@@ -382,7 +370,7 @@ extension ToolbarHost {
     /// Drop slot at the drag target: the toolbar's footprint once docked there.
     private func dockHint(_ dock: ToolbarDock) -> some View {
         let length = restingLength(dock.axis)
-        let thickness = (isCompact ? Tokens.Size.focusPillHeight : Tokens.Size.capsuleHeight) * typeSize.chromeScale
+        let thickness = (state.isFocused ? Tokens.Size.focusPillHeight : Tokens.Size.capsuleHeight) * typeSize.chromeScale
         let size = dock.isVertical ? CGSize(width: thickness, height: length) : CGSize(width: length, height: thickness)
         let placement = layout.placement(for: dock, length: length)
         return Capsule()

@@ -40,7 +40,7 @@ final class LaunchTests: XCTestCase {
     }
 
     @MainActor
-    func testInkingCollapsesToFocusPillAndTapRestores() {
+    func testInkingCollapsesToFocusPillAndChevronRestores() {
         let app = XCUIApplication()
         // No Pencil in the simulator: let one finger ink.
         app.launchArguments += [
@@ -63,6 +63,14 @@ final class LaunchTests: XCTestCase {
 
         let pill = app.descendants(matching: .any)["focusPill"]
         XCTAssertTrue(pill.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Lasso"].exists)
+
+        // More ink and a tap on the canvas keep focus mode (#158).
+        let again = window.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.7))
+        let againEnd = window.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.72))
+        again.press(forDuration: 0.05, thenDragTo: againEnd, withVelocity: .slow, thenHoldForDuration: 0.1)
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
+        XCTAssertTrue(pill.exists)
         XCTAssertFalse(app.buttons["Lasso"].exists)
 
         app.buttons["Show toolbar"].tap()

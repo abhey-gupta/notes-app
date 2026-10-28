@@ -63,9 +63,7 @@ extension NotebookSession: SelectionDisplay {
     // MARK: Drag
 
     private func selectionDragBegan(_ corner: LassoSelection.Corner?) -> Bool {
-        guard selection?.beginDrag(from: corner) == true else { return false }
-        state.exitFocus()
-        return true
+        selection?.beginDrag(from: corner) == true
     }
 
     private func selectionDragged(_ phase: SelectionOverlayView.DragPhase, _ transform: CGAffineTransform) {
