@@ -2,111 +2,43 @@ import DesignSystem
 import SwiftUI
 import Tools
 
-/// Back, notebook title and paper/template menu (mock §02, left).
-struct NavCapsule: View {
+/// Small glass ‹ back to the library (top leading). The title and paper options live in ⋯ (``PagesCapsule``).
+struct BackCapsule: View {
     let title: String
+    let onBack: () -> Void
+
+    var body: some View {
+        SlimCapsule {
+            ToolButton(.back, "Library", size: Tokens.Size.focusToolButton, action: onBack)
+                .accessibilityHint("Closes \(title)")
+        }
+    }
+}
+
+/// The top row's slim capsule: focus-pill thickness, 3 pt ends, so a lone button is a circle.
+private struct SlimCapsule<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GlassCapsule(height: Tokens.Size.focusPillHeight, leading: 3, trailing: 3, spacing: 0) { content }
+    }
+}
+
+/// Pages · ⋯ (top trailing). ⋯ holds the notebook's options under its title (paper, template, Keep exact
+/// colors on Night paper), then Share and Focus mode. DEBUG adds a dock picker.
+///
+/// Compact chrome (#118): Add Photo and Laser Pointer join ⋯ (no room on the bar); focus mode (regular
+/// chrome only) leaves it.
+struct PagesCapsule: View {
+    let tools: ToolState
+    let state: EditorState
+    let title: String
+    /// Current page (1-based) and page count, for export.
+    let page: (current: Int, total: Int)
     @Binding var paper: PaperTheme
     @Binding var pattern: PaperPattern
     /// "Keep exact colors", offered on Night paper.
     @Binding var keepsExactColors: Bool
-    let onBack: () -> Void
-    /// Whole capsule's width budget (``maxWidth(_:)``).
-    private var maxWidth: CGFloat = .infinity
-
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        let scale = typeSize.chromeScale
-        // The title takes what the budget leaves (#176): 64-100 pt (~10 characters), tail-truncated. Below 64
-        // the capsule overflows its budget and a top-docked toolbar drops a row.
-        WidthLimit(max: maxWidth) {
-            GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
-                ToolButton(.back, "Library", action: onBack)
-                Menu {
-                    // Full title, since the pill truncates it (#176).
-                    Section(title) {
-                        Picker("Paper", selection: $paper) {
-                            ForEach(PaperTheme.allCases) { theme in
-                                Text(theme.displayName).tag(theme)
-                            }
-                        }
-                        Picker("Template", selection: $pattern) {
-                            ForEach(PaperPattern.allCases) { pattern in
-                                Text(pattern.displayName).tag(pattern)
-                            }
-                        }
-                        if paper == .night {
-                            Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        WidthLimit(min: 64 * scale, max: 100 * scale) {
-                            Text(title)
-                                .font(.chromeTitle)
-                                .foregroundStyle(Tokens.Colors.textPrimary)
-                                .lineLimit(1)
-                                .accessibilityIdentifier("notebookTitle")
-                        }
-                        Image(systemName: Symbol.disclosure.name)
-                            .scaledFont(size: 11, weight: .semibold)
-                            .foregroundStyle(Tokens.Colors.textTertiary)
-                    }
-                    .frame(height: Tokens.Size.toolButton.height * scale)
-                    .contentShape(.rect)
-                }
-                .menuIndicator(.hidden)
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(title), notebook options")
-                .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
-            }
-        }
-    }
-
-    /// Caps the capsule at `width` by tail-truncating the title (#176).
-    func maxWidth(_ width: CGFloat) -> Self {
-        var capsule = self
-        capsule.maxWidth = width
-        return capsule
-    }
-}
-
-/// Lays its child out at its ideal width if that's within `min...max` (and the proposal), else squeezed to the
-/// clamped width (a title tail-truncates), unless even squeezed it won't fit: then whole, overflowing.
-/// Unlike `frame(maxWidth:)` it never grows past what the child wants.
-private struct WidthLimit: Layout {
-    var min: CGFloat = 0
-    var max: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
-        guard let child = subviews.first else { return .zero }
-        return child.sizeThatFits(limited(proposal, child))
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
-        guard let child = subviews.first else { return }
-        child.place(at: bounds.origin, proposal: limited(proposal, child))
-    }
-
-    private func limited(_ proposal: ProposedViewSize, _ child: LayoutSubview) -> ProposedViewSize {
-        let width = Swift.max(Swift.min(proposal.width ?? max, max), min)
-        let whole = ProposedViewSize(width: nil, height: proposal.height)
-        let squeezed = ProposedViewSize(width: width, height: proposal.height)
-        let fits = { (size: ProposedViewSize) in child.sizeThatFits(size).width <= width }
-        return !fits(whole) && fits(squeezed) ? squeezed : whole
-    }
-}
-
-/// Pages, share, more (mock §02, right). DEBUG adds a dock picker to the menu.
-///
-/// Compact chrome (#118): pages · ⋯ only; Share and Add Photo move into ⋯ and open from it, and focus mode
-/// (regular chrome only) leaves the menu.
-struct PagesCapsule: View {
-    let tools: ToolState
-    let state: EditorState
-    /// Current page (1-based) and page count, for export.
-    let page: (current: Int, total: Int)
-    let paper: PaperTheme
     var isCompact = false
 
     @State private var showsShare = false
@@ -115,27 +47,20 @@ struct PagesCapsule: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        GlassCapsule {
-            ToolButton(.pages, "Pages") { state.pages.present() }
+        SlimCapsule {
+            ToolButton(.pages, "Pages", size: Tokens.Size.focusToolButton) { state.pages.present() }
                 .accessibilityHint("Shows all pages")
-            if isCompact {
-                more
-                    .background(ActivityAnchor(presenter: presenter))
-                    .popover(isPresented: $showsShare) { sharePopover }
-                    .background {
-                        Color.clear.popover(isPresented: $showsPhotos) {
-                            PhotoFlyout(paper: paper) { data in
-                                showsPhotos = false
-                                state.insertPhoto(data)
-                            }
+            more
+                .background(ActivityAnchor(presenter: presenter))
+                .popover(isPresented: $showsShare) { sharePopover }
+                .background {
+                    Color.clear.popover(isPresented: $showsPhotos) {
+                        PhotoFlyout(paper: paper) { data in
+                            showsPhotos = false
+                            state.insertPhoto(data)
                         }
                     }
-            } else {
-                ToolButton(.share, "Share") { showsShare.toggle() }
-                    .background(ActivityAnchor(presenter: presenter))
-                    .popover(isPresented: $showsShare) { sharePopover }
-                more
-            }
+                }
         }
     }
 
@@ -154,13 +79,33 @@ struct PagesCapsule: View {
 
     private var more: some View {
         let scale = typeSize.chromeScale
+        let size = Tokens.Size.focusToolButton
         return Menu {
-            if isCompact {
+            Section(title) {
+                Picker("Paper", systemImage: "doc", selection: $paper) {
+                    ForEach(PaperTheme.allCases) { theme in
+                        Text(theme.displayName).tag(theme)
+                    }
+                }
+                .pickerStyle(.menu)
+                Picker("Template", systemImage: "squareshape.split.3x3", selection: $pattern) {
+                    ForEach(PaperPattern.allCases) { pattern in
+                        Text(pattern.displayName).tag(pattern)
+                    }
+                }
+                .pickerStyle(.menu)
+                if paper == .night {
+                    Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
+                }
+            }
+            Section {
                 Button("Share", systemImage: Symbol.share.name) { showsShare = true }
-                Button("Add Photo", systemImage: Symbol.photo.name) { showsPhotos = true }
-                Toggle("Laser Pointer", systemImage: Symbol.laser.name, isOn: laserBinding)
-            } else {
-                Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
+                if isCompact {
+                    Button("Add Photo", systemImage: Symbol.photo.name) { showsPhotos = true }
+                    Toggle("Laser Pointer", systemImage: Symbol.laser.name, isOn: laserBinding)
+                } else {
+                    Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
+                }
             }
             #if DEBUG
                 Picker("Toolbar dock (debug)", selection: dockBinding) {
@@ -171,12 +116,14 @@ struct PagesCapsule: View {
             Image(systemName: Symbol.more.name)
                 .font(.system(size: Tokens.Size.toolIcon * scale))
                 .foregroundStyle(Tokens.Colors.icon)
-                .frame(width: Tokens.Size.toolButton.width * scale, height: Tokens.Size.toolButton.height * scale)
+                .frame(width: size.width * scale, height: size.height * scale)
                 .contentShape(.capsule)
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .accessibilityLabel("More")
+        .accessibilityValue(title)
+        .accessibilityHint("\(paper.displayName) paper, \(pattern.displayName). Share and notebook options")
     }
 
     /// Off goes back to the tool before the laser.

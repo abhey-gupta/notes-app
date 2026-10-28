@@ -11,9 +11,10 @@ final class ShareTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-sampleLibrary", "YES", "-openNotebook", "Thermodynamics", "-resetToolState", "YES"]
         app.launch()
-        let share = app.buttons["Share"]
-        XCTAssertTrue(share.waitForExistence(timeout: 5))
-        share.tap()
+        let more = app.buttons["More"]
+        XCTAssertTrue(more.waitForExistence(timeout: 5))
+        more.tap()
+        app.buttons["Share"].tap()
 
         let popover = app.descendants(matching: .any)["sharePopover"]
         XCTAssertTrue(popover.waitForExistence(timeout: 3))

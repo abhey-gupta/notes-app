@@ -28,10 +28,11 @@ final class LaunchTests: XCTestCase {
 
         let back = app.buttons["Library"]
         XCTAssertTrue(back.waitForExistence(timeout: 5))
-        for tool in ["Pen", "Highlighter", "Eraser", "Lasso", "Undo", "Redo", "Pages", "Share", "More"] {
+        for tool in ["Pen", "Highlighter", "Eraser", "Lasso", "Undo", "Redo", "Pages", "More"] {
             XCTAssertTrue(app.buttons[tool].exists, "\(tool) missing")
         }
-        XCTAssertTrue(app.buttons["Thermodynamics, notebook options"].exists)
+        XCTAssertFalse(app.buttons["Share"].exists, "share is in ⋯")
+        XCTAssertEqual(app.buttons["More"].value as? String, "Thermodynamics")
         XCTAssertTrue(app.staticTexts["pageIndicator"].exists)
 
         back.tap()
@@ -91,7 +92,8 @@ final class LaunchTests: XCTestCase {
         title.typeText("Organic Chemistry")
         app.buttons["createNotebook"].tap()
 
-        XCTAssertTrue(app.buttons["Organic Chemistry, notebook options"].waitForExistence(timeout: 5), "create opens the editor")
+        XCTAssertTrue(app.buttons["More"].waitForExistence(timeout: 5), "create opens the editor")
+        XCTAssertEqual(app.buttons["More"].value as? String, "Organic Chemistry")
         app.buttons["Library"].tap()
         XCTAssertTrue(app.buttons["cover-Organic Chemistry"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["recent-Organic Chemistry"].exists)

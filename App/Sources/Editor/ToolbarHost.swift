@@ -93,19 +93,22 @@ struct ToolbarHost: View {
             ZStack {
                 if !state.isFocused {
                     HStack(alignment: .top) {
-                        NavCapsule(title: title, paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, onBack: onBack)
-                            .maxWidth(layout.navMaxWidth(at: dock, toolbarLength: restingLength(.horizontal)))
+                        BackCapsule(title: title, onBack: onBack)
                             .chromeID(.nav, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
                             .padding(.leading, chrome.windowControls.leading)
                             .accessibilitySortPriority(ChromeOrder.nav)
                         Spacer(minLength: Tokens.Spacing.m)
-                        PagesCapsule(tools: tools, state: state, page: page, paper: paper, isCompact: chrome.isCompact)
-                            .chromeID(.pages, in: glass, transition: glassTransition)
-                            .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
-                            .accessibilitySortPriority(ChromeOrder.pages)
+                        PagesCapsule(
+                            tools: tools, state: state, title: title, page: page,
+                            paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, isCompact: chrome.isCompact
+                        )
+                        .chromeID(.pages, in: glass, transition: glassTransition)
+                        .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
+                        .accessibilitySortPriority(ChromeOrder.pages)
                     }
-                    .padding(.top, Tokens.Spacing.s)
+                    // Slim capsules sit on the toolbar's centre line when it's docked at the top.
+                    .padding(.top, Tokens.Spacing.s + (Tokens.Size.capsuleHeight - Tokens.Size.focusPillHeight) / 2 * typeSize.chromeScale)
                     .frame(maxHeight: .infinity, alignment: .top)
                 }
                 if let drag {

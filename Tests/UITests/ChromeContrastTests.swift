@@ -24,6 +24,7 @@ final class ChromeContrastTests: XCTestCase {
             // First tap outside only dismisses the popover.
             app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)).tap()
             XCTAssertTrue(popover.waitForNonExistence(timeout: 3))
+            app.buttons["More"].tap()
             app.buttons["Share"].tap()
             XCTAssertTrue(app.descendants(matching: .any)["sharePopover"].waitForExistence(timeout: 3))
             save(app, "\(name)-share")

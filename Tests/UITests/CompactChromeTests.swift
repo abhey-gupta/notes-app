@@ -61,7 +61,6 @@ final class CompactChromeTests: XCTestCase {
         XCTAssertGreaterThan(toolbar.frame.midY, app.windows.firstMatch.frame.midY)
         XCTAssertFalse(app.buttons["photoButton"].exists)
         XCTAssertFalse(app.buttons["Redo"].exists)
-        XCTAssertFalse(app.buttons["Share"].exists, "share is in ⋯")
         XCTAssertTrue(toolbar.buttons["Undo"].exists)
 
         app.buttons["More"].tap()

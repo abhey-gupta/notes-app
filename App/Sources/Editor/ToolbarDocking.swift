@@ -213,14 +213,6 @@ struct DockLayout {
     /// melts into the nav or pages capsule (#176).
     static let rowGap = Tokens.Spacing.glassBlend + Tokens.Spacing.xs
 
-    /// Widest the nav capsule can be beside the window controls and the pages capsule, and a `toolbarLength`
-    /// toolbar docked at the top, so the title truncates instead of pushing them off the row (#176, #118).
-    func navMaxWidth(at dock: ToolbarDock, toolbarLength: CGFloat) -> CGFloat {
-        guard containerWidth > 0 else { return .infinity }
-        let row = containerWidth - windowControls.leading - pages - Self.rowGap - 1
-        return dock == .top ? row - toolbarLength - Self.rowGap : row
-    }
-
     /// Top row width taken at the leading end: the nav capsule after the window controls.
     private var leadingReserve: CGFloat {
         nav > 0 ? windowControls.leading + nav : windowControls.leading

@@ -71,7 +71,7 @@ final class AccessibilityTests: XCTestCase {
         let window = app.windows.firstMatch.frame
         let pen = app.buttons["Pen"]
         XCTAssertGreaterThanOrEqual(pen.frame.height, 59, "tool button grows at AX1")
-        for name in ["Library", "Pen", "Lasso", "Undo", "Redo", "Pages", "Share", "More", "Thermodynamics, notebook options"] {
+        for name in ["Library", "Pen", "Lasso", "Undo", "Redo", "Pages", "More"] {
             let frame = app.buttons[name].frame
             XCTAssertTrue(window.contains(frame), "\(name) on screen: \(frame)")
         }
@@ -106,10 +106,6 @@ final class AccessibilityTests: XCTestCase {
         let covers = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cover-'")).allElementsBoundByIndex.map(\.frame)
         try app.performAccessibilityAudit(for: XCUIAccessibilityAuditType.all.subtracting(.dynamicType)) { issue in
             if issue.auditType == .contrast, let element = issue.element, Self.isSampledArt(element, covers: covers) {
-                return true
-            }
-            // The nav title truncates by design (#176); the button speaks it and the menu header shows it whole.
-            if issue.auditType == .textClipped, issue.element?.identifier == "notebookTitle" {
                 return true
             }
             let element = issue.element.map { "\($0.elementType.rawValue) '\($0.label)' id '\($0.identifier)' \($0.frame)" } ?? "-"
