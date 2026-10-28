@@ -6,7 +6,7 @@ public enum Symbol: String, CaseIterable, Sendable {
     case highlighter
     case eraser
     case lasso
-    case laser = "laser.burst"
+    case laser = "scribble.variable"
     case photo
     case undo = "arrow.uturn.backward"
     case redo = "arrow.uturn.forward"
