@@ -23,12 +23,15 @@ extension ActiveTool {
 
 /// Tools owns tool data and placement; DesignSystem owns their look. This is the seam.
 extension ToolSettings {
-    /// App defaults: quick colors from `Tokens.quickColors`, highlighter from `Tokens.highlighter`.
+    /// App defaults: quick colors from `Tokens.quickColors`, highlighter from `Tokens.highlighter`, and three
+    /// highlighter quick colors (yellow, teal, pink; #125).
     static var notespace: ToolSettings {
         let yellow = Tokens.highlighter
+        let palette = Tokens.highlighterPalette
         return ToolSettings(
             highlighter: HighlighterSettings(color: .custom(RGBA8(yellow.opacity(1)))),
-            quickColors: Tokens.quickColors.map { .semantic($0.semantic) }
+            quickColors: Tokens.quickColors.map { .semantic($0.semantic) },
+            highlighterColors: [yellow.opacity(1), palette[4], palette[2]].map { .custom(RGBA8($0)) }
         )
     }
 }

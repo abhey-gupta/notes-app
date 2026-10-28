@@ -205,7 +205,10 @@ struct ToolStateTests {
         #expect(eraser.width == 32)
         eraser.widthIndex = -1
         #expect(eraser.widthIndex == 0)
-        #expect(ToolSettings(quickColors: [.primary]).quickColors.count == ToolSettings.quickColorCount)
+        #expect(ToolSettings(quickColors: []).quickColors == ToolSettings().quickColors, "never empty")
+        let six = [InkColor](repeating: .primary, count: 6)
+        #expect(ToolSettings(quickColors: six).quickColors.count == ToolSettings.maxQuickColors)
+        #expect(ToolSettings(highlighterColors: []).highlighterColors == [HighlighterSettings.yellow])
     }
 
     // MARK: Quick colors
@@ -219,7 +222,7 @@ struct ToolStateTests {
         #expect(state.tool == .pen)
     }
 
-    @Test(arguments: [Tool.highlighter, .eraser, .lasso, .laser])
+    @Test(arguments: [Tool.eraser, .lasso, .laser])
     func quickColorSwitchesToPen(from tool: Tool) throws {
         let state = try makeState(makeDefaults())
         state.select(tool)

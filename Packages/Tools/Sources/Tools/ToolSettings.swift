@@ -224,8 +224,8 @@ public struct LaserSettings: Hashable, Sendable, Codable {
 /// Decoding is lenient: missing or invalid fields fall back to the defaults passed to ``ToolState``, so
 /// adding a field never wipes a user's settings.
 public struct ToolSettings: Hashable, Sendable, Codable {
-    /// Number of quick-color slots.
-    public static let quickColorCount = 3
+    /// Most quick colors a palette holds (#125); it always holds at least one.
+    public static let maxQuickColors = 5
 
     /// Current tool.
     public var tool: Tool
@@ -237,15 +237,20 @@ public struct ToolSettings: Hashable, Sendable, Codable {
     public var eraser: EraserSettings
     /// Laser pointer settings.
     public var laser: LaserSettings
-    /// Quick-color slots, always ``quickColorCount`` long.
+    /// Pen quick colors, 1...``maxQuickColors``.
     public var quickColors: [InkColor] {
-        didSet { quickColors = Self.normalized(quickColors) }
+        didSet { quickColors = Self.normalized(quickColors, defaults: Self.defaultQuickColors) }
+    }
+
+    /// Highlighter quick colors, 1...``maxQuickColors`` (#125: each inking tool has its own).
+    public var highlighterColors: [InkColor] {
+        didSet { highlighterColors = Self.normalized(highlighterColors, defaults: [HighlighterSettings.yellow]) }
     }
 
     /// Toolbar dock.
     public var dock: ToolbarDock
 
-    /// Creates settings. `quickColors` is padded/truncated to ``quickColorCount``.
+    /// Creates settings. Palettes keep their first ``maxQuickColors``; an empty one takes the defaults.
     public init(
         tool: Tool = .pen,
         pen: PenSettings = PenSettings(),
@@ -253,6 +258,7 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         eraser: EraserSettings = EraserSettings(),
         laser: LaserSettings = LaserSettings(),
         quickColors: [InkColor] = [.semantic(.primary), .semantic(.blue), .semantic(.red)],
+        highlighterColors: [InkColor] = [HighlighterSettings.yellow],
         dock: ToolbarDock = .top
     ) {
         self.tool = tool
@@ -261,13 +267,13 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         self.highlighter = HighlighterSettings(size: highlighter.size, color: highlighter.color)
         self.eraser = EraserSettings(mode: eraser.mode, widthIndex: eraser.widthIndex, autoDeselect: eraser.autoDeselect)
         self.laser = laser
-        self.quickColors = Self.normalized(quickColors)
+        self.quickColors = Self.normalized(quickColors, defaults: Self.defaultQuickColors)
+        self.highlighterColors = Self.normalized(highlighterColors, defaults: [HighlighterSettings.yellow])
         self.dock = dock
     }
 
-    private static func normalized(_ colors: [InkColor]) -> [InkColor] {
-        let defaults = ToolSettings.defaultQuickColors
-        return (0 ..< quickColorCount).map { $0 < colors.count ? colors[$0] : defaults[$0] }
+    private static func normalized(_ colors: [InkColor], defaults: [InkColor]) -> [InkColor] {
+        colors.isEmpty ? defaults : Array(colors.prefix(maxQuickColors))
     }
 
     private static let defaultQuickColors: [InkColor] = [.semantic(.primary), .semantic(.blue), .semantic(.red)]
@@ -284,6 +290,7 @@ extension ToolSettings {
             eraser: stored.eraser ?? defaults.eraser,
             laser: stored.laser ?? defaults.laser,
             quickColors: stored.quickColors ?? defaults.quickColors,
+            highlighterColors: stored.highlighterColors ?? defaults.highlighterColors,
             dock: stored.dock ?? defaults.dock
         )
     }
@@ -297,10 +304,11 @@ private struct StoredToolSettings: Decodable {
     var eraser: EraserSettings?
     var laser: LaserSettings?
     var quickColors: [InkColor]?
+    var highlighterColors: [InkColor]?
     var dock: ToolbarDock?
 
     private enum CodingKeys: String, CodingKey {
-        case tool, pen, highlighter, eraser, laser, quickColors, dock
+        case tool, pen, highlighter, eraser, laser, quickColors, highlighterColors, dock
     }
 
     init(from decoder: any Decoder) throws {
@@ -314,6 +322,7 @@ private struct StoredToolSettings: Decodable {
         eraser = field(.eraser)
         laser = field(.laser)
         quickColors = field(.quickColors)
+        highlighterColors = field(.highlighterColors)
         dock = field(.dock)
     }
 }

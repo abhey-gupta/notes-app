@@ -46,9 +46,14 @@ public final class ToolState {
         didSet { changed(laser != oldValue) }
     }
 
-    /// Quick-color slots (always ``ToolSettings/quickColorCount``). Change with ``setQuickColor(_:at:)``.
+    /// Pen quick colors (1...``ToolSettings/maxQuickColors``).
     public private(set) var quickColors: [InkColor] {
         didSet { changed(quickColors != oldValue) }
+    }
+
+    /// Highlighter quick colors (1...``ToolSettings/maxQuickColors``).
+    public private(set) var highlighterColors: [InkColor] {
+        didSet { changed(highlighterColors != oldValue) }
     }
 
     /// Toolbar dock.
@@ -81,6 +86,7 @@ public final class ToolState {
         eraser = settings.eraser
         laser = settings.laser
         quickColors = settings.quickColors
+        highlighterColors = settings.highlighterColors
         dock = settings.dock
     }
 
@@ -93,6 +99,7 @@ public final class ToolState {
             eraser: eraser,
             laser: laser,
             quickColors: quickColors,
+            highlighterColors: highlighterColors,
             dock: dock
         )
     }
@@ -131,26 +138,77 @@ public final class ToolState {
         tool == .highlighter ? highlighter.color : pen.color
     }
 
-    // MARK: Quick colors
+    // MARK: Quick colors (#27, #125)
 
-    /// Slot whose color the pen currently uses, if any.
+    /// Inking tool whose palette the toolbar shows: the highlighter's while it's current, else the pen's.
+    public var paletteTool: Tool {
+        tool == .highlighter ? .highlighter : .pen
+    }
+
+    /// The toolbar's quick colors: ``paletteTool``'s.
+    public var palette: [InkColor] {
+        paletteTool == .highlighter ? highlighterColors : quickColors
+    }
+
+    /// ``paletteTool``'s color.
+    public var paletteColor: InkColor {
+        paletteTool == .highlighter ? highlighter.color : pen.color
+    }
+
+    /// Slot whose color ``paletteTool`` currently uses, if any.
     public var activeQuickColor: Int? {
-        quickColors.firstIndex(of: pen.color)
+        palette.firstIndex(of: paletteColor)
     }
 
-    /// Quick-color tap: the pen takes the slot's color immediately and becomes the current tool.
+    /// Quick-color tap: ``paletteTool`` takes the slot's color at once and becomes the current tool.
     public func selectQuickColor(_ index: Int) {
-        guard quickColors.indices.contains(index) else { return }
-        pen.color = quickColors[index]
-        tool = .pen
+        guard palette.indices.contains(index) else { return }
+        setPaletteColor(palette[index])
+        tool = paletteTool
     }
 
-    /// Replaces a slot (palette long-press, #27). If the pen was using that slot it follows the new color.
+    /// Replaces a slot (swatch long-press, the colors popover). If the tool was using it, it follows.
     public func setQuickColor(_ color: InkColor, at index: Int) {
-        guard quickColors.indices.contains(index) else { return }
-        let penFollows = pen.color == quickColors[index]
-        quickColors[index] = color
-        if penFollows {
+        guard palette.indices.contains(index) else { return }
+        let follows = paletteColor == palette[index]
+        updatePalette { $0[index] = color }
+        if follows {
+            setPaletteColor(color)
+        }
+    }
+
+    /// Appends a slot (at most ``ToolSettings/maxQuickColors``); returns its index, or `nil` when full.
+    @discardableResult
+    public func addQuickColor(_ color: InkColor) -> Int? {
+        guard palette.count < ToolSettings.maxQuickColors else { return nil }
+        updatePalette { $0.append(color) }
+        return palette.count - 1
+    }
+
+    /// Removes a slot; the last one stays.
+    public func removeQuickColor(at index: Int) {
+        guard palette.count > 1, palette.indices.contains(index) else { return }
+        updatePalette { $0.remove(at: index) }
+    }
+
+    /// Moves a slot to `destination` (an index in the palette after the move).
+    public func moveQuickColor(from source: Int, to destination: Int) {
+        guard palette.indices.contains(source), palette.indices.contains(destination), source != destination else { return }
+        updatePalette { $0.insert($0.remove(at: source), at: destination) }
+    }
+
+    private func updatePalette(_ change: (inout [InkColor]) -> Void) {
+        if paletteTool == .highlighter {
+            change(&highlighterColors)
+        } else {
+            change(&quickColors)
+        }
+    }
+
+    private func setPaletteColor(_ color: InkColor) {
+        if paletteTool == .highlighter {
+            highlighter.color = color
+        } else {
             pen.color = color
         }
     }

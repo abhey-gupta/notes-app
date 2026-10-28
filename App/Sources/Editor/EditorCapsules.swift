@@ -167,8 +167,10 @@ struct EditorToolbarContent: View {
     let onToolFrame: (Tool, CGRect) -> Void
 
     /// Bumped per slot when a long-press assigns it: pops the swatch and plays a haptic.
-    @State private var assigned = [Int](repeating: 0, count: ToolSettings.quickColorCount)
+    @State private var assigned = [Int](repeating: 0, count: ToolSettings.maxQuickColors)
     @State private var showsPhotos = false
+    @State private var showsColors = false
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -198,7 +200,29 @@ struct EditorToolbarContent: View {
             .accessibilityHint("Shows recent photos to add to the page")
         }
         ChromeSeparator(axis: axis)
-        ForEach(Array(tools.quickColors.enumerated()), id: \.offset) { index, color in
+        if isCompact, tools.palette.count > Self.compactVisibleColors {
+            // A phone-width bar shows three; the rest scroll.
+            ScrollView(.horizontal) {
+                HStack(spacing: Tokens.Spacing.hairline) { swatches }
+            }
+            .scrollIndicators(.hidden)
+            .frame(width: compactSwatchesWidth)
+        } else {
+            swatches
+        }
+        colorsButton
+        ChromeSeparator(axis: axis)
+        ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
+            .disabled(!state.canUndo)
+        if !isCompact {
+            ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
+                .disabled(!state.canRedo)
+        }
+    }
+
+    /// The palette ``ToolState/paletteTool`` uses: the highlighter's while it's current, else the pen's (#125).
+    private var swatches: some View {
+        ForEach(Array(tools.palette.enumerated()), id: \.offset) { index, color in
             ColorSwatch(color.color(on: paper), label: color.label, isSelected: tools.activeQuickColor == index) {
                 tools.selectQuickColor(index)
             }
@@ -209,24 +233,51 @@ struct EditorToolbarContent: View {
                 SpringKeyframe(1.0, duration: 0.4, spring: .bouncy)
             }
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in assign(index) })
-            .accessibilityHint("Quick color. Touch and hold to store the current pen color here.")
-            .accessibilityAction(named: "Set to current pen color") { assign(index) }
+            .accessibilityHint("Quick color. Touch and hold to store the current color here.")
+            .accessibilityAction(named: "Set to current color") { assign(index) }
             .sensoryFeedback(.success, trigger: assigned[index])
         }
-        ChromeSeparator(axis: axis)
-        ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
-            .disabled(!state.canUndo)
-        if !isCompact {
-            ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
-                .disabled(!state.canRedo)
+    }
+
+    /// ⌄ after the swatches: the quick-color editor (#125), opening away from the dock.
+    private var colorsButton: some View {
+        let scale = typeSize.chromeScale
+        let horizontal = axis == .horizontal
+        return Button {
+            showsColors.toggle()
+        } label: {
+            Image(systemName: Symbol.disclosure.name)
+                .scaledFont(size: 11, weight: .semibold)
+                .foregroundStyle(Tokens.Colors.textTertiary)
+                .frame(
+                    width: (horizontal ? 26 : Tokens.Size.compactToolButton.width) * scale,
+                    height: (horizontal ? Tokens.Size.compactToolButton.height : 26) * scale
+                )
+                .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showsColors, arrowEdge: arrowEdge) {
+            QuickColorsPopover(tools: tools, paper: paper)
+                .presentationCompactAdaptation(.popover)
+                .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
+        }
+        .accessibilityLabel("Edit colors")
+        .accessibilityIdentifier("editColors")
+    }
+
+    private static let compactVisibleColors = 3
+
+    private var compactSwatchesWidth: CGFloat {
+        let swatch = (Tokens.Size.swatch + 2 * Tokens.Size.swatchRingOuter) * typeSize.chromeScale
+        let count = CGFloat(Self.compactVisibleColors)
+        return count * swatch + (count - 1) * Tokens.Spacing.hairline
     }
 
     /// A phone-width bar has no room for the laser pointer: it's in ⋯ (``PagesCapsule``).
     static let compactTools = Tool.allCases.filter { $0 != .laser }
 
     private func assign(_ index: Int) {
-        tools.setQuickColor(tools.pen.color, at: index)
+        tools.setQuickColor(tools.paletteColor, at: index)
         assigned[index] += 1
     }
 }
