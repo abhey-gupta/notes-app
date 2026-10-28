@@ -208,6 +208,13 @@ final class CanvasTests: XCTestCase {
         let cover = app.buttons["cover-Pinch"]
         XCTAssertTrue(cover.waitForExistence(timeout: 5))
         cover.tap()
+        // Reopens where it was left (page 2); page 1 through the overview.
+        XCTAssertEqual(waitForIndicator(app) { $0 == "2 of 2" }, "2 of 2", "reopens on the page it was left on")
+        app.buttons["Pages"].tap()
+        let first = app.descendants(matching: .any)["page-1"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        first.tap()
+        XCTAssertEqual(waitForIndicator(app) { $0 == "1 of 2" }, "1 of 2")
         XCTAssertTrue(waitForStrokes("1 stroke", in: app), "page 1 unchanged by the pinch")
     }
 

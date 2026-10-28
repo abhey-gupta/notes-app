@@ -106,6 +106,8 @@
         var lastBoundsSize: CGSize = .zero
         var fitZoom: CGFloat = 1
         var isUpdatingInsets = false
+        /// A ``restore(_:)`` before the first layout, applied by it.
+        var pendingPosition: ReadingPosition?
         /// `addPageButton`'s size: `intrinsicContentSize` re-resolves its configuration (≈30 % of a scroll
         /// frame, #44), so measure once per text size.
         private var addPageButtonSize: CGSize?
@@ -264,6 +266,9 @@
                 cancelSideGrabForResize()
                 resize(from: lastBoundsSize, to: size)
                 lastBoundsSize = size
+                if let pendingPosition {
+                    restore(pendingPosition)
+                }
             } else {
                 updateInsets()
                 viewportDidChange()

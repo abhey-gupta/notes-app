@@ -3,6 +3,7 @@ import CoreGraphics
 import enum DesignSystem.Tokens
 import Document
 import Editing
+import Foundation
 import InkEngine
 import InkEnginePencilKit
 import InkModel
@@ -133,8 +134,7 @@ final class NotebookSession {
                 state.keepsExactColors = true
                 applyPalette(keepsExactColors: true)
             }
-            host.pageExtension = PageExtension(notebook: manifest.notebook)
-            host.layout = pageLayout(pages.map(\.id), pageSize: manifest.notebook.pageSize)
+            showPages(pages.map(\.id), of: manifest.notebook)
             if let window = host.pageWindow {
                 residency.update(window)
             }
@@ -161,6 +161,9 @@ final class NotebookSession {
 
     /// Checkpoints every dirty page and renders pending thumbnails (scene left the foreground).
     func flush() {
+        if store != nil {
+            savePosition()
+        }
         edits?.run("flush") { [store, thumbnails] in
             try await store?.flush()
             await thumbnails?.flush()
@@ -170,6 +173,9 @@ final class NotebookSession {
     /// The editor went away: stop input, finish queued edits, checkpoint, update the library entry.
     func close() {
         guard !isClosed else { return }
+        if store != nil {
+            savePosition()
+        }
         isClosed = true
         engine.delegate = nil
         host.delegate = nil
@@ -198,6 +204,29 @@ final class NotebookSession {
                 Self.closing[id] = nil
             }
         }
+    }
+
+    // MARK: Reading position
+
+    /// Scroll and zoom per notebook, on this device, so a notebook reopens where it was left.
+    private var positionKey: String {
+        "readingPosition.\(notebookID.uuid.uuidString)"
+    }
+
+    /// The notebook's real pages, at the position it was left in.
+    private func showPages(_ ids: [PageID], of notebook: Notebook) {
+        host.pageExtension = PageExtension(notebook: notebook)
+        host.layout = pageLayout(ids, pageSize: notebook.pageSize)
+        savedPosition().map(host.restore)
+    }
+
+    private func savedPosition(defaults: UserDefaults = .standard) -> ReadingPosition? {
+        defaults.data(forKey: positionKey).flatMap { try? JSONDecoder().decode(ReadingPosition.self, from: $0) }
+    }
+
+    private func savePosition(defaults: UserDefaults = .standard) {
+        guard let position = host.readingPosition, let data = try? JSONEncoder().encode(position) else { return }
+        defaults.set(data, forKey: positionKey)
     }
 
     // MARK: Settings

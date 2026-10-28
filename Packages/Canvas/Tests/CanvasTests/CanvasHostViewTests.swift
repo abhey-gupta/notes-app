@@ -76,6 +76,30 @@
             #expect(abs(viewport.size.width / viewport.zoomScale - host.layout.pageSize.width) < 0.001)
         }
 
+        /// A saved position comes back: same page point under the chrome, same zoom; fitted stays fitted.
+        @Test func readingPositionRoundTrips() throws {
+            host.animateZoom(to: 2, duration: 0)
+            host.scrollToPage(6, animated: false)
+            host.canvasScrollView.contentOffset.x += 40
+            let saved = try #require(host.readingPosition)
+            #expect(saved.width == .zoomed)
+
+            let other = CanvasHostView(engine: RecordingInkEngine())
+            other.layout = host.layout
+            other.restore(saved) // before the first layout: applied by it
+            other.frame = host.frame
+            other.layoutIfNeeded()
+            #expect(other.canvasScrollView.zoomScale == 2)
+            #expect(other.canvasScrollView.contentOffset == host.canvasScrollView.contentOffset)
+            #expect(other.state.currentPage == host.state.currentPage)
+
+            other.restore(ReadingPosition(origin: CGPoint(x: 0, y: 100_000), zoom: 1, width: .fitted))
+            let scroll = other.canvasScrollView
+            #expect(abs(scroll.zoomScale - CanvasHostView.fitZoom(pageWidth: other.layout.pageSize.width, viewWidth: 1024)) < 0.001)
+            #expect(abs(scroll.contentOffset.y - (scroll.contentSize.height + scroll.contentInset.bottom - scroll.bounds.height)) < 0.5)
+            #expect(other.readingPosition?.width == .fitted)
+        }
+
         /// The engine's view sits inside the zoomed content: content-sized, in page points.
         @Test func engineViewIsContentSized() {
             #expect(engine.view.bounds.size == host.layout.contentSize)
