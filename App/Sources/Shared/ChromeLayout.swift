@@ -39,6 +39,7 @@ extension View {
 private struct ChromeLayoutReader: ViewModifier {
     @State private var width: CGFloat = 0
     @State private var controls = WindowControls()
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     func body(content: Content) -> some View {
         content
@@ -55,6 +56,7 @@ private struct ChromeLayoutReader: ViewModifier {
     private var isCompact: Bool {
         LaunchOptions.forcesCompactChrome
             || UIDevice.current.userInterfaceIdiom == .phone
+            || sizeClass == .compact
             || (width > 0 && width < ChromeLayout.compactWidth)
     }
 }
@@ -81,8 +83,13 @@ private struct WindowControlsProbe: UIViewRepresentable {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
+            // iPadOS windowing scales an app down instead of narrowing it past its minimum size; compact
+            // chrome needs the real narrow width.
+            window?.windowScene?.sizeRestrictions?.minimumSize = Self.minimumWindow
             report()
         }
+
+        private static let minimumWindow = CGSize(width: 320, height: 480)
 
         override func safeAreaInsetsDidChange() {
             super.safeAreaInsetsDidChange()

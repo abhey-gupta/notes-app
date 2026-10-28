@@ -236,7 +236,8 @@ struct DockLayout {
         let spacing = Tokens.Spacing.self
         let capsule = Tokens.Size.capsuleHeight * scale
         let pillInset = isFocused ? (capsule - Tokens.Size.focusPillHeight * scale) / 2 : 0
-        let belowTopRow = spacing.s + capsule + spacing.m
+        // Past the glass blend distance, so a dropped toolbar doesn't melt into the row above.
+        let belowTopRow = spacing.s + capsule + Self.rowGap
         let abovePagePill = spacing.chromeInset + pagePill.height + spacing.m
         switch dock {
         case .top:
