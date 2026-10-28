@@ -7,15 +7,21 @@ final class PhotoTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    /// Attaches a screenshot; with `TEST_RUNNER_SCREENSHOT_DIR` set it is also written there as `<name>.png`.
+    /// Attaches a screenshot; with `TEST_RUNNER_SCREENSHOTS=YES` it is also written to the runner's temp
+    /// directory as `<name>.png` (path logged as `SCREENSHOT <path>`, for a look during development).
     private func attachScreenshot(_ app: XCUIApplication, _ name: String) {
         let screenshot = app.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        if let directory = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"] {
-            try? screenshot.pngRepresentation.write(to: URL(filePath: directory).appending(path: "\(name).png"))
+        guard ProcessInfo.processInfo.environment["SCREENSHOTS"] == "YES" else { return }
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(name).png")
+        do {
+            try screenshot.pngRepresentation.write(to: url)
+            print("SCREENSHOT \(url.path)")
+        } catch {
+            print("SCREENSHOT failed: \(error)")
         }
     }
 
@@ -30,7 +36,7 @@ final class PhotoTests: XCTestCase {
         let flyout = app.descendants(matching: .any)["photoFlyout"]
         XCTAssertTrue(flyout.waitForExistence(timeout: 5), "flyout opens under the button")
         // The embedded picker renders in its own process; give it a moment to show the grid.
-        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
         attachScreenshot(app, "photo-flyout")
         XCTAssertTrue(app.buttons["Pen"].exists, "toolbar stays up behind the flyout")
         // Tap the canvas away from the flyout: it closes, the current tool is unchanged.
