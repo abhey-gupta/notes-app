@@ -7,13 +7,14 @@ import Tools
 ///
 /// The toolbar docks top (default), bottom, left or right. Drag it with a finger and it follows with an
 /// interactive spring, rubber-banding at the screen edges, while a slot shows where it will land; release and
-/// it springs to the nearest dock, re-flowing between horizontal and vertical in place. Pinch in to collapse it
-/// to the compact pill at the same dock; tap (or pinch out on) the pill to expand. Focus mode shows the same
-/// pill. Dock and compact persist in `ToolState`.
+/// it springs to the nearest dock, re-flowing between horizontal and vertical in place. Pinch in to enter focus
+/// mode (#158): the toolbar collapses to the compact pill at the same dock and the nav and pages capsules hide.
+/// Focus mode lasts until the pill's chevron or a pinch out on the pill; drawing, scrolling and taps don't end
+/// it. Dock persists in `ToolState`; focus mode doesn't.
 ///
 /// Tapping the active tool on the expanded toolbar opens its options popover (``ToolPopover``, #27),
-/// anchored to that button with the arrow toward the toolbar on every dock. Any tap on the compact pill
-/// expands; the pill has no popover.
+/// anchored to that button with the arrow toward the toolbar on every dock. The pill's tool and color are
+/// display only; the pill has no popover.
 struct ToolbarHost: View {
     let tools: ToolState
     let state: EditorState
@@ -72,8 +73,9 @@ struct ToolbarHost: View {
         Rectangle().inset(by: -2)
     }
 
+    /// The toolbar is the compact pill exactly in focus mode (#158).
     private var isCompact: Bool {
-        state.isFocused || tools.isCompact
+        state.isFocused
     }
 
     var body: some View {
@@ -193,7 +195,6 @@ struct ToolbarHost: View {
             }
         }
         .contentShape(Self.hitShape)
-        .gesture(TapGesture().onEnded(expand), isEnabled: compact)
         .chromeID(.tools, in: glass, transition: glassTransition)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(compact ? "focusPill" : "toolbar")
@@ -282,31 +283,27 @@ struct ToolbarHost: View {
     private func collapse() {
         options = nil
         withAnimation(morphAnimation) {
-            tools.isCompact = true
+            state.enterFocus()
             pinch = 1
         }
     }
 
-    /// Pill tap / pinch-out, and the focus pill's tool and chevron buttons.
+    /// The pill's chevron or a pinch out on it: the only ways out of focus mode (#158).
     private func expand() {
         options = nil
         withAnimation(morphAnimation) {
-            tools.isCompact = false
             state.exitFocus()
         }
     }
 
     private var pagePill: some View {
-        Button(action: state.exitFocus) {
-            GlassPill.pageIndicator(current: page.current, total: page.total)
-        }
-        .buttonStyle(.plain)
-        .onGeometryChange(for: CGSize.self, of: \.size) { metrics.pill = $0 }
-        .opacity(isCompact ? 0.7 : 1)
-        .accessibilityIdentifier("pageIndicator")
-        .accessibilityHint(state.isFocused ? "Shows the toolbar" : "Current page")
-        .padding(.bottom, Tokens.Spacing.chromeInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        GlassPill.pageIndicator(current: page.current, total: page.total)
+            .onGeometryChange(for: CGSize.self, of: \.size) { metrics.pill = $0 }
+            .opacity(isCompact ? 0.7 : 1)
+            .accessibilityIdentifier("pageIndicator")
+            .accessibilityHint("Current page")
+            .padding(.bottom, Tokens.Spacing.chromeInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 }
 
@@ -328,12 +325,12 @@ extension ToolbarHost {
         Binding { state.keepsExactColors } set: { state.onKeepsExactColors($0) }
     }
 
-    /// The compact pill: current tool and color (named for VoiceOver), expand.
+    /// The compact pill: current tool and color (display only, named for VoiceOver), expand.
     private func pillContent(axis: Axis) -> some View {
         FocusPillContent(
             axis: axis, tool: tools.tool.symbol, ink: ink,
             toolName: tools.tool.label, colorName: tools.currentColor.accessibilityName,
-            onTool: expand, onExpand: expand
+            onExpand: expand
         )
     }
 
@@ -373,7 +370,6 @@ extension ToolbarHost {
             nav: state.isFocused ? 0 : metrics.nav,
             pages: state.isFocused ? 0 : metrics.pages,
             pagePill: metrics.pill,
-            isCompact: isCompact,
             isFocused: state.isFocused,
             scale: typeSize.chromeScale
         )

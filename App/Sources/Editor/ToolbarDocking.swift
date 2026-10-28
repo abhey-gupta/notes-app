@@ -185,7 +185,7 @@ struct DockLayout {
     var nav: CGFloat
     var pages: CGFloat
     var pagePill: CGSize
-    var isCompact: Bool
+    /// Focus mode: the toolbar is the compact pill.
     var isFocused: Bool
     /// Dynamic Type chrome scale (``DynamicTypeSize/chromeScale``): capsules are thicker at large sizes.
     var scale: CGFloat = 1
@@ -212,7 +212,7 @@ struct DockLayout {
     func placement(for dock: ToolbarDock, length: CGFloat) -> Placement {
         let spacing = Tokens.Spacing.self
         let capsule = Tokens.Size.capsuleHeight * scale
-        let pillInset = isCompact ? (capsule - Tokens.Size.focusPillHeight * scale) / 2 : 0
+        let pillInset = isFocused ? (capsule - Tokens.Size.focusPillHeight * scale) / 2 : 0
         let belowTopRow = spacing.s + capsule + spacing.m
         let abovePagePill = spacing.chromeInset + pagePill.height + spacing.m
         switch dock {

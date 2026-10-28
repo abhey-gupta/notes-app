@@ -179,8 +179,6 @@ public enum Tokens {
         public static let dragFollow: Animation = .interactiveSpring(response: 0.16, dampingFraction: 0.86)
         /// Toolbar released: flies to its dock (position + axis re-flow) with a little settle.
         public static let dock: Animation = .spring(duration: 0.42, bounce: 0.18)
-        /// Continuous inking before chrome collapses (§7).
-        public static let focusDelay: Duration = .milliseconds(1500)
         /// A page's thumbnail giving way to its sharp raster (editor open, #43; page images, #70).
         public static let thumbnailCrossfadeDuration: TimeInterval = 0.12
         public static let thumbnailCrossfade: Animation = .easeOut(duration: thumbnailCrossfadeDuration)

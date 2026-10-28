@@ -303,7 +303,6 @@ extension NotebookSession: InkEngineDelegate {
 
     func engineDidBeginStroke(_: any InkEngine) {
         clearSelection()
-        state.strokeBegan()
         if !host.isFirstResponder {
             host.becomeFirstResponder()
         }
@@ -322,10 +321,6 @@ extension NotebookSession: CanvasHostViewDelegate {
         }
     }
 
-    func canvasHostWillBeginNavigating(_: CanvasHostView) {
-        state.exitFocus()
-    }
-
     func canvasHostDidRequestNewPage(_: CanvasHostView) {
         insertPage(after: nil, template: nil)
     }
@@ -339,7 +334,6 @@ extension NotebookSession: CanvasHostViewDelegate {
     }
 
     func canvasHostDidLiftAllTouches(_: CanvasHostView) {
-        state.strokeEnded()
         edits?.endGesture()
         if isErasing {
             isErasing = false

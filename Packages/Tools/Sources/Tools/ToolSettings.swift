@@ -226,8 +226,6 @@ public struct ToolSettings: Hashable, Sendable, Codable {
 
     /// Toolbar dock.
     public var dock: ToolbarDock
-    /// Toolbar pinched to the compact pill.
-    public var isCompact: Bool
 
     /// Creates settings. `quickColors` is padded/truncated to ``quickColorCount``.
     public init(
@@ -236,8 +234,7 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         highlighter: HighlighterSettings = HighlighterSettings(),
         eraser: EraserSettings = EraserSettings(),
         quickColors: [InkColor] = [.semantic(.primary), .semantic(.blue), .semantic(.red)],
-        dock: ToolbarDock = .top,
-        isCompact: Bool = false
+        dock: ToolbarDock = .top
     ) {
         self.tool = tool
         // Re-run the normalizing inits: synthesized decoding skips them.
@@ -246,7 +243,6 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         self.eraser = EraserSettings(mode: eraser.mode, widthIndex: eraser.widthIndex, autoDeselect: eraser.autoDeselect)
         self.quickColors = Self.normalized(quickColors)
         self.dock = dock
-        self.isCompact = isCompact
     }
 
     private static func normalized(_ colors: [InkColor]) -> [InkColor] {
@@ -267,8 +263,7 @@ extension ToolSettings {
             highlighter: stored.highlighter ?? defaults.highlighter,
             eraser: stored.eraser ?? defaults.eraser,
             quickColors: stored.quickColors ?? defaults.quickColors,
-            dock: stored.dock ?? defaults.dock,
-            isCompact: stored.isCompact ?? defaults.isCompact
+            dock: stored.dock ?? defaults.dock
         )
     }
 }
@@ -281,11 +276,9 @@ private struct StoredToolSettings: Decodable {
     var eraser: EraserSettings?
     var quickColors: [InkColor]?
     var dock: ToolbarDock?
-    // swiftlint:disable:next discouraged_optional_boolean
-    var isCompact: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case tool, pen, highlighter, eraser, quickColors, dock, isCompact
+        case tool, pen, highlighter, eraser, quickColors, dock
     }
 
     init(from decoder: any Decoder) throws {
@@ -299,7 +292,6 @@ private struct StoredToolSettings: Decodable {
         eraser = field(.eraser)
         quickColors = field(.quickColors)
         dock = field(.dock)
-        isCompact = field(.isCompact)
     }
 }
 

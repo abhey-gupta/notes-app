@@ -23,7 +23,7 @@ final class CanvasTests: XCTestCase {
 
     @MainActor
     private func waitForIndicator(_ app: XCUIApplication, timeout: TimeInterval = 10, where match: @escaping (String) -> Bool) -> String? {
-        let pill = app.buttons["pageIndicator"]
+        let pill = app.staticTexts["pageIndicator"]
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if pill.exists, match(pill.label) {
@@ -197,7 +197,7 @@ final class CanvasTests: XCTestCase {
             canvas(app).pinch(withScale: scale, velocity: scale < 1 ? -1 : 1)
             RunLoop.current.run(until: Date().addingTimeInterval(1.5))
             XCTAssertTrue(waitForStrokes("0 strokes", in: app), "page 2 still blank after pinch \(scale)")
-            XCTAssertEqual(app.buttons["pageIndicator"].label, "2 of 2")
+            XCTAssertEqual(app.staticTexts["pageIndicator"].label, "2 of 2")
         }
         // Page 2 is blank paper: no dark pixels in its middle (the only ink is on page 1, above).
         let shot = Gray(app.windows.firstMatch.screenshot().image)
@@ -234,7 +234,7 @@ final class CanvasTests: XCTestCase {
         edge.press(forDuration: 0.8, thenDragTo: out, withVelocity: .slow, thenHoldForDuration: 0.3)
         let widened = NSPredicate(format: "value CONTAINS %@", "Widened to")
         XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: widened, evaluatedWith: drawing)], timeout: 10), .completed, "pages widened")
-        XCTAssertEqual(app.buttons["pageIndicator"].label, "1 of 11")
+        XCTAssertEqual(app.staticTexts["pageIndicator"].label, "1 of 11")
 
         app.buttons["Library"].tap()
         XCTAssertTrue(cover.waitForExistence(timeout: 5))

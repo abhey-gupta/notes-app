@@ -15,7 +15,6 @@
             windows.append(window)
         }
 
-        func canvasHostWillBeginNavigating(_: CanvasHostView) {}
         func canvasHostDidRequestNewPage(_: CanvasHostView) {}
         func canvasHostDidLiftAllTouches(_: CanvasHostView) {}
     }
