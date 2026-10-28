@@ -83,13 +83,8 @@ private struct WindowControlsProbe: UIViewRepresentable {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            // iPadOS windowing scales an app down instead of narrowing it past its minimum size; compact
-            // chrome needs the real narrow width.
-            window?.windowScene?.sizeRestrictions?.minimumSize = Self.minimumWindow
             report()
         }
-
-        private static let minimumWindow = CGSize(width: 320, height: 480)
 
         override func safeAreaInsetsDidChange() {
             super.safeAreaInsetsDidChange()
