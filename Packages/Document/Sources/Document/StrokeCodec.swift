@@ -1,4 +1,5 @@
 import Compression
+import CoreGraphics
 import Foundation
 import InkModel
 
@@ -26,8 +27,10 @@ public enum StrokeCodecError: Error, Hashable, Sendable {
     case invalidRendering
     /// Two strokes on one page share an ID.
     case duplicateStrokeID(StrokeID)
-    /// Bytes left over after the last stroke.
+    /// Bytes left over after the last stroke (or image).
     case trailingBytes
+    /// Two images on one page share an ID.
+    case duplicateImageID(ImageID)
 }
 
 /// Binary codec for one page's strokes (`pages/<pageID>.strokes`, ARCHITECTURE.md §4.3).
@@ -44,14 +47,18 @@ public enum StrokeCodecError: Error, Hashable, Sendable {
 ///                if present: u8 inkLength | ink UTF-8 | u32 randomSeed | [u128 renderGroupID]
 ///                | [f64 grain x, y] | [f32 opacity if uniform] | sampleCount × (f32 width
 ///                [, f32 height unless square] [, f32 opacity unless uniform])   (see RenderingLayout)
+/// images (v3):   after the strokes: u32 imageCount | imageCount × (u128 id | u128 asset | f64 x, y, w, h)
 /// ```
 /// The rendering block is ``InkModel/StrokeRendering``: PencilKit's per-point size and opacity, ink and
 /// seed, so a stroke renders exactly as captured (#71). Version 1 files (no rendering block) still
-/// decode; strokes from them have no rendering. Encoding is deterministic, so
+/// decode; strokes from them have no rendering. Version 3 (#157) appends the page's images (placement
+/// only; the bytes live in `images/<asset>.heic`); older files have none. Encoding is deterministic, so
 /// `encode(decode(encode(s))) == encode(s)` byte for byte.
 public enum StrokeCodec {
     /// Version written to, and the newest accepted from, the header.
-    public static let formatVersion: UInt16 = 2
+    public static let formatVersion: UInt16 = 3
+    /// Bytes one image takes in a v3 body.
+    static let imageLength = 16 + 16 + 4 * 8
     /// Largest uncompressed body accepted (256 MiB); bounds allocations driven by header fields.
     public static let maxBodyLength = 1 << 28
 
@@ -66,20 +73,40 @@ public enum StrokeCodec {
     /// - Parameter compress: lz4-compress the body. Skipped automatically when it would not shrink.
     /// - Throws: ``StrokeCodecError/invalidLength`` if the page exceeds ``maxBodyLength``.
     public static func encode(_ strokes: [Stroke], compress: Bool = true) throws(StrokeCodecError) -> Data {
-        try encode(strokes, compress: compress, version: formatVersion)
+        try encode(PageContent(strokes: strokes), compress: compress, version: formatVersion)
+    }
+
+    /// Encodes a page's strokes and images.
+    public static func encode(_ content: PageContent, compress: Bool = true) throws(StrokeCodecError) -> Data {
+        try encode(content, compress: compress, version: formatVersion)
     }
 
     /// ``encode(_:compress:)`` in an older layout (tests write version 1 files with it). Version 1
-    /// drops renderings.
+    /// drops renderings; versions before 3 drop images.
     static func encode(_ strokes: [Stroke], compress: Bool = true, version: UInt16) throws(StrokeCodecError) -> Data {
+        try encode(PageContent(strokes: strokes), compress: compress, version: version)
+    }
+
+    static func encode(_ content: PageContent, compress: Bool = true, version: UInt16) throws(StrokeCodecError) -> Data {
+        let strokes = content.strokes
+        let images = version >= 3 ? content.images : []
         var bodyLength = 0
         for stroke in strokes {
             bodyLength += encodedLength(stroke, version: version)
+        }
+        if version >= 3 {
+            bodyLength += 4 + images.count * imageLength
         }
         guard bodyLength <= maxBodyLength else { throw .invalidLength }
         var body = ByteWriter(capacity: bodyLength)
         for stroke in strokes {
             body.append(stroke, version: version)
+        }
+        if version >= 3 {
+            body.append(UInt32(images.count))
+            for image in images {
+                body.append(image)
+            }
         }
         var flags: UInt32 = 0
         var stored = body.bytes
@@ -99,10 +126,15 @@ public enum StrokeCodec {
         return base + RenderingLayout.encodedLength(stroke.rendering)
     }
 
-    /// Decodes a stroke file. Validates every length before reading; any malformation is a typed error.
+    /// Decodes a stroke file's strokes (images, if any, are dropped; see ``decodeContent(_:)``).
     public static func decode(_ data: Data) throws(StrokeCodecError) -> [Stroke] {
-        let result: Result<[Stroke], StrokeCodecError> = data.withUnsafeBytes { raw in
-            Result { () throws(StrokeCodecError) -> [Stroke] in try decode(raw) }
+        try decodeContent(data).strokes
+    }
+
+    /// Decodes a stroke file. Validates every length before reading; any malformation is a typed error.
+    public static func decodeContent(_ data: Data) throws(StrokeCodecError) -> PageContent {
+        let result: Result<PageContent, StrokeCodecError> = data.withUnsafeBytes { raw in
+            Result { () throws(StrokeCodecError) -> PageContent in try decode(raw) }
         }
         return try result.get()
     }
@@ -128,7 +160,7 @@ public enum StrokeCodec {
         return data
     }
 
-    static func decode(_ raw: UnsafeRawBufferPointer) throws(StrokeCodecError) -> [Stroke] {
+    static func decode(_ raw: UnsafeRawBufferPointer) throws(StrokeCodecError) -> PageContent {
         let header = try Header(validating: raw)
         let stored = UnsafeRawBufferPointer(rebasing: raw[headerLength...])
         if !header.isCompressed, stored.count != header.bodyLength {
@@ -143,8 +175,10 @@ public enum StrokeCodec {
 
         guard header.isCompressed else { return try parseBody(stored, strokeCount: header.strokeCount, version: header.version) }
         guard let body = lz4Decode(stored, length: header.bodyLength) else { throw .decompressionFailed }
-        let result: Result<[Stroke], StrokeCodecError> = body.withUnsafeBytes { b in
-            Result { () throws(StrokeCodecError) -> [Stroke] in try parseBody(b, strokeCount: header.strokeCount, version: header.version) }
+        let result: Result<PageContent, StrokeCodecError> = body.withUnsafeBytes { b in
+            Result { () throws(StrokeCodecError) -> PageContent in
+                try parseBody(b, strokeCount: header.strokeCount, version: header.version)
+            }
         }
         return try result.get()
     }
@@ -190,7 +224,11 @@ public enum StrokeCodec {
 
     // MARK: Private
 
-    private static func parseBody(_ body: UnsafeRawBufferPointer, strokeCount: Int, version: UInt16) throws(StrokeCodecError) -> [Stroke] {
+    private static func parseBody(
+        _ body: UnsafeRawBufferPointer,
+        strokeCount: Int,
+        version: UInt16
+    ) throws(StrokeCodecError) -> PageContent {
         var reader = ByteReader(buffer: body)
         var strokes: [Stroke] = []
         strokes.reserveCapacity(strokeCount)
@@ -200,8 +238,21 @@ public enum StrokeCodec {
             guard ids.insert(stroke.id).inserted else { throw .duplicateStrokeID(stroke.id) }
             strokes.append(stroke)
         }
+        var images: [PageImage] = []
+        if version >= 3 {
+            guard reader.remaining >= 4 else { throw .truncated }
+            let count = Int(UInt32(littleEndian: reader.read(UInt32.self)))
+            guard count <= reader.remaining / imageLength else { throw .truncated }
+            images.reserveCapacity(count)
+            var imageIDs = Set<ImageID>(minimumCapacity: count)
+            for _ in 0 ..< count {
+                let image = readImage(&reader)
+                guard imageIDs.insert(image.id).inserted else { throw .duplicateImageID(image.id) }
+                images.append(image)
+            }
+        }
         guard reader.remaining == 0 else { throw .trailingBytes }
-        return strokes
+        return PageContent(strokes: strokes, images: images)
     }
 
     /// Reads one stroke in the body layout of `version`, bounds-checked. Shared with the journal codec.

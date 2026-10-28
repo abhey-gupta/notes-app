@@ -12,6 +12,7 @@ public final class RecordingInkEngine: InkEngine {
     public weak var delegate: (any InkEngineDelegate)?
     public var selectionColor: UIColor = .systemBlue
     public var thumbnailURL: ((PageID) -> URL?)?
+    public var imageURL: ((ImageAssetID) -> URL?)?
     public var pageArtwork: ((PageID) -> (any PageArtwork)?)?
 
     public private(set) var viewports: [Viewport] = []

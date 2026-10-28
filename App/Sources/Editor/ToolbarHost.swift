@@ -171,7 +171,7 @@ struct ToolbarHost: View {
                     tools: tools,
                     state: state,
                     paper: paper,
-                    axis: axis,
+                    axis: axis, arrowEdge: optionsArrowEdge,
                     onReselect: toggleOptions,
                     onToolFrame: { toolFrames[$0] = $1 }
                 )

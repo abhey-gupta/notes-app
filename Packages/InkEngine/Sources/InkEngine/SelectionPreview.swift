@@ -9,13 +9,21 @@ public struct SelectionPreview: Hashable, Sendable {
     public var page: PageID
     /// Strokes drawn transformed (and hidden in place).
     public var strokes: Set<StrokeID>
+    /// Images drawn transformed in place (they stay beneath the ink; #157).
+    public var images: Set<ImageID>
     /// Page-space transform applied to them.
     public var transform: CGAffineTransform
 
     /// Creates a preview.
-    public init(page: PageID, strokes: Set<StrokeID>, transform: CGAffineTransform = .identity) {
+    public init(page: PageID, strokes: Set<StrokeID>, images: Set<ImageID> = [], transform: CGAffineTransform = .identity) {
         self.page = page
         self.strokes = strokes
+        self.images = images
         self.transform = transform
+    }
+
+    /// Nothing to lift.
+    public var isEmpty: Bool {
+        strokes.isEmpty && images.isEmpty
     }
 }

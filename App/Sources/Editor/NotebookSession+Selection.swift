@@ -12,7 +12,8 @@ import UIKit
 /// ```
 /// lasso path ─▶ SelectionMachine ─▶ overlay (hull, handles) + context bar
 /// drag ─▶ engine.setSelectionPreview (lifted image, transform per frame) ─release─▶ PageEdit.transform
-/// bar ─▶ recolor / duplicate (+20 pt) / delete ─▶ PageEdit.recolor / .add / .remove
+/// bar ─▶ recolor / duplicate (+20 pt) / delete ─▶ PageEdit.recolor / .add(Images) / .remove(Images)
+/// photo flyout ─▶ SelectionMachine.insert ─▶ PageEdit.addImages, then selected (`+Photos`, #157)
 /// ```
 ///
 /// Every action goes through the `EditPipeline` like a stroke, then the selection is rebuilt from the page.
@@ -52,12 +53,15 @@ extension NotebookSession: SelectionDisplay {
 
     func showSelection(_ selection: LassoSelection?) {
         selectionOverlay.selection = selection
+        state.selectionHasInk = selection?.hasInk ?? true
         // Render the drag preview now (off main), not when the drag starts.
         engine.prepareSelectionPreview(Set(selection?.strokeIDs ?? []), on: selection?.pageID ?? PageID())
     }
 
     func liftSelection(_ selection: LassoSelection?, transform: CGAffineTransform) {
-        engine.setSelectionPreview(selection.map { SelectionPreview(page: $0.pageID, strokes: Set($0.strokeIDs), transform: transform) })
+        engine.setSelectionPreview(selection.map {
+            SelectionPreview(page: $0.pageID, strokes: Set($0.strokeIDs), images: Set($0.imageIDs), transform: transform)
+        })
     }
 
     // MARK: Drag

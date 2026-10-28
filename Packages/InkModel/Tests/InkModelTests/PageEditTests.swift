@@ -158,4 +158,52 @@ struct PageEditTests {
             #expect(copy == page)
         }
     }
+
+    // MARK: Images (#157)
+
+    @Test func imageEditsApplyAndInvert() throws {
+        let a = PageImage(asset: ImageAssetID(), frame: CGRect(x: 10, y: 10, width: 100, height: 50))
+        let b = PageImage(asset: ImageAssetID(), frame: CGRect(x: 200, y: 10, width: 40, height: 40))
+        var page = Page()
+        let add = page.addImagesEdit([a, b])
+        #expect(try page.apply(add) == CGRect(x: 10, y: 10, width: 230, height: 50))
+        #expect(page.images == [a, b])
+        #expect(page.rev == 1)
+        #expect(add.imageIDs == [a.id, b.id] && add.strokeIDs.isEmpty && add.touchesImagesOnly)
+
+        let move = try page.transformImagesEdit([b.id], by: CGAffineTransform(translationX: -100, y: 0).scaledBy(x: 2, y: 2))
+        try page.apply(move)
+        #expect(page.image(b.id)?.frame == CGRect(x: 300, y: 20, width: 80, height: 80))
+        try page.apply(move.inverse())
+        #expect(page.image(b.id)?.frame == b.frame)
+
+        let remove = try page.removeImagesEdit([a.id])
+        try page.apply(remove)
+        #expect(page.images == [b])
+        try page.apply(remove.inverse())
+        #expect(page.images == [a, b])
+        #expect(remove.inverse().inverse() == remove)
+        #expect(page.isEmpty == false && Page().isEmpty)
+    }
+
+    @Test func imageEditsRefuseBadInput() throws {
+        let a = PageImage(asset: ImageAssetID(), frame: CGRect(x: 0, y: 0, width: 10, height: 10))
+        var page = Page(images: [a])
+        let missing = ImageID()
+        #expect(throws: PageEditError.unknownImage(missing)) { try page.removeImagesEdit([missing]) }
+        #expect(throws: PageEditError.duplicateImage(a.id)) { try page.transformImagesEdit([a.id, a.id], by: .identity) }
+        #expect(throws: PageEditError.nonInvertibleTransform) {
+            try page.transformImagesEdit([a.id], by: CGAffineTransform(scaleX: 0, y: 1))
+        }
+        #expect(throws: PageEditError.duplicateImage(a.id)) { try page.apply(.addImages([PlacedImage(index: 1, image: a)])) }
+        #expect(throws: PageEditError.indexOutOfRange(5)) { try page.apply(.addImages([PlacedImage(
+            index: 5,
+            image: PageImage(asset: a.asset, frame: .zero)
+        )])) }
+        let other = PageImage(asset: a.asset, frame: .zero)
+        #expect(throws: PageEditError.imageIndexMismatch(index: 0, expected: other.id)) {
+            try page.apply(.removeImages([PlacedImage(index: 0, image: other)]))
+        }
+        #expect(page.images == [a] && page.rev == 0, "a refused edit changes nothing")
+    }
 }

@@ -153,15 +153,20 @@ struct PagesCapsule: View {
     #endif
 }
 
-/// Tools, quick colors, undo/redo, laid out along `axis` so the same content docks on any edge.
-/// ARCHITECTURE §7 calls this `ToolbarContent`; renamed so it doesn't shadow SwiftUI's protocol in App.
+/// Tools, the photo button, quick colors, undo/redo, laid out along `axis` so the same content docks on
+/// any edge. ARCHITECTURE §7 calls this `ToolbarContent`; renamed so it doesn't shadow SwiftUI's protocol
+/// in App.
 ///
-/// Long-press a quick color to store the pen's current color in that slot (#27).
+/// Long-press a quick color to store the pen's current color in that slot (#27). The photo button (#157)
+/// is not a tool: it opens the ``PhotoFlyout`` (away from the dock, like tool options) and the current
+/// tool stays; a tap on a photo closes the flyout and places it.
 struct EditorToolbarContent: View {
     let tools: ToolState
     let state: EditorState
     let paper: PaperTheme
     let axis: Axis
+    /// Popover edge carrying the arrow (faces the dock).
+    let arrowEdge: Edge
     /// Tap on the already-current tool.
     let onReselect: (Tool) -> Void
     /// Each tool button's frame in ``ToolbarHost/capsuleSpace`` (popover anchors).
@@ -169,6 +174,7 @@ struct EditorToolbarContent: View {
 
     /// Bumped per slot when a long-press assigns it: pops the swatch and plays a haptic.
     @State private var assigned = [Int](repeating: 0, count: ToolSettings.quickColorCount)
+    @State private var showsPhotos = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -183,6 +189,17 @@ struct EditorToolbarContent: View {
             .accessibilityValue(tools.accessibilityValue(of: tool))
             .accessibilityHint(tools.tool == tool && tool != .lasso ? "Shows \(tool.label.lowercased()) options" : "")
         }
+        ToolButton(.photo, "Photo", isActive: showsPhotos, ink: ink, showsDot: false) {
+            showsPhotos.toggle()
+        }
+        .popover(isPresented: $showsPhotos, arrowEdge: arrowEdge) {
+            PhotoFlyout(paper: paper) { data in
+                showsPhotos = false
+                state.insertPhoto(data)
+            }
+        }
+        .accessibilityIdentifier("photoButton")
+        .accessibilityHint("Shows recent photos to add to the page")
         ChromeSeparator(axis: axis)
         ForEach(Array(tools.quickColors.enumerated()), id: \.offset) { index, color in
             ColorSwatch(color.color(on: paper), label: color.label, isSelected: tools.activeQuickColor == index) {

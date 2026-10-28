@@ -182,6 +182,19 @@ public actor DocumentStore {
         return dirty
     }
 
+    // MARK: Images (#157)
+
+    /// Writes an image asset's bytes; see ``NotebookPackage/writeImage(_:asset:)``. Call before the edit
+    /// that places it.
+    public func writeImage(_ data: Data, asset: ImageAssetID) throws(DocumentError) {
+        try package.writeImage(data, asset: asset)
+    }
+
+    /// `images/<asset>.heic`.
+    public nonisolated func imageURL(for asset: ImageAssetID) -> URL {
+        NotebookPackage.imageURL(for: asset, in: url)
+    }
+
     // MARK: Checkpoints
 
     /// Checkpoints every dirty page (one manifest write). Call when the app backgrounds or resigns

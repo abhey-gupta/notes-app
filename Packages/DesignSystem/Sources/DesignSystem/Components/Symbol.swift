@@ -6,6 +6,7 @@ public enum Symbol: String, CaseIterable, Sendable {
     case highlighter
     case eraser
     case lasso
+    case photo
     case undo = "arrow.uturn.backward"
     case redo = "arrow.uturn.forward"
     case pages = "square.grid.2x2"

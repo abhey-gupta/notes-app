@@ -42,6 +42,7 @@ public final class MetalInkEngine: InkEngine {
     public var selectionColor: UIColor = .systemBlue
     /// Unused: pages draw from geometry at once, with no thumbnail phase.
     public var thumbnailURL: ((PageID) -> URL?)?
+    public var imageURL: ((ImageAssetID) -> URL?)?
     /// Unused: the shelved engine draws templates only (no PDF import).
     public var pageArtwork: ((PageID) -> (any PageArtwork)?)?
 

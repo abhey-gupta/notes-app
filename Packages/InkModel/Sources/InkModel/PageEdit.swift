@@ -53,6 +53,12 @@ public enum PageEdit: Hashable, Sendable, Codable {
     case transform([StrokeID], forward: CGAffineTransform, backward: CGAffineTransform)
     /// Changes stroke colors.
     case recolor([ColorChange])
+    /// Inserts images at the given z-positions (#157).
+    case addImages([PlacedImage])
+    /// Removes the images at the given z-positions (IDs must match).
+    case removeImages([PlacedImage])
+    /// Bakes `forward` into the images' frames; `backward` is its inverse, used by ``inverse()``.
+    case transformImages([ImageID], forward: CGAffineTransform, backward: CGAffineTransform)
 
     /// The edit that undoes this one when applied to the page this one produced.
     public func inverse() -> PageEdit {
@@ -62,16 +68,37 @@ public enum PageEdit: Hashable, Sendable, Codable {
         case let .replace(old, new): .replace(old: new, new: old)
         case let .transform(ids, forward, backward): .transform(ids, forward: backward, backward: forward)
         case let .recolor(changes): .recolor(changes.map { ColorChange(id: $0.id, from: $0.to, to: $0.from) })
+        case let .addImages(placed): .removeImages(placed)
+        case let .removeImages(placed): .addImages(placed)
+        case let .transformImages(ids, forward, backward): .transformImages(ids, forward: backward, backward: forward)
         }
     }
 
-    /// IDs of every stroke the edit touches (before and after).
+    /// IDs of every stroke the edit touches (before and after). Empty for image edits.
     public var strokeIDs: [StrokeID] {
         switch self {
         case let .add(placed), let .remove(placed): placed.map(\.stroke.id)
         case let .replace(old, new): (old + new).map(\.stroke.id)
         case let .transform(ids, _, _): ids
         case let .recolor(changes): changes.map(\.id)
+        case .addImages, .removeImages, .transformImages: []
+        }
+    }
+
+    /// IDs of every image the edit touches. Empty for stroke edits.
+    public var imageIDs: [ImageID] {
+        switch self {
+        case .add, .remove, .replace, .transform, .recolor: []
+        case let .addImages(placed), let .removeImages(placed): placed.map(\.image.id)
+        case let .transformImages(ids, _, _): ids
+        }
+    }
+
+    /// The edit changes images only (strokes, and anything drawn from them, are untouched).
+    public var touchesImagesOnly: Bool {
+        switch self {
+        case .add, .remove, .replace, .transform, .recolor: false
+        case .addImages, .removeImages, .transformImages: true
         }
     }
 }
@@ -86,8 +113,14 @@ public enum PageEditError: Error, Hashable, Sendable {
     case indexOutOfRange(Int)
     /// The stroke at `index` is not the one the edit expects.
     case indexMismatch(index: Int, expected: StrokeID)
-    /// Placed-stroke indices are not strictly ascending.
+    /// Placed-stroke (or placed-image) indices are not strictly ascending.
     case unsortedIndices
+    /// No image with this ID on the page.
+    case unknownImage(ImageID)
+    /// The image ID is already on the page, or repeated within the edit.
+    case duplicateImage(ImageID)
+    /// The image at `index` is not the one the edit expects.
+    case imageIndexMismatch(index: Int, expected: ImageID)
     /// The transform has a zero or non-finite determinant.
     case nonInvertibleTransform
 }

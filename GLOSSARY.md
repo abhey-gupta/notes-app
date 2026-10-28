@@ -20,6 +20,14 @@ _Avoid_: Line, path, drawing
 The printed pattern on a page (blank, lined, dotted, grid, Cornell).
 _Avoid_: Background, paper pattern
 
+**Photo**:
+A picture placed on a page beneath all its strokes, at a frame in page points. Its bytes are an asset the notebook keeps once; copies of a photo share the asset.
+_Avoid_: Image (for the placement), attachment, sticker
+
+**Photo flyout**:
+The grid of recent photos the toolbar's Photo button opens; one tap places that photo on the current page, selected.
+_Avoid_: Picker, gallery, media browser
+
 **Page extension**:
 Paper added beside the original page width, on the left and/or the right; every page of a notebook shares it. A side grab (press-hold at a page edge, drag) changes it.
 _Avoid_: Margin, canvas size, landscape
@@ -27,7 +35,7 @@ _Avoid_: Margin, canvas size, landscape
 ## Changes
 
 **Page edit**:
-One change to the strokes on one page (add, remove, replace, move/resize, recolor). Every page edit can be inverted exactly.
+One change to the strokes or photos on one page (add, remove, replace, move/resize, recolor). Every page edit can be inverted exactly.
 _Avoid_: Mutation, operation, change set
 
 **Page structure edit**:
@@ -57,7 +65,7 @@ _Avoid_: Callback, refresh
 ## Selection
 
 **Selection**:
-The strokes the lasso picked on one page, outlined with handles and the context bar. At most one at a time; any new gesture, tool change, undo/redo or tap outside ends it.
+The strokes and photos the lasso picked on one page (or a photo just placed), outlined with handles and the context bar. At most one at a time; any new gesture, tool change, undo/redo or tap outside ends it.
 _Avoid_: Lasso (for the result), marquee
 
 **Lifted ink**:

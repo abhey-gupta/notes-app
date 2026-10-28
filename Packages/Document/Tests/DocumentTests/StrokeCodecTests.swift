@@ -39,9 +39,9 @@ struct StrokeCodecTests {
         let data = try StrokeCodec.encode(strokes, compress: false)
         let bytes = [UInt8](data)
         #expect(Array(bytes[0 ..< 4]) == Array("INKS".utf8))
-        #expect(Array(bytes[4 ..< 10]) == [2, 0, 3, 0, 0, 0])
+        #expect(Array(bytes[4 ..< 10]) == [3, 0, 3, 0, 0, 0])
         #expect(Array(bytes[10 ..< 14]) == [0, 0, 0, 0])
-        #expect(bytes.count == 22 + 3 * (30 + 5 * 24 + 1)) // + rendering flags byte (none)
+        #expect(bytes.count == 22 + 3 * (30 + 5 * 24 + 1) + 4) // + rendering flags byte (none), image count (v3)
         #expect(bytes[22 + 30 + 5 * 24] == 0)
         let first = strokes[0]
         #expect(Array(bytes[22 ..< 38]) == withUnsafeBytes(of: first.id.uuid.uuid) { Array($0) })
@@ -70,14 +70,14 @@ struct StrokeCodecTests {
             return Array(bytes[(22 + 30 + 3 * 24)...])
         }
         let square = try encoded(samples.map { _ in PointRendering(width: 2, height: 2, opacity: 0.5) })
-        #expect(square.count == 1 + 1 + 3 + 4 + 4 + 3 * 4) // flags, ink, seed, shared opacity, widths
+        #expect(square.count == 1 + 1 + 3 + 4 + 4 + 3 * 4 + 4) // flags, ink, seed, shared opacity, widths, image count
         #expect(Array(square[0 ..< 9]) == [7, 3] + Array("ink".utf8) + [4, 3, 2, 1])
         let full = try encoded([
             PointRendering(width: 2, height: 3, opacity: 1), PointRendering(width: 2, height: 2, opacity: 0.5),
             PointRendering(width: 1, height: 1, opacity: 1),
         ])
         #expect(full[0] == 1)
-        #expect(full.count == 1 + 1 + 3 + 4 + 3 * 12)
+        #expect(full.count == 1 + 1 + 3 + 4 + 3 * 12 + 4)
     }
 
     @Test(arguments: [true, false])
@@ -110,7 +110,7 @@ struct StrokeCodecTests {
 
     @Test func emptyPage() throws {
         let data = try StrokeCodec.encode([])
-        #expect(data.count == 22)
+        #expect(data.count == 22 + 4) // header + image count (v3)
         #expect(try StrokeCodec.decode(data).isEmpty)
     }
 
@@ -155,12 +155,12 @@ struct StrokeCodecTests {
         #expect(throws: StrokeCodecError.badMagic) { try StrokeCodec.decode(Data(bytes)) }
     }
 
-    @Test(arguments: [UInt16(0), 3, 99, 0xFFFF])
+    @Test(arguments: [UInt16(0), 4, 99, 0xFFFF])
     func rejectsUnsupportedVersion(version: UInt16) throws {
         var bytes = try [UInt8](StrokeCodec.encode([]))
         bytes[Offset.version] = UInt8(version & 0xFF)
         bytes[Offset.version + 1] = UInt8(version >> 8)
-        #expect(throws: StrokeCodecError.unsupportedVersion(found: version, supported: 2)) { try StrokeCodec.decode(Data(bytes)) }
+        #expect(throws: StrokeCodecError.unsupportedVersion(found: version, supported: 3)) { try StrokeCodec.decode(Data(bytes)) }
     }
 
     @Test func rejectsUnknownFlags() throws {
@@ -202,7 +202,8 @@ struct StrokeCodecTests {
             try StrokeCodec.decode(rebuilt(file) { put(4, at: second + Offset.sampleCount, in: &$0) })
         }
         #expect(throws: StrokeCodecError.trailingBytes) { try StrokeCodec.decode(rebuilt(file) { $0.append(0) }) }
-        #expect(throws: StrokeCodecError.trailingBytes) { try StrokeCodec.decode(rebuilt(file, strokeCount: 1) { _ in }) }
+        // One stroke declared: the second stroke's ID bytes read as an absurd image count.
+        #expect(throws: StrokeCodecError.truncated) { try StrokeCodec.decode(rebuilt(file, strokeCount: 1) { _ in }) }
         #expect(throws: StrokeCodecError.truncated) { try StrokeCodec.decode(rebuilt(file, strokeCount: 3) { _ in }) }
         #expect(throws: StrokeCodecError.invalidLength) { try StrokeCodec.decode(rebuilt(file, strokeCount: .max) { _ in }) }
     }
@@ -319,6 +320,51 @@ struct StrokeCodecFuzzTests {
                 bytes.replaceSubrange(0 ..< 6, with: Array("INKS".utf8) + [1, 0])
             }
             #expect(throws: StrokeCodecError.self) { try StrokeCodec.decode(Data(bytes)) }
+        }
+    }
+
+    // MARK: Images (#157)
+
+    @Test(arguments: [true, false])
+    func imagesRoundTrip(compress: Bool) throws {
+        var rng = SplitMix64(seed: 9)
+        let images = [
+            PageImage(asset: ImageAssetID(), frame: CGRect(x: 10, y: 20.5, width: 300, height: 200)),
+            PageImage(asset: ImageAssetID(), frame: CGRect(x: -3, y: 0, width: 1.25, height: 4000)),
+        ]
+        let content = PageContent(strokes: Fixtures.strokes(&rng, count: 4, samples: 6), images: images)
+        let data = try StrokeCodec.encode(content, compress: compress)
+        let decoded = try StrokeCodec.decodeContent(data)
+        #expect(decoded == content)
+        #expect(try StrokeCodec.encode(decoded, compress: compress) == data)
+        #expect(try StrokeCodec.decode(data) == content.strokes)
+    }
+
+    @Test func imagesOnlyPage() throws {
+        let image = PageImage(asset: ImageAssetID(), frame: CGRect(x: 1, y: 2, width: 3, height: 4))
+        let data = try StrokeCodec.encode(PageContent(images: [image]), compress: false)
+        #expect(data.count == 22 + 4 + 64)
+        #expect(try StrokeCodec.decodeContent(data) == PageContent(images: [image]))
+    }
+
+    @Test func olderFilesHaveNoImages() throws {
+        var rng = SplitMix64(seed: 10)
+        let strokes = Fixtures.strokes(&rng, count: 2, samples: 3)
+        for version: UInt16 in [1, 2] {
+            let content = try StrokeCodec.decodeContent(StrokeCodec.encode(strokes, compress: false, version: version))
+            #expect(content.images.isEmpty)
+            #expect(content.strokes.count == 2)
+        }
+    }
+
+    @Test func rejectsMalformedImages() throws {
+        let image = PageImage(asset: ImageAssetID(), frame: CGRect(x: 1, y: 2, width: 3, height: 4))
+        let file = try StrokeCodec.encode(PageContent(images: [image, PageImage(asset: image.asset, frame: .zero)]), compress: false)
+        #expect(throws: StrokeCodecError.truncated) { try StrokeCodec.decode(rebuilt(file) { put(3, at: 0, in: &$0) }) }
+        #expect(throws: StrokeCodecError.trailingBytes) { try StrokeCodec.decode(rebuilt(file) { put(1, at: 0, in: &$0) }) }
+        #expect(throws: StrokeCodecError.truncated) { try StrokeCodec.decode(rebuilt(file) { $0.removeLast(1) }) }
+        #expect(throws: StrokeCodecError.duplicateImageID(image.id)) {
+            try StrokeCodec.decode(rebuilt(file) { $0.replaceSubrange(4 + 64 ..< 4 + 64 + 16, with: Array($0[4 ..< 20])) })
         }
     }
 }

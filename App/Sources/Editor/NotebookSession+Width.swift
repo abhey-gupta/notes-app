@@ -36,14 +36,13 @@ extension NotebookSession {
         )
     }
 
-    /// Union of every page's ink along x (page space), reading pages not in memory and releasing them.
+    /// Union of every page's ink and photos along x (page space), reading pages not in memory and releasing them.
     func inkExtent() async -> ClosedRange<CGFloat>? {
         guard let residency else { return nil }
         var extent: ClosedRange<CGFloat>?
         for id in residency.pageIDs {
             guard !Task.isCancelled, let page = try? await residency.peek(id) else { continue }
-            for stroke in page.strokes {
-                let bounds = stroke.bounds
+            for bounds in page.strokes.map(\.bounds) + page.images.map(\.bounds) {
                 guard !bounds.isNull, bounds.width.isFinite else { continue }
                 extent = extent.map { min($0.lowerBound, bounds.minX) ... max($0.upperBound, bounds.maxX) } ?? bounds.minX ... bounds.maxX
             }
@@ -91,8 +90,8 @@ extension NotebookSession {
         }
     }
 
-    /// Moves every stroke right by `dx` (left paper added or taken away), page by page; pages not in
-    /// memory are read, edited and evicted again.
+    /// Moves every stroke and photo right by `dx` (left paper added or taken away), page by page; pages
+    /// not in memory are read, edited and evicted again.
     private func shiftInk(by dx: CGFloat, store: DocumentStore, residency: PageResidency) async throws {
         let transform = CGAffineTransform(translationX: dx, y: 0)
         for id in residency.pageIDs {
@@ -100,6 +99,11 @@ extension NotebookSession {
             let page = try await store.page(id)
             if !page.strokes.isEmpty {
                 let edit = try page.transformEdit(page.strokes.map(\.id), by: transform)
+                try await store.apply(edit, to: id)
+                residency.didApply(edit, to: id)
+            }
+            if !page.images.isEmpty {
+                let edit = try page.transformImagesEdit(page.images.map(\.id), by: transform)
                 try await store.apply(edit, to: id)
                 residency.didApply(edit, to: id)
             }

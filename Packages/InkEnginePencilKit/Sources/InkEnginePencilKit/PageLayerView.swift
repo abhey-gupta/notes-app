@@ -4,10 +4,10 @@ import PencilKit
 import UIKit
 
 /// One visible page in content space: paper color, imported artwork (a PDF page, ``ArtworkLayer``, #119),
-/// vector template marks, its highlights (#120, one shape layer each, beneath everything that draws ink),
-/// and an image of its ink (outside ``inkHole``, the part a `PKCanvasView` has drawn; ``HoledImageLayer``
-/// bands, no mask). Pages touch (#162): every page but the first draws a one-pixel hairline in the
-/// template mark color along its top edge, over its image.
+/// vector template marks, its photos (#157, one layer each, beneath the highlights), its highlights (#120,
+/// one shape layer each, beneath everything that draws ink), and an image of its ink (outside ``inkHole``,
+/// the part a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask). Pages touch (#162): every page
+/// but the first draws a one-pixel hairline in the template mark color along its top edge, over its image.
 ///
 /// The image is one of (#70's fallback chain, best first): the raster for ``requestedKey``; a stale
 /// raster of the page (an older bucket or content, scaled by the layer) while that renders; the page's
@@ -22,6 +22,9 @@ import UIKit
 final class PageLayerView: UIView {
     let linesLayer = CAShapeLayer()
     private let dotsLayer = CAShapeLayer()
+    /// Photos in z-order, beneath the highlights and the ink (`+Photos`).
+    let photosLayer = CALayer()
+    var photoLayers: [ImageID: CALayer] = [:]
     /// Highlight bands in stroke order, the live one (if any) last. Beneath the thumbnail (which has them
     /// baked in) and the ink image; the canvas above draws ink only.
     private let highlightsLayer = CALayer()
@@ -124,6 +127,7 @@ final class PageLayerView: UIView {
         imageLayer.addSublayer(inkLayer)
         layer.addSublayer(linesLayer)
         layer.addSublayer(dotsLayer)
+        layer.addSublayer(photosLayer)
         layer.addSublayer(highlightsLayer)
         layer.addSublayer(imageLayer)
         layer.addSublayer(seamLayer)
@@ -153,6 +157,7 @@ final class PageLayerView: UIView {
         dotsLayer.fillColor = colors.line
         linesLayer.frame = bounds
         dotsLayer.frame = bounds
+        photosLayer.frame = bounds
         highlightsLayer.frame = bounds
         imageLayer.frame = bounds
         inkLayer.frame = imageLayer.bounds

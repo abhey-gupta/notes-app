@@ -31,7 +31,11 @@ final class EditorState {
     /// Lasso selection box in screen (canvas view) space for the context bar; `nil` when there is no
     /// selection or it is being dragged.
     var selectionFrame: CGRect?
+    /// The selection holds strokes (the context bar offers colors); a photo-only selection doesn't (#157).
+    var selectionHasInk = true
     @ObservationIgnored var onSelectionAction: (SelectionAction) -> Void = { _ in }
+    /// A photo picked from the toolbar flyout (#157): its bytes, to place on the current page.
+    @ObservationIgnored var onInsertPhoto: (Data) -> Void = { _ in }
     /// Exports the selected pages to a temp PDF (§9); `asShown` keeps Night paper. Progress in 0...1.
     @ObservationIgnored var onExportPDF: (PageSelection, Bool, @escaping @Sendable (Double) -> Void) async throws -> URL = { _, _, _ in
         throw PDFExportError.noPages
@@ -87,6 +91,12 @@ final class EditorState {
 
     func perform(_ action: SelectionAction) {
         onSelectionAction(action)
+    }
+
+    /// Photo flyout tap: place `data` on the current page, selected.
+    func insertPhoto(_ data: Data) {
+        exitFocus()
+        onInsertPhoto(data)
     }
 
     /// Bumped when the Pencil asks for tool options (#24); the toolbar opens the current tool's popover.

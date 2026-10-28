@@ -13,10 +13,18 @@ struct InkRun: Sendable {
     var cap: CGLineCap = .round
 }
 
+/// A photo to draw beneath the ink, in its page-space frame (#157).
+struct PhotoArt: Sendable {
+    var image: CGImage
+    var frame: CGRect
+}
+
 /// A page reduced to what the PDF needs, built off the drawing thread (outlines are the expensive part).
 struct PageArt: Sendable {
     var page: PageID
     var template: PageTemplate
+    /// Photos, bottom to top, beneath everything drawn (only those the loader could provide).
+    var photos: [PhotoArt] = []
     /// One run per highlighter stroke (each multiplies separately, like on screen).
     var highlights: [InkRun] = []
     /// Brush strokes as an image under the ink, if a rasterizer provided one.
@@ -31,7 +39,8 @@ struct PageArt: Sendable {
         options: PDFExportOptions,
         palette: any PDFPalette,
         rasterizer: (any BrushRasterizer)?,
-        rasterScale: CGFloat
+        rasterScale: CGFloat,
+        images: PDFExporter.ImageLoader? = nil
     ) async throws -> PageArt {
         let theme = options.exportTheme
         var colors: [InkColor: CGColor] = [:]
@@ -44,7 +53,7 @@ struct PageArt: Sendable {
             return resolved
         }
 
-        var art = PageArt(page: page.id, template: page.template)
+        var art = PageArt(page: page.id, template: page.template, photos: photos(of: page, loader: images))
         if let rasterizer {
             let brushes = page.strokes.filter { $0.tool == .brush && !$0.samples.isEmpty }
             if !brushes.isEmpty {
@@ -85,6 +94,14 @@ struct PageArt: Sendable {
             }
         }
         return art
+    }
+
+    /// The page's photos the loader can provide, in order.
+    private static func photos(of page: Page, loader: PDFExporter.ImageLoader?) -> [PhotoArt] {
+        guard let loader else { return [] }
+        return page.images.compactMap { placed in
+            loader(placed.asset).map { PhotoArt(image: $0, frame: placed.frame) }
+        }
     }
 
     /// The band the screen draws (#120) at the highlighter's alpha: its polygons merged with their rounded

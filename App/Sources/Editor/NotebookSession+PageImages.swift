@@ -7,10 +7,11 @@ import os
 
 /// Page images (#70) and the thumbnail-first open (#43): a page shows `thumbs/<id>.heic` scaled up until
 /// its strokes load and its first raster renders, then crossfades; the first sharp page after an open
-/// ends `canvas.firstSharpTile`.
+/// ends `canvas.firstSharpTile`. Photo bytes (#157) come from the open store's package.
 extension NotebookSession {
     func installPageImages(on engine: any InkEngine) {
         engine.thumbnailURL = { [weak self] id in self?.thumbnails?.thumbnailURL(for: id) }
+        engine.imageURL = { [weak self] asset in self?.store?.imageURL(for: asset) }
     }
 
     /// Imported PDF pages (#119), opened off main; the engine looks them up per page. Each sits on the

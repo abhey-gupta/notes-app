@@ -34,7 +34,7 @@ struct NotebookPackageTests {
             let notebook = Notebook(title: "New")
             let url = NotebookPackage.url(for: notebook.id, in: NotebookPackage.notebooksDirectory(in: dir))
             let package = try NotebookPackage.create(at: url, notebook: notebook)
-            #expect(try contents(of: url) == ["manifest.json", "pages", "thumbs"])
+            #expect(try contents(of: url) == ["images", "manifest.json", "pages", "thumbs"])
             #expect(try contents(of: url.deletingLastPathComponent()) == [url.lastPathComponent])
             #expect(package.manifest.notebook.pages.count == 1, "empty notebook gets a first page")
             #expect(package.manifest.pages[0].template == .blank)
@@ -142,7 +142,7 @@ struct NotebookPackageTests {
             var bytes = try [UInt8](StrokeCodec.encode([]))
             bytes[4] = 99
             try Data(bytes).write(to: package.strokesURL(for: id))
-            #expect(throws: DocumentError.unsupportedFormatVersion(found: 99, supported: 2)) { try package.loadPage(id) }
+            #expect(throws: DocumentError.unsupportedFormatVersion(found: 99, supported: 3)) { try package.loadPage(id) }
         }
     }
 

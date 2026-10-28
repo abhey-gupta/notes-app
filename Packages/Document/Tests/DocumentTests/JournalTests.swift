@@ -119,7 +119,7 @@ struct JournalTests {
         header[4] = 99
         let crc = header.prefix(28).withUnsafeBytes { CRC32.checksum($0) }
         header.replaceSubrange(28 ..< 32, with: withUnsafeBytes(of: crc.littleEndian) { Array($0) })
-        #expect(throws: DocumentError.unsupportedFormatVersion(found: 99, supported: 2)) {
+        #expect(throws: DocumentError.unsupportedFormatVersion(found: 99, supported: 3)) {
             try Journal.scan(Data(header))
         }
     }

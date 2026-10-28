@@ -40,6 +40,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// `thumbs/<page>.heic` for a page, shown scaled up while its strokes load or its first raster
     /// renders (#43, #70). `nil`: the page shows flat paper meanwhile.
     public var thumbnailURL: ((PageID) -> URL?)?
+    public var imageURL: ((ImageAssetID) -> URL?)?
     /// Imported artwork (a PDF page) per page, drawn in tiles under the template and ink (#119).
     public var pageArtwork: ((PageID) -> (any PageArtwork)?)? {
         didSet {
@@ -64,6 +65,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     let input = InkInputView()
     /// Ink rasters of recently shown pages, per zoom bucket, and decoded thumbnails.
     let rasters = InkRasterCache()
+    /// Decoded photos by asset (`+Photos`, #157).
+    let photos = PhotoCache()
     /// Off-main raster renders, nearest the viewport first.
     let renderQueue = RasterRenderQueue()
     /// Thumbnails being decoded, and pages that have none on disk.
@@ -110,10 +113,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             name: UIApplication.didReceiveMemoryWarningNotification, object: nil
         )
         registerGauges()
-    }
-
-    @objc private func didReceiveMemoryWarning() {
-        rasters.removeAll()
     }
 
     // MARK: InkEngine
@@ -186,6 +185,11 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             snapshots[page] = try snapshot.applying(edit)
         } catch {
             Self.log.error("apply failed on \(page, privacy: .public): \(String(describing: error), privacy: .public)")
+            return
+        }
+        if edit.touchesImagesOnly {
+            // Photos are the page views' own layers: nothing for the canvas to redo.
+            layoutPages()
             return
         }
         var echoedOnly = false

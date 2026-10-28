@@ -114,21 +114,26 @@ public final class EditPipeline {
         enqueue("read") { [self] in try await body(mirror.ensureLoaded(page)) }
     }
 
-    /// One edit to `page` as one undo step named `actionName`. `make` builds it from the current page and
-    /// a result to hand back (`nil` = nothing to do). `then` always runs: with the result and the edited
-    /// page, or `(nil, nil)` if nothing was done or the store refused it.
+    /// One or more edits to `page` as one undo step named `actionName` (a selection of strokes and images
+    /// moves as one step of two edits). `make` builds them from the current page and a result to hand back
+    /// (`nil` or no edits = nothing to do). `then` always runs: with the result and the edited page, or
+    /// `(nil, nil)` if nothing was done or the store refused it.
     public func edit<Result>(
         _ actionName: String,
         on page: PageID,
-        make: @escaping @MainActor (Page) throws -> (PageEdit, Result)?,
+        make: @escaping @MainActor (Page) throws -> ([PageEdit], Result)?,
         then: @escaping @MainActor (Result?, Page?) -> Void = { _, _ in }
     ) {
         enqueue("edit") { [self] in
             var outcome: (Result, Page)?
             defer { then(outcome?.0, outcome?.1) }
-            guard let (edit, result) = try await make(mirror.ensureLoaded(page)) else { return }
-            try await commit(edit, to: page)
-            history.record(edit, on: page, actionName: actionName)
+            guard let (edits, result) = try await make(mirror.ensureLoaded(page)), !edits.isEmpty else { return }
+            history.beginGroup(actionName: actionName)
+            defer { history.endGroup() }
+            for edit in edits {
+                try await commit(edit, to: page)
+                history.record(edit, on: page, actionName: actionName)
+            }
             outcome = mirror.page(page).map { (result, $0) }
         }
     }
@@ -148,7 +153,7 @@ public final class EditPipeline {
             }
             let id = try await store.insertPage(at: at, template: template)
             await mirror.pagesDidChange()
-            history.record(structure: [.insert(id, at: at, template: template, strokes: [])], actionName: "Add Page")
+            history.record(structure: [.insert(id, at: at, template: template, strokes: [], images: [])], actionName: "Add Page")
             then(at)
         }
     }
@@ -160,7 +165,7 @@ public final class EditPipeline {
             var pages: [PageStructureEdit.Removal] = []
             for (index, id) in mirror.pageIDs.enumerated() where wanted.contains(id) {
                 let page = try await store.page(id)
-                pages.append(.init(id: id, index: index, template: page.template, strokes: page.strokes))
+                pages.append(.init(id: id, index: index, template: page.template, strokes: page.strokes, images: page.images))
             }
             guard !pages.isEmpty, pages.count < mirror.pageIDs.count else { return }
             let edits = PageStructureEdit.deleting(pages)
@@ -287,28 +292,40 @@ public final class EditPipeline {
     }
 
     /// Structure edits (one entry's worth) to the store, the mirror follows once, then restored pages get
-    /// their ink back.
+    /// their ink and images back.
     private func applyStructure(_ edits: [PageStructureEdit]) async throws {
         guard !edits.isEmpty else { return }
-        var restored: [(id: PageID, strokes: [Stroke])] = []
+        var restored: [Restored] = []
         for edit in edits {
             switch edit {
-            case let .insert(id, index, template, strokes):
+            case let .insert(id, index, template, strokes, images):
                 try await store.insertPage(id: id, at: index, template: template)
-                if !strokes.isEmpty {
-                    restored.append((id, strokes))
+                if !strokes.isEmpty || !images.isEmpty {
+                    restored.append(Restored(id: id, strokes: strokes, images: images))
                 }
-            case let .delete(id, _, _, _):
+            case let .delete(id, _, _, _, _):
                 try await store.deletePage(id)
             case let .move(from, to):
                 try await store.movePage(from: from, to: to)
             }
         }
         await mirror.pagesDidChange()
-        for (id, strokes) in restored {
-            let page = try await mirror.ensureLoaded(id)
-            try await commit(page.addEdit(strokes), to: id)
+        for item in restored {
+            let page = try await mirror.ensureLoaded(item.id)
+            if !item.images.isEmpty {
+                try await commit(page.addImagesEdit(item.images), to: item.id)
+            }
+            if !item.strokes.isEmpty {
+                try await commit(page.addEdit(item.strokes), to: item.id)
+            }
         }
+    }
+
+    /// A re-inserted page's content, put back after the structure change.
+    private struct Restored {
+        var id: PageID
+        var strokes: [Stroke]
+        var images: [PageImage]
     }
 
     private func finishGesture() {

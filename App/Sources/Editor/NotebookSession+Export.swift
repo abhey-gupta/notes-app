@@ -1,6 +1,7 @@
 import Document
 import Export
 import Foundation
+import InkEnginePencilKit
 import InkModel
 
 extension NotebookSession {
@@ -31,7 +32,9 @@ extension NotebookSession {
             progress(Self.loadShare * Double(n + 1) / Double(range.count))
         }
         let options = PDFExportOptions(notebook: manifest.notebook, exportsAsShown: asShown)
-        var exporter = PDFExporter(palette: DesignSystemPDFPalette())
+        var exporter = PDFExporter(palette: DesignSystemPDFPalette()) { asset in
+            PhotoCache.decode(store.imageURL(for: asset))
+        }
         // PDF imports: the ink is flattened onto the original pages (#119).
         exporter.artwork = artwork
         return try await exporter.exportPDF(pages: pages, options: options) { fraction in

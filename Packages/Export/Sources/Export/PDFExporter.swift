@@ -7,8 +7,8 @@ import os
 /// Vector PDF export of a notebook (ARCHITECTURE.md §9).
 ///
 /// One PDF page per notebook page at the notebook's page size. Per page, bottom to top: paper, imported
-/// artwork (``artwork``: the original PDF page, kept vector, #119), template (vector lines/dots),
-/// highlighter strokes (multiply), brush strokes (raster image from the
+/// artwork (``artwork``: the original PDF page, kept vector, #119), template (vector lines/dots), photos
+/// (``ImageLoader``, #157), highlighter strokes (multiply), brush strokes (raster image from the
 /// ``BrushRasterizer`` if any), pen ink. Ink is fitted with cubic Béziers within ~4 % of the stroke width
 /// (0.05–0.15 pt): centerlines stroked with round caps/joins in near-constant-width pieces, or filled
 /// `InkGeometry` outlines where that doesn't fit (``StrokeShape``). Realistic notes come to ~80 KB per
@@ -21,17 +21,23 @@ public struct PDFExporter: Sendable {
     /// Pixels per point for rasterized brush strokes.
     public static let brushRasterScale: CGFloat = 2
 
+    /// Decodes the bytes of an image placed on a page (#157); `nil` leaves that image out.
+    public typealias ImageLoader = @Sendable (ImageAssetID) -> CGImage?
+
     /// Color source (the app adapts `DesignSystem`).
     public var palette: any PDFPalette
     /// Brush rasterizer; `nil` exports brush strokes as vector fills.
     public var brushRasterizer: (any BrushRasterizer)?
+    /// Photo bytes; `nil` exports pages without their photos.
+    public var imageLoader: ImageLoader?
     /// Imported artwork by page (PDF import): the ink is flattened onto it.
     public var artwork: [PageID: any PageArtwork] = [:]
 
     /// Creates an exporter.
-    public init(palette: any PDFPalette, brushRasterizer: (any BrushRasterizer)? = nil) {
+    public init(palette: any PDFPalette, brushRasterizer: (any BrushRasterizer)? = nil, imageLoader: ImageLoader? = nil) {
         self.palette = palette
         self.brushRasterizer = brushRasterizer
+        self.imageLoader = imageLoader
     }
 
     /// Exports to a new temporary file, `<tmp>/<unique>/<title>.pdf`, for the share sheet. The caller owns
@@ -126,6 +132,7 @@ public struct PDFExporter: Sendable {
     private func buildArt(for pages: [Page], options: PDFExportOptions) async throws -> [PageArt] {
         let palette = palette
         let rasterizer = brushRasterizer
+        let images = imageLoader
         return try await withThrowingTaskGroup(of: (Int, PageArt).self) { group in
             for (i, page) in pages.enumerated() {
                 group.addTask {
@@ -134,7 +141,8 @@ public struct PDFExporter: Sendable {
                         options: options,
                         palette: palette,
                         rasterizer: rasterizer,
-                        rasterScale: Self.brushRasterScale
+                        rasterScale: Self.brushRasterScale,
+                        images: images
                     ))
                 }
             }
@@ -169,6 +177,19 @@ public struct PDFExporter: Sendable {
             context.strokePath()
             context.addPath(template.dots)
             context.fillPath()
+        }
+
+        if !art.photos.isEmpty {
+            context.saveGState()
+            // Images draw bottom-up; flip back to PDF space for them.
+            context.translateBy(x: 0, y: size.height)
+            context.scaleBy(x: 1, y: -1)
+            context.interpolationQuality = .high
+            for photo in art.photos {
+                let f = photo.frame
+                context.draw(photo.image, in: CGRect(x: f.minX, y: size.height - f.maxY, width: f.width, height: f.height))
+            }
+            context.restoreGState()
         }
 
         if !art.highlights.isEmpty {

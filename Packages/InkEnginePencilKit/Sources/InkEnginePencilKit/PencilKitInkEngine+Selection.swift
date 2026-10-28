@@ -40,6 +40,9 @@ extension PencilKitInkEngine {
     }
 
     public func setSelectionPreview(_ preview: SelectionPreview?) {
+        // Photos move as their own layers (`+Photos`); the lifted image is ink only.
+        setPhotoPreview(preview
+            .flatMap { $0.images.isEmpty ? nil : PhotoPreview(page: $0.page, images: $0.images, transform: $0.transform) })
         guard let preview, !preview.strokes.isEmpty, snapshots[preview.page] != nil else {
             endSelectionPreview()
             return
@@ -220,6 +223,8 @@ final class SelectionLayers {
     var liftedHighlights: Set<StrokeID> = []
     /// The highlight being drawn (`+Highlighter`, #120).
     var liveHighlight: LiveHighlight?
+    /// Photos drawn moved in place during a drag (#157).
+    var photoPreview: PhotoPreview?
     /// Page-space rect the `lifted` image covers.
     var rect = CGRect.null
     var generation = 0
