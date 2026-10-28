@@ -46,6 +46,7 @@ struct NavCapsule: View {
                                 .font(.chromeTitle)
                                 .foregroundStyle(Tokens.Colors.textPrimary)
                                 .lineLimit(1)
+                                .accessibilityIdentifier("notebookTitle")
                         }
                         Image(systemName: Symbol.disclosure.name)
                             .scaledFont(size: 11, weight: .semibold)
