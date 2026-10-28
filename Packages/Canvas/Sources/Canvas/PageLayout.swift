@@ -164,9 +164,9 @@ public extension PageLayout {
     }
 
     /// Where a pinch that ended at `zoom` settles: `fill` when it is within `threshold` (a fraction of
-    /// `fill`, 5 %) of it, so a page pinched to about the screen's width lands exactly on it (#130);
+    /// `fill`, 8 %) of it, so a page pinched to about the screen's width lands exactly on it (#130);
     /// `nil` when it should stay put (out of the band, or already there).
-    static func snapZoom(_ zoom: CGFloat, fill: CGFloat, threshold: CGFloat = 0.05) -> CGFloat? {
+    static func snapZoom(_ zoom: CGFloat, fill: CGFloat, threshold: CGFloat = 0.08) -> CGFloat? {
         guard fill > 0, zoom > 0, abs(zoom - fill) > 0.0005 else { return nil }
         return abs(zoom / fill - 1) <= threshold ? fill : nil
     }

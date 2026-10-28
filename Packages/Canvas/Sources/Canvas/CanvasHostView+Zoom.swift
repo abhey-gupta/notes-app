@@ -55,7 +55,7 @@
             }
         }
 
-        /// A pinch that ended with the page about as wide as the screen (within 5 % of ``fillZoom``)
+        /// A pinch that ended with the page about as wide as the screen (within 8 % of ``fillZoom``)
         /// eases onto exactly that width with a light tap (#130). Not during the pinch (no magnet under
         /// the fingers) and not while UIKit bounces back from beyond the zoom range (far from fit width
         /// anyway). Runs on the next turn, after `UIScrollView`'s own end-of-pinch correction.
