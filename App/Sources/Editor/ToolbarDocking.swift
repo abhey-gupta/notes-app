@@ -185,7 +185,7 @@ struct DockLayout {
     var nav: CGFloat
     var pages: CGFloat
     var pagePill: CGSize
-    var isCompact: Bool
+    /// Focus mode: the toolbar is the compact pill.
     var isFocused: Bool
     /// Dynamic Type chrome scale (``DynamicTypeSize/chromeScale``): capsules are thicker at large sizes.
     var scale: CGFloat = 1
@@ -194,6 +194,17 @@ struct DockLayout {
         var insets = EdgeInsets()
         /// Horizontal nudge keeping a top/bottom toolbar clear of the neighbouring capsules.
         var shift: CGFloat = 0
+    }
+
+    /// Gap between the top row's capsules: wider than the glass blend distance, so a top-docked toolbar never
+    /// melts into the nav or pages capsule (#176).
+    static let rowGap = Tokens.Spacing.glassBlend + Tokens.Spacing.xs
+
+    /// Widest the nav capsule can be at the top with a `toolbarLength` toolbar docked there beside it, so the
+    /// title truncates instead of pushing the toolbar off the row (#176). Unbounded for other docks.
+    func navMaxWidth(at dock: ToolbarDock, toolbarLength: CGFloat) -> CGFloat {
+        guard dock == .top, containerWidth > 0 else { return .infinity }
+        return containerWidth - pages - toolbarLength - 2 * Self.rowGap - 1
     }
 
     /// Padding and nudge that put a `length`-long toolbar at `dock`:
@@ -205,12 +216,12 @@ struct DockLayout {
     func placement(for dock: ToolbarDock, length: CGFloat) -> Placement {
         let spacing = Tokens.Spacing.self
         let capsule = Tokens.Size.capsuleHeight * scale
-        let pillInset = isCompact ? (capsule - Tokens.Size.focusPillHeight * scale) / 2 : 0
+        let pillInset = isFocused ? (capsule - Tokens.Size.focusPillHeight * scale) / 2 : 0
         let belowTopRow = spacing.s + capsule + spacing.m
         let abovePagePill = spacing.chromeInset + pagePill.height + spacing.m
         switch dock {
         case .top:
-            if let shift = DockGeometry.rowShift(width: length, in: containerWidth, leading: nav, trailing: pages, gap: spacing.m) {
+            if let shift = DockGeometry.rowShift(width: length, in: containerWidth, leading: nav, trailing: pages, gap: Self.rowGap) {
                 return Placement(insets: EdgeInsets(top: spacing.s + pillInset, leading: 0, bottom: 0, trailing: 0), shift: shift)
             }
             return Placement(insets: EdgeInsets(top: belowTopRow + pillInset, leading: 0, bottom: 0, trailing: 0))

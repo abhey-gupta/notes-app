@@ -113,6 +113,11 @@ public actor DocumentStore {
         package.manifest
     }
 
+    /// Imported PDF artwork by page; see ``NotebookPackage/artwork()``. Opens the PDFs, reads no pages.
+    public func artwork() -> [PageID: any PageArtwork] {
+        package.artwork()
+    }
+
     /// The page with every applied edit, loading it (stroke file + journal replay) on first use.
     public func page(_ id: PageID) throws(DocumentError) -> Page {
         try load(id).page

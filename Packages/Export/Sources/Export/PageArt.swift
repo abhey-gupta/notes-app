@@ -21,6 +21,7 @@ struct PhotoArt: Sendable {
 
 /// A page reduced to what the PDF needs, built off the drawing thread (outlines are the expensive part).
 struct PageArt: Sendable {
+    var page: PageID
     var template: PageTemplate
     /// Photos, bottom to top, beneath everything drawn (only those the loader could provide).
     var photos: [PhotoArt] = []
@@ -52,7 +53,7 @@ struct PageArt: Sendable {
             return resolved
         }
 
-        var art = PageArt(template: page.template, photos: photos(of: page, loader: images))
+        var art = PageArt(page: page.id, template: page.template, photos: photos(of: page, loader: images))
         if let rasterizer {
             let brushes = page.strokes.filter { $0.tool == .brush && !$0.samples.isEmpty }
             if !brushes.isEmpty {

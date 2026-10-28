@@ -1,6 +1,6 @@
 import XCTest
 
-/// Dynamic toolbar (#26): drag to each dock, pinch to compact, tap to expand, persistence, quick colors.
+/// Dynamic toolbar (#26): drag to each dock, pinch into focus mode (#158), chevron to leave, persistence, quick colors.
 final class ToolbarTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -101,7 +101,7 @@ final class ToolbarTests: XCTestCase {
     }
 
     @MainActor
-    func testPinchCompactsAndTapExpands() {
+    func testPinchEntersFocusModeUntilChevron() {
         let app = launch()
         let bar = toolbar(app)
         XCTAssertTrue(bar.waitForExistence(timeout: 5))
@@ -109,10 +109,16 @@ final class ToolbarTests: XCTestCase {
 
         XCTAssertTrue(pill(app).waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["Lasso"].exists)
-        XCTAssertTrue(app.buttons["Pages"].exists, "pinch compacts the tools only, not the other capsules")
+        XCTAssertTrue(app.buttons["Pages"].waitForNonExistence(timeout: 3), "pinch enters focus mode: other capsules hide")
 
         pill(app).tap()
+        app.windows.firstMatch.swipeUp()
+        XCTAssertTrue(pill(app).exists, "taps and scrolls don't leave focus mode")
+        XCTAssertFalse(app.buttons["Pages"].exists)
+
+        app.buttons["Show toolbar"].tap()
         XCTAssertTrue(app.buttons["Lasso"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Pages"].exists)
         XCTAssertTrue(waitUntil(toolbar(app), isAt: .top, in: app))
     }
 
@@ -129,7 +135,7 @@ final class ToolbarTests: XCTestCase {
     }
 
     @MainActor
-    func testDockCompactAndToolSurviveRelaunch() {
+    func testDockAndToolSurviveRelaunchFocusDoesNot() {
         var app = launch()
         let bar = toolbar(app)
         app.buttons["Highlighter"].tap()
@@ -142,9 +148,7 @@ final class ToolbarTests: XCTestCase {
         app.terminate()
 
         app = launch(reset: false)
-        XCTAssertTrue(waitUntil(pill(app), isAt: .right, in: app), "compact pill restored at right")
-        pill(app).tap()
-        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app))
+        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app), "expanded at right: focus mode isn't saved")
         XCTAssertTrue(app.buttons["Highlighter"].isSelected)
     }
 
@@ -182,9 +186,17 @@ final class ToolbarTests: XCTestCase {
         app.buttons["Pen"].tap()
         XCTAssertTrue(popover(app).waitForExistence(timeout: 3), "tapping the active tool opens its options")
         app.buttons["Brush"].tap()
-        app.buttons["Width 8"].tap()
+        let size = app.descendants(matching: .any)["penSize"]
+        XCTAssertEqual(size.value as? String, "8.0 mm", "brush has its own size")
+        app.buttons["penSizePlus"].tap()
+        XCTAssertEqual(size.value as? String, "8.1 mm", "+ steps 0.1 mm")
+        app.buttons["penSizeSaved2"].tap()
+        XCTAssertEqual(size.value as? String, "15.0 mm", "a saved size applies on tap")
+        XCTAssertTrue(app.buttons["penSizeSaved2"].isSelected)
+        app.buttons["penSizeMinus"].tap()
+        app.buttons["penSizeSaved0"].press(forDuration: 0.8)
+        XCTAssertTrue(app.buttons["Saved size 14.9 mm"].waitForExistence(timeout: 2), "touch and hold stores the current size")
         XCTAssertTrue(app.buttons["Brush"].isSelected)
-        XCTAssertTrue(app.buttons["Width 8"].isSelected)
         XCTAssertTrue(app.switches["pressureToggle"].exists)
         dismissPopover(app)
 
@@ -211,16 +223,22 @@ final class ToolbarTests: XCTestCase {
         app.buttons["Highlighter"].tap()
         app.buttons["Highlighter"].tap()
         XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Width 24"].exists)
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Width ")).count, 3, "highlighter has 3 widths")
+        XCTAssertTrue(app.descendants(matching: .any)["highlighterSize"].exists)
+        XCTAssertEqual(
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Saved size ")).count,
+            3,
+            "highlighter has 3 saved sizes"
+        )
         XCTAssertLessThan(popover(app).frame.maxX, bar.frame.minX + 1, "opens beside a right-docked toolbar")
         dismissPopover(app)
 
         bar.pinch(withScale: 0.4, velocity: -1)
         XCTAssertTrue(waitUntil(pill(app), isAt: .right, in: app))
-        app.buttons["Current tool"].tap()
-        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app), "any tap on the pill expands")
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Current tool")).firstMatch.tap()
         XCTAssertFalse(popover(app).exists, "the pill has no options popover")
+        XCTAssertTrue(pill(app).exists, "the pill's tool is display only")
+        pill(app).pinch(withScale: 2.5, velocity: 1)
+        XCTAssertTrue(waitUntil(toolbar(app), isAt: .right, in: app), "pinch out leaves focus mode")
     }
 
     @MainActor

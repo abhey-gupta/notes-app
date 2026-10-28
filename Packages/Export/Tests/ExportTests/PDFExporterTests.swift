@@ -68,6 +68,46 @@ struct PDFExporterTests {
         #expect(bitmap[300, 500] == Pixel(255, 255, 255))
     }
 
+    /// A page of a one-page PDF with a red band across its top half, drawn as page artwork.
+    struct BandArtwork: PageArtwork, @unchecked Sendable {
+        let page: CGPDFPage
+
+        init() throws {
+            let data = NSMutableData()
+            var box = CGRect(x: 0, y: 0, width: 595, height: 842)
+            let consumer = try #require(CGDataConsumer(data: data))
+            let context = try #require(CGContext(consumer: consumer, mediaBox: &box, nil))
+            context.beginPDFPage(nil)
+            context.setFillColor(srgb(0xFF0000))
+            context.fill(CGRect(x: 0, y: 421, width: 595, height: 421))
+            context.endPDFPage()
+            context.closePDF()
+            let provider = try #require(CGDataProvider(data: data))
+            page = try #require(CGPDFDocument(provider)?.page(at: 1))
+        }
+
+        func draw(in context: CGContext, size: CGSize) {
+            context.saveGState()
+            context.translateBy(x: 0, y: size.height)
+            context.scaleBy(x: 1, y: -1)
+            context.drawPDFPage(page)
+            context.restoreGState()
+        }
+    }
+
+    @Test func inkIsFlattenedOntoPageArtworkKeptVector() async throws {
+        let page = Self.inkPage()
+        var exporter = exporter
+        exporter.artwork = try [page.id: BandArtwork()]
+        let pdf = try await PDF(exporter.pdfData(pages: [page, Self.inkPage()], options: PDFExportOptions()))
+        let bitmap = try pdf.bitmap(0)
+        #expect(bitmap[300, 200] == Pixel(255, 0, 0), "artwork's top half")
+        #expect(bitmap[300, 600] == Pixel(255, 255, 255))
+        #expect(bitmap[300, 400] == Pixel(0x1E, 0x21, 0x29), "ink on top")
+        #expect(try pdf.operatorCounts(0).images == 0, "the original page stays vector")
+        #expect(try pdf.bitmap(1)[300, 200] == Pixel(255, 255, 255), "pages without artwork are plain")
+    }
+
     @Test func nightExportsOnWhiteWithLightPaletteByDefault() async throws {
         let options = PDFExportOptions(theme: .night)
         #expect(options.exportTheme == .white)

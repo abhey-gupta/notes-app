@@ -22,14 +22,6 @@
             viewportDidChange()
         }
 
-        public func scrollViewWillBeginDragging(_: UIScrollView) {
-            delegate?.canvasHostWillBeginNavigating(self)
-        }
-
-        public func scrollViewWillBeginZooming(_: UIScrollView, with _: UIView?) {
-            delegate?.canvasHostWillBeginNavigating(self)
-        }
-
         public func scrollViewDidEndZooming(_: UIScrollView, with _: UIView?, atScale _: CGFloat) {
             settleZoom() // after a bounce back into range
         }

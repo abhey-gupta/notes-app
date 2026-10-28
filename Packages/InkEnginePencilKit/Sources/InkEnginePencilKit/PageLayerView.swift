@@ -3,10 +3,11 @@ import InkModel
 import PencilKit
 import UIKit
 
-/// One visible page in content space: paper color, vector template marks, its photos (#157, one layer each,
-/// beneath everything), its highlights (#120, one shape layer each, beneath everything that draws ink),
-/// and an image of its ink (outside ``inkHole``, the part a `PKCanvasView` has drawn; ``HoledImageLayer``
-/// bands, no mask).
+/// One visible page in content space: paper color, imported artwork (a PDF page, ``ArtworkLayer``, #119),
+/// vector template marks, its photos (#157, one layer each, beneath the highlights), its highlights (#120,
+/// one shape layer each, beneath everything that draws ink), and an image of its ink (outside ``inkHole``,
+/// the part a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask). Pages touch (#162): every page
+/// but the first draws a one-pixel hairline in the template mark color along its top edge, over its image.
 ///
 /// The image is one of (#70's fallback chain, best first): the raster for ``requestedKey``; a stale
 /// raster of the page (an older bucket or content, scaled by the layer) while that renders; the page's
@@ -16,10 +17,10 @@ import UIKit
 /// (``crossfadeDuration``, #43); raster-to-raster swaps are instant.
 ///
 /// The view sits in the host's zoom view, so zoom is the ancestor's transform; the template marks
-/// re-rasterize at ``layout(frame:template:markScale:colors:)``'s `markScale` to stay crisp.
+/// re-rasterize at ``layout(frame:template:leftExtension:artwork:markScale:colors:)``'s `markScale` to stay crisp.
 @MainActor
 final class PageLayerView: UIView {
-    private let linesLayer = CAShapeLayer()
+    let linesLayer = CAShapeLayer()
     private let dotsLayer = CAShapeLayer()
     /// Photos in z-order, beneath the highlights and the ink (`+Photos`).
     let photosLayer = CALayer()
@@ -34,11 +35,14 @@ final class PageLayerView: UIView {
     /// The scaled-up thumbnail (opaque: paper, template and ink at thumbnail resolution).
     let thumbnailLayer = HoledImageLayer()
     let inkLayer = HoledImageLayer()
+    /// The seam with the page above (#162), one screen pixel tall; hidden on the first page.
+    let seamLayer = CALayer()
 
     /// Thumbnail → raster crossfade length, seconds (the app sets it from its motion tokens).
     var crossfadeDuration: TimeInterval = 0.12
 
     private var templateKey: TemplateKey?
+    var artworkLayer: ArtworkLayer?
 
     private struct TemplateKey: Equatable {
         var template: PageTemplate
@@ -126,6 +130,7 @@ final class PageLayerView: UIView {
         layer.addSublayer(photosLayer)
         layer.addSublayer(highlightsLayer)
         layer.addSublayer(imageLayer)
+        layer.addSublayer(seamLayer)
     }
 
     @available(*, unavailable)
@@ -133,10 +138,14 @@ final class PageLayerView: UIView {
         fatalError("init(coder:) not supported")
     }
 
-    /// Lays out at `frame` (content space, the page's size) with `template`; `markScale` (px per pt,
-    /// `nil` to keep the current one) is the template layers' `contentsScale`. A page that changed size
-    /// (widened, #129) drops its image: a raster of the old size would be stretched over the new one.
-    func layout(frame: CGRect, template: PageTemplate, leftExtension: CGFloat = 0, markScale: CGFloat?, colors: Colors) {
+    /// Lays out at `frame` (content space, the page's size) with `template` over `artwork`; `markScale`
+    /// (px per pt, `nil` to keep the current one) is the template layers' `contentsScale`. A page's
+    /// artwork is set once (it never changes for a page ID). A page that changed size (widened, #129)
+    /// drops its image: a raster of the old size would be stretched over the new one.
+    func layout(
+        frame: CGRect, template: PageTemplate, leftExtension: CGFloat = 0, artwork: (any PageArtwork)? = nil,
+        markScale: CGFloat?, colors: Colors
+    ) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         if bounds.size != .zero, bounds.size != frame.size {
@@ -152,6 +161,7 @@ final class PageLayerView: UIView {
         highlightsLayer.frame = bounds
         imageLayer.frame = bounds
         inkLayer.frame = imageLayer.bounds
+        layoutArtwork(artwork)
         layoutThumbnail()
         let key = TemplateKey(template: template, size: frame.size, leftExtension: leftExtension)
         if templateKey != key {
@@ -167,6 +177,9 @@ final class PageLayerView: UIView {
                 sublayer.contentsScale = markScale
             }
         }
+        seamLayer.backgroundColor = colors.line
+        seamLayer.isHidden = frame.minY <= 0
+        seamLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: 1 / max(linesLayer.contentsScale, 1))
         updateInkHole()
         CATransaction.commit()
     }

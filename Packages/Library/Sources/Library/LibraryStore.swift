@@ -86,35 +86,6 @@ public actor LibraryStore {
 
     // MARK: Notebooks
 
-    /// Creates the notebook's package (one blank page if it has none) and its index entry, as one step:
-    /// if the index can't be written, the package is removed again. A blank title becomes "Untitled",
-    /// then "Untitled 2", "Untitled 3"…
-    @discardableResult
-    public func create(_ notebook: Notebook, in folder: FolderID? = nil) async throws(LibraryError) -> LibraryEntry {
-        var next = await loadedIndex()
-        try Self.check(folder, in: next)
-        var notebook = notebook
-        if notebook.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            notebook.title = Self.numbered("Untitled", taken: Set(next.notebooks.map(\.title)))
-        }
-        let url = NotebookPackage.url(for: notebook.id, in: locations.notebooksDirectory)
-        let package: NotebookPackage
-        do {
-            package = try NotebookPackage.create(at: url, notebook: notebook)
-        } catch {
-            throw .document(error)
-        }
-        let entry = LibraryEntry(manifest: package.manifest, packagePath: url.lastPathComponent, folderID: folder)
-        next.notebooks.append(entry)
-        do {
-            try commit(next)
-        } catch {
-            try? FileManager.default.removeItem(at: url)
-            throw error
-        }
-        return entry
-    }
-
     /// Edits notebook metadata in the package manifest (bumping its `modifiedAt`), then the index entry.
     @discardableResult
     public func updateNotebook(_ id: NotebookID, _ change: @Sendable (inout Notebook) -> Void) async throws(LibraryError) -> LibraryEntry {

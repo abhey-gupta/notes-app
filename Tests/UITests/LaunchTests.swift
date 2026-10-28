@@ -32,7 +32,7 @@ final class LaunchTests: XCTestCase {
             XCTAssertTrue(app.buttons[tool].exists, "\(tool) missing")
         }
         XCTAssertTrue(app.buttons["Thermodynamics, notebook options"].exists)
-        XCTAssertTrue(app.buttons["pageIndicator"].exists)
+        XCTAssertTrue(app.staticTexts["pageIndicator"].exists)
 
         back.tap()
         XCTAssertTrue(app.buttons["newNotebook"].waitForExistence(timeout: 5))
@@ -40,7 +40,7 @@ final class LaunchTests: XCTestCase {
     }
 
     @MainActor
-    func testInkingCollapsesToFocusPillAndTapRestores() {
+    func testFocusModeSurvivesInkingUntilChevron() {
         let app = XCUIApplication()
         // No Pencil in the simulator: let one finger ink.
         app.launchArguments += [
@@ -52,17 +52,22 @@ final class LaunchTests: XCTestCase {
             "YES",
             "-allowFingerDrawing",
             "YES",
+            "-focusMode",
+            "YES",
         ]
         app.launch()
-        XCTAssertTrue(app.buttons["Pen"].waitForExistence(timeout: 5))
+        let pill = app.descendants(matching: .any)["focusPill"]
+        XCTAssertTrue(pill.waitForExistence(timeout: 5))
 
         let window = app.windows.firstMatch
         let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.55))
         let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.6))
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2)
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
+        app.staticTexts["pageIndicator"].tap()
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Current tool")).firstMatch.tap()
 
-        let pill = app.descendants(matching: .any)["focusPill"]
-        XCTAssertTrue(pill.waitForExistence(timeout: 3))
+        XCTAssertTrue(pill.exists, "ink and taps don't leave focus mode (#158)")
         XCTAssertFalse(app.buttons["Lasso"].exists)
 
         app.buttons["Show toolbar"].tap()
@@ -79,6 +84,7 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(new.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["No notebooks yet. Tap New to start one."].exists, "fresh install shows the empty state")
         new.tap()
+        app.buttons["New Notebook"].tap()
 
         let title = app.textFields["notebookTitle"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))

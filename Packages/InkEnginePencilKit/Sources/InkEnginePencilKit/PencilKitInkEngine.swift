@@ -41,6 +41,13 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// renders (#43, #70). `nil`: the page shows flat paper meanwhile.
     public var thumbnailURL: ((PageID) -> URL?)?
     public var imageURL: ((ImageAssetID) -> URL?)?
+    /// Imported artwork (a PDF page) per page, drawn in tiles under the template and ink (#119).
+    public var pageArtwork: ((PageID) -> (any PageArtwork)?)? {
+        didSet {
+            layoutPages()
+        }
+    }
+
     /// Thumbnail → raster crossfade, seconds (the app sets `Tokens.Motion.thumbnailCrossfadeDuration`).
     public var crossfadeDuration: TimeInterval = 0.12 {
         didSet {
@@ -106,11 +113,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             name: UIApplication.didReceiveMemoryWarningNotification, object: nil
         )
         registerGauges()
-    }
-
-    @objc private func didReceiveMemoryWarning() {
-        rasters.removeAll()
-        photos.removeAll()
     }
 
     // MARK: InkEngine

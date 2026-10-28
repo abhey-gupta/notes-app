@@ -94,6 +94,11 @@ targets:
             LSHandlerRank: Owner
             LSTypeIsPackage: true
             LSItemContentTypes: [com.abhey.notespace.notebook]
+          # "Open in Notespace" from Files / the share sheet → import sheet (#119).
+          - CFBundleTypeName: PDF Document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.adobe.pdf]
 
   NotespaceUITests:
     type: bundle.ui-testing

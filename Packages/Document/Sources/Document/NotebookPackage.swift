@@ -10,6 +10,7 @@ import InkModel
 ///   pages/<pageID>.wal       autosave journal, reserved for the WAL (§4.4)
 ///   thumbs/<pageID>.heic     page thumbnail;  thumbs/cover.heic  library cover
 ///   images/<assetID>.heic    photo bytes placed on pages (#157); written once, never rewritten
+///   backgrounds/<name>.pdf   imported PDF; pages show it via PageBackground.pdf (#119)
 ///   backup-v1/               manifest.json + pages/ as they were before the v1 → v2 migration
 /// ```
 ///
@@ -27,11 +28,9 @@ public struct NotebookPackage: Sendable {
     public let url: URL
     /// Manifest as last read or written.
     public private(set) var manifest: Manifest
-
-    private init(url: URL, manifest: Manifest) {
-        self.url = url
-        self.manifest = manifest
-    }
+    /// Backgrounds of pages deleted while open, so undo (``insertPage(id:at:template:)`` with the same
+    /// ID) brings a PDF page back on its PDF.
+    private var removedBackgrounds: [PageID: PageBackground] = [:]
 
     // MARK: Locations
 
@@ -119,16 +118,7 @@ public struct NotebookPackage: Sendable {
     /// - Throws: ``DocumentError/alreadyExists(_:)``, ``DocumentError/duplicatePage(_:)``,
     ///   ``DocumentError/pageTooLarge(_:)``, ``DocumentError/io(_:reason:)``.
     public static func create(at url: URL, notebook: Notebook, pages: some Sequence<Page>) throws(DocumentError) -> NotebookPackage {
-        let fm = FileManager.default
-        guard !fm.fileExists(atPath: url.path(percentEncoded: false)) else { throw .alreadyExists(url) }
-        let staging = url.deletingLastPathComponent()
-            .appending(path: ".\(UUID().uuidString).staging", directoryHint: .isDirectory)
-        let stagingPages = staging.appending(path: "pages", directoryHint: .isDirectory)
-        do {
-            try fm.createDirectory(at: stagingPages, withIntermediateDirectories: true)
-            try fm.createDirectory(at: staging.appending(path: "thumbs"), withIntermediateDirectories: false)
-            try fm.createDirectory(at: staging.appending(path: "images"), withIntermediateDirectories: false)
-            var notebook = notebook
+        try create(at: url, notebook: notebook) { staging in
             var entries: [PageEntry] = []
             for page in pages {
                 entries.append(PageEntry(id: page.id, template: page.template, rev: page.rev))
@@ -139,8 +129,27 @@ public struct NotebookPackage: Sendable {
                 } catch {
                     throw DocumentError.pageTooLarge(page.id)
                 }
-                try data.write(to: stagingPages.appending(path: "\(page.id).strokes", directoryHint: .notDirectory))
+                try data.write(to: staging.appending(path: "pages/\(page.id).strokes", directoryHint: .notDirectory))
             }
+            return entries
+        }
+    }
+
+    /// Stages a package: `stage` fills the staging directory (it has `pages/` and `thumbs/`) and returns
+    /// the page entries; then the manifest is written and the directory renamed into place.
+    static func create(
+        at url: URL, notebook: Notebook, stage: (URL) throws -> [PageEntry]
+    ) throws(DocumentError) -> NotebookPackage {
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: url.path(percentEncoded: false)) else { throw .alreadyExists(url) }
+        let staging = url.deletingLastPathComponent()
+            .appending(path: ".\(UUID().uuidString).staging", directoryHint: .isDirectory)
+        do {
+            try fm.createDirectory(at: staging.appending(path: "pages"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: staging.appending(path: "thumbs"), withIntermediateDirectories: false)
+            try fm.createDirectory(at: staging.appending(path: "images"), withIntermediateDirectories: false)
+            var notebook = notebook
+            let entries = try stage(staging)
             if !entries.isEmpty {
                 notebook.pages = entries.map(\.id)
             } else if notebook.pages.isEmpty {
@@ -281,9 +290,11 @@ public struct NotebookPackage: Sendable {
         id: PageID = PageID(), at index: Int? = nil, template: PageTemplate? = nil
     ) throws(DocumentError) -> PageID {
         var next = manifest
-        let entry = PageEntry(id: id, template: template ?? next.notebook.paper.defaultTemplate)
+        let background = removedBackgrounds[id] ?? .template
+        let entry = PageEntry(id: id, template: template ?? next.notebook.paper.defaultTemplate, background: background)
         try next.insertPage(entry, at: index ?? next.notebook.pages.count)
         try commit(next)
+        removedBackgrounds[id] = nil
         return id
     }
 
@@ -292,8 +303,12 @@ public struct NotebookPackage: Sendable {
     /// A crash in between leaves only unreferenced files, never a dangling reference.
     public mutating func deletePage(_ id: PageID) throws(DocumentError) {
         var next = manifest
+        let background = next.entry(for: id)?.background
         try next.removePage(id)
         try commit(next)
+        if let background, background != .template {
+            removedBackgrounds[id] = background
+        }
         for file in [strokesURL(for: id), journalURL(for: id), thumbnailURL(for: id)] {
             try? FileManager.default.removeItem(at: file)
         }

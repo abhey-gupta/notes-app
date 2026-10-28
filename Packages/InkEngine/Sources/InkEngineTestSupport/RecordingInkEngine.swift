@@ -13,6 +13,7 @@ public final class RecordingInkEngine: InkEngine {
     public var selectionColor: UIColor = .systemBlue
     public var thumbnailURL: ((PageID) -> URL?)?
     public var imageURL: ((ImageAssetID) -> URL?)?
+    public var pageArtwork: ((PageID) -> (any PageArtwork)?)?
 
     public private(set) var viewports: [Viewport] = []
     public private(set) var pageSets: [[PageSnapshot]] = []

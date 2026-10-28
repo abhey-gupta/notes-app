@@ -6,9 +6,10 @@ import os
 
 /// Vector PDF export of a notebook (ARCHITECTURE.md §9).
 ///
-/// One PDF page per notebook page at the notebook's page size. Per page, bottom to top: paper, template
-/// (vector lines/dots), photos (``ImageLoader``, #157), highlighter strokes (multiply), brush strokes
-/// (raster image from the ``BrushRasterizer`` if any), pen ink. Ink is fitted with cubic Béziers within ~4 % of the stroke width
+/// One PDF page per notebook page at the notebook's page size. Per page, bottom to top: paper, imported
+/// artwork (``artwork``: the original PDF page, kept vector, #119), template (vector lines/dots), photos
+/// (``ImageLoader``, #157), highlighter strokes (multiply), brush strokes (raster image from the
+/// ``BrushRasterizer`` if any), pen ink. Ink is fitted with cubic Béziers within ~4 % of the stroke width
 /// (0.05–0.15 pt): centerlines stroked with round caps/joins in near-constant-width pieces, or filled
 /// `InkGeometry` outlines where that doesn't fit (``StrokeShape``). Realistic notes come to ~80 KB per
 /// dense page. No text, no fonts.
@@ -29,6 +30,8 @@ public struct PDFExporter: Sendable {
     public var brushRasterizer: (any BrushRasterizer)?
     /// Photo bytes; `nil` exports pages without their photos.
     public var imageLoader: ImageLoader?
+    /// Imported artwork by page (PDF import): the ink is flattened onto it.
+    public var artwork: [PageID: any PageArtwork] = [:]
 
     /// Creates an exporter.
     public init(palette: any PDFPalette, brushRasterizer: (any BrushRasterizer)? = nil, imageLoader: ImageLoader? = nil) {
@@ -162,6 +165,7 @@ public struct PDFExporter: Sendable {
 
         context.setFillColor(palette.paper(theme))
         context.fill(CGRect(origin: .zero, size: size))
+        artwork[art.page]?.draw(in: context, size: size)
 
         let template = TemplateGeometry(art.template, size: size, leftExtension: options.leftExtension)
         if !template.isEmpty {

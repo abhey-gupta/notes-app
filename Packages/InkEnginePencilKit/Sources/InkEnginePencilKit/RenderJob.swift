@@ -30,6 +30,8 @@ struct RenderJob: Sendable {
     /// The page's photos, bottom to top, drawn over the template (thumbnails and export fallback only;
     /// a page view draws its own photo layers).
     var photos: [Photo] = []
+    /// Imported artwork under the template (``page(size:scale:)`` only; ink rasters are transparent).
+    var artwork: (any PageArtwork)?
     /// Ink strokes on the canvas not yet in `page` (drawn last, as on the canvas).
     var pending: [PKStroke] = []
     /// Highlights committed but not yet in `page` (drawn after the page's).
@@ -92,7 +94,7 @@ struct RenderJob: Sendable {
         Highlight.color(UIColor(palette.ink(stroke.color, on: theme)))
     }
 
-    /// Paper + template + ink scaled into `size` points at `scale`.
+    /// Paper + artwork + template + ink scaled into `size` points at `scale`.
     func page(size: CGSize, scale: CGFloat) -> CGImage? {
         let format = UIGraphicsImageRendererFormat.preferred()
         format.scale = scale
@@ -110,11 +112,17 @@ struct RenderJob: Sendable {
         let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
             let cg = context.cgContext
             cg.scaleBy(x: sx, y: sy)
+            if let artwork {
+                cg.setFillColor(palette.paper(theme).cgColor)
+                cg.fill(CGRect(origin: .zero, size: page.size))
+                artwork.draw(in: cg, size: page.size)
+            }
             TemplateGeometry.drawBackground(
                 page.page.template,
                 size: page.size,
                 leftExtension: page.leftExtension,
-                paper: palette.paper(theme).cgColor,
+                // Marks over the artwork; no paper fill on top of it.
+                paper: artwork == nil ? palette.paper(theme).cgColor : CGColor(gray: 0, alpha: 0),
                 line: palette.templateLine(theme).cgColor,
                 in: cg
             )

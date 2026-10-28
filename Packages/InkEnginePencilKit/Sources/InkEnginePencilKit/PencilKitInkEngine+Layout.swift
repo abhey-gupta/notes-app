@@ -101,7 +101,7 @@ extension PencilKitInkEngine {
         }
     }
 
-    /// Paper, template, photos, highlights and ink image for every visible page; images keep out of the
+    /// Paper, artwork, template, photos, highlights and ink image for every visible page; images keep out of the
     /// region a canvas has drawn. Renders queue nearest the viewport first (`+Images`).
     func layoutPages() {
         let visible = Set(viewport.pages.map(\.id))
@@ -128,6 +128,7 @@ extension PencilKitInkEngine {
             let snapshot = snapshots[page.id]
             view.layout(
                 frame: page.frame, template: snapshot?.page.template ?? .blank, leftExtension: snapshot?.leftExtension ?? 0,
+                artwork: pageArtwork?(page.id),
                 markScale: markScale, colors: colors
             )
             let canvas = canvas(for: page.id)

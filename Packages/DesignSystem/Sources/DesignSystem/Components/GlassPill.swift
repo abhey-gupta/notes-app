@@ -25,27 +25,24 @@ public struct GlassPill: View {
     }
 }
 
-/// Compact chrome while writing (mock §05): current tool, current color, expand.
+/// Focus mode chrome (mock §05, #158): current tool and color (display only), and the chevron that leaves it.
 /// Chain `.glassEffectID(_:in:)` with the tools capsule's ID so collapsing is a morph, not a fade.
 /// `axis: .vertical` stacks the same pieces for a side-docked toolbar.
 public struct FocusPill: View {
     private let axis: Axis
     private let tool: Symbol
     private let ink: Color
-    private let onTool: () -> Void
     private let onExpand: () -> Void
 
     public init(
         axis: Axis = .horizontal,
         tool: Symbol,
         ink: Color,
-        onTool: @escaping () -> Void = {},
         onExpand: @escaping () -> Void
     ) {
         self.axis = axis
         self.tool = tool
         self.ink = ink
-        self.onTool = onTool
         self.onExpand = onExpand
     }
 
@@ -57,7 +54,7 @@ public struct FocusPill: View {
             trailing: Self.endPadding,
             spacing: 0
         ) {
-            FocusPillContent(axis: axis, tool: tool, ink: ink, onTool: onTool, onExpand: onExpand)
+            FocusPillContent(axis: axis, tool: tool, ink: ink, onExpand: onExpand)
         }
     }
 
@@ -71,7 +68,6 @@ public struct FocusPillContent: View {
     private let axis: Axis
     private let tool: Symbol
     private let ink: Color
-    private let onTool: () -> Void
     private let onExpand: () -> Void
     /// VoiceOver values: "Pen", "Blue".
     private let toolName: String?
@@ -83,7 +79,6 @@ public struct FocusPillContent: View {
         ink: Color,
         toolName: String? = nil,
         colorName: String? = nil,
-        onTool: @escaping () -> Void = {},
         onExpand: @escaping () -> Void
     ) {
         self.axis = axis
@@ -91,7 +86,6 @@ public struct FocusPillContent: View {
         self.ink = ink
         self.toolName = toolName
         self.colorName = colorName
-        self.onTool = onTool
         self.onExpand = onExpand
     }
 
@@ -110,16 +104,18 @@ public struct FocusPillContent: View {
                 ink: ink,
                 size: horizontal ? button : CGSize(width: button.height, height: button.width),
                 iconSize: 17,
-                showsDot: false,
-                action: onTool
-            )
-            .accessibilityValue(toolName ?? "")
-            .accessibilityHint("Shows the toolbar")
+                showsDot: false
+            ) {}
+                .allowsHitTesting(false)
+                .absorbsTaps()
+                .accessibilityValue(toolName ?? "")
+                .accessibilityRemoveTraits([.isButton, .isSelected])
             ColorSwatch(ink, label: "Current color", isSelected: true, diameter: Tokens.Size.focusSwatch)
                 .allowsHitTesting(false)
                 .accessibilityValue(colorName ?? "")
                 .accessibilityRemoveTraits([.isButton, .isSelected])
                 .padding(along, Tokens.Spacing.xs)
+                .absorbsTaps()
             ChromeSeparator(axis: axis, height: 18)
                 .padding(along, -Tokens.Spacing.xs)
             Button(action: onExpand) {
@@ -132,6 +128,13 @@ public struct FocusPillContent: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Show toolbar")
         }
+    }
+}
+
+private extension View {
+    /// Display-only pieces still take their taps, so fuzzy hit-testing doesn't hand a near miss to the chevron.
+    func absorbsTaps() -> some View {
+        contentShape(.rect).onTapGesture {}
     }
 }
 

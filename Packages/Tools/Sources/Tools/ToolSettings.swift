@@ -21,13 +21,70 @@ public enum ToolbarDock: String, CaseIterable, Hashable, Sendable, Codable {
     }
 }
 
-/// Pen settings: family, width step, color, pressure.
+/// A pen or highlighter size in page millimetres (A4 is 210 mm wide), in 0.1 mm steps, plus three saved
+/// sizes the options popover offers as one-tap chips (#168). Range checks belong to the owner, which
+/// knows the family (``PenSettings/sizeRange(for:)``).
+public struct InkSize: Hashable, Sendable, Codable {
+    /// Slider and ± step.
+    public static let step: Float = 0.1
+    /// Page points per millimetre (PostScript points, as the A4 page size).
+    public static let pointsPerMillimetre: Float = 72 / 25.4
+    /// Saved-size chips.
+    public static let savedCount = 3
+
+    /// Current size (mm).
+    public var millimetres: Float
+    /// Saved sizes (mm), always ``savedCount`` long once normalized.
+    public var saved: [Float]
+
+    public init(_ millimetres: Float, saved: [Float]) {
+        self.millimetres = millimetres
+        self.saved = saved
+    }
+
+    /// Width on the page in points: what the stroke draws.
+    public var points: Float {
+        millimetres * Self.pointsPerMillimetre
+    }
+
+    /// Snapped to 0.1 mm and clamped to `range`; saved sizes likewise, padded from `fallback`.
+    public func normalized(to range: ClosedRange<Float>, fallback: InkSize) -> InkSize {
+        let saved = (0 ..< Self.savedCount).map { i in
+            Self.snap(i < self.saved.count ? self.saved[i] : fallback.saved[i], to: range)
+        }
+        return InkSize(Self.snap(millimetres, to: range), saved: saved)
+    }
+
+    /// `value` rounded to the nearest 0.1 mm inside `range` (non-finite → lower bound).
+    public static func snap(_ value: Float, to range: ClosedRange<Float>) -> Float {
+        guard value.isFinite else { return range.lowerBound }
+        let stepped = (value / step).rounded() * step
+        return min(max(stepped, range.lowerBound), range.upperBound)
+    }
+}
+
+/// Pen settings: family, a size per family, color, pressure.
 public struct PenSettings: Hashable, Sendable, Codable {
-    /// Pen widths in points, by ``widthIndex`` (mock units 3/5/8/11/15). Toolbar units: what PencilKit
-    /// draws for each comes from `PencilKitConversion.pencilKitWidth` (the default, index 1, is a fine pen).
-    public static let widths: [Float] = [1.5, 2.5, 4, 6, 8]
     /// Families offered for the pen tool (the highlighter is its own tool).
     public static let kinds: [PenKind] = [.fountain, .ballpoint, .brush]
+
+    /// Sizes (mm) a family offers. PencilKit's watercolor can't draw thinner than ~6 mm.
+    public static func sizeRange(for kind: PenKind) -> ClosedRange<Float> {
+        switch kind {
+        case .fountain, .ballpoint: 0.1 ... 2
+        case .brush: 6 ... 20
+        case .highlighter: HighlighterSettings.sizeRange
+        }
+    }
+
+    /// Fresh size for a family (a fine 0.5 mm ballpoint, #71 follow-up).
+    public static func defaultSize(for kind: PenKind) -> InkSize {
+        switch kind {
+        case .fountain, .ballpoint: InkSize(0.5, saved: [0.3, 0.5, 1])
+        case .brush: InkSize(8, saved: [6, 10, 15])
+        case .highlighter: HighlighterSettings.defaultSize
+        }
+    }
 
     /// Pen family; never `.highlighter` (falls back to `.ballpoint`).
     public var kind: PenKind {
@@ -38,54 +95,62 @@ public struct PenSettings: Hashable, Sendable, Codable {
         }
     }
 
-    /// Index into ``widths``, clamped.
-    public var widthIndex: Int {
-        didSet { widthIndex = widthIndex.clamped(to: Self.widths.indices) }
-    }
+    /// Size per family, normalized; read and write through ``size``.
+    public private(set) var sizes: [PenKind: InkSize]
 
     /// Ink color.
     public var color: InkColor
     /// Pressure modulates width.
     public var pressure: Bool
 
-    /// Base width in points.
+    /// The current family's size; writes snap to 0.1 mm inside ``sizeRange(for:)``.
+    public var size: InkSize {
+        get { sizes[kind] ?? Self.defaultSize(for: kind) }
+        set { sizes[kind] = newValue.normalized(to: Self.sizeRange(for: kind), fallback: Self.defaultSize(for: kind)) }
+    }
+
+    /// Width on the page in points.
     public var width: Float {
-        Self.widths[widthIndex]
+        size.points
     }
 
     /// Creates pen settings (out-of-range values are normalized).
-    /// Fresh installs get a fine ballpoint (#71 follow-up: the fountain default read as marker-thick).
-    public init(kind: PenKind = .ballpoint, widthIndex: Int = 1, color: InkColor = .primary, pressure: Bool = true) {
+    public init(kind: PenKind = .ballpoint, sizes: [PenKind: InkSize] = [:], color: InkColor = .primary, pressure: Bool = true) {
         self.kind = Self.kinds.contains(kind) ? kind : .ballpoint
-        self.widthIndex = widthIndex.clamped(to: Self.widths.indices)
+        self.sizes = Dictionary(uniqueKeysWithValues: Self.kinds.map { kind in
+            let fallback = Self.defaultSize(for: kind)
+            return (kind, (sizes[kind] ?? fallback).normalized(to: Self.sizeRange(for: kind), fallback: fallback))
+        })
         self.color = color
         self.pressure = pressure
     }
 }
 
-/// Highlighter settings: width step and color.
+/// Highlighter settings: size and color.
 public struct HighlighterSettings: Hashable, Sendable, Codable {
-    /// Chisel widths in points, by ``widthIndex``.
-    public static let widths: [Float] = [10, 16, 24]
+    /// Band widths (mm) offered.
+    public static let sizeRange: ClosedRange<Float> = 2 ... 12
+    /// Fresh size.
+    public static let defaultSize = InkSize(5.5, saved: [3.5, 5.5, 8.5])
     /// Mock highlighter yellow (`#FFD633`); translucency comes from the pen profile.
     public static let yellow = InkColor.custom(RGBA8(r: 0xFF, g: 0xD6, b: 0x33))
 
-    /// Index into ``widths``, clamped.
-    public var widthIndex: Int {
-        didSet { widthIndex = widthIndex.clamped(to: Self.widths.indices) }
+    /// Size; writes snap to 0.1 mm inside ``sizeRange``.
+    public var size: InkSize {
+        didSet { size = size.normalized(to: Self.sizeRange, fallback: Self.defaultSize) }
     }
 
     /// Highlight color.
     public var color: InkColor
 
-    /// Width in points.
+    /// Band width in points.
     public var width: Float {
-        Self.widths[widthIndex]
+        size.points
     }
 
     /// Creates highlighter settings.
-    public init(widthIndex: Int = 1, color: InkColor = HighlighterSettings.yellow) {
-        self.widthIndex = widthIndex.clamped(to: Self.widths.indices)
+    public init(size: InkSize = HighlighterSettings.defaultSize, color: InkColor = HighlighterSettings.yellow) {
+        self.size = size.normalized(to: Self.sizeRange, fallback: Self.defaultSize)
         self.color = color
     }
 }
@@ -161,8 +226,6 @@ public struct ToolSettings: Hashable, Sendable, Codable {
 
     /// Toolbar dock.
     public var dock: ToolbarDock
-    /// Toolbar pinched to the compact pill.
-    public var isCompact: Bool
 
     /// Creates settings. `quickColors` is padded/truncated to ``quickColorCount``.
     public init(
@@ -171,17 +234,15 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         highlighter: HighlighterSettings = HighlighterSettings(),
         eraser: EraserSettings = EraserSettings(),
         quickColors: [InkColor] = [.semantic(.primary), .semantic(.blue), .semantic(.red)],
-        dock: ToolbarDock = .top,
-        isCompact: Bool = false
+        dock: ToolbarDock = .top
     ) {
         self.tool = tool
         // Re-run the normalizing inits: synthesized decoding skips them.
-        self.pen = PenSettings(kind: pen.kind, widthIndex: pen.widthIndex, color: pen.color, pressure: pen.pressure)
-        self.highlighter = HighlighterSettings(widthIndex: highlighter.widthIndex, color: highlighter.color)
+        self.pen = PenSettings(kind: pen.kind, sizes: pen.sizes, color: pen.color, pressure: pen.pressure)
+        self.highlighter = HighlighterSettings(size: highlighter.size, color: highlighter.color)
         self.eraser = EraserSettings(mode: eraser.mode, widthIndex: eraser.widthIndex, autoDeselect: eraser.autoDeselect)
         self.quickColors = Self.normalized(quickColors)
         self.dock = dock
-        self.isCompact = isCompact
     }
 
     private static func normalized(_ colors: [InkColor]) -> [InkColor] {
@@ -202,8 +263,7 @@ extension ToolSettings {
             highlighter: stored.highlighter ?? defaults.highlighter,
             eraser: stored.eraser ?? defaults.eraser,
             quickColors: stored.quickColors ?? defaults.quickColors,
-            dock: stored.dock ?? defaults.dock,
-            isCompact: stored.isCompact ?? defaults.isCompact
+            dock: stored.dock ?? defaults.dock
         )
     }
 }
@@ -216,11 +276,9 @@ private struct StoredToolSettings: Decodable {
     var eraser: EraserSettings?
     var quickColors: [InkColor]?
     var dock: ToolbarDock?
-    // swiftlint:disable:next discouraged_optional_boolean
-    var isCompact: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case tool, pen, highlighter, eraser, quickColors, dock, isCompact
+        case tool, pen, highlighter, eraser, quickColors, dock
     }
 
     init(from decoder: any Decoder) throws {
@@ -234,7 +292,6 @@ private struct StoredToolSettings: Decodable {
         eraser = field(.eraser)
         quickColors = field(.quickColors)
         dock = field(.dock)
-        isCompact = field(.isCompact)
     }
 }
 

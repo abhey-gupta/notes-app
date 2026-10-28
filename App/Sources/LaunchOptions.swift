@@ -13,16 +13,16 @@ import Tools
 ///   instead of the container's. Perf tests point it at fixture libraries the test runner builds (#15).
 /// - `-seedNotebooks <n>`: if the on-disk library is empty, fill it with n mock-shaped notebooks.
 /// - `-openNotebook <title>`: start in the editor for that notebook (`first` = most recent).
-/// - `-focusMode YES`: with `-openNotebook`, start with the chrome collapsed.
+/// - `-focusMode YES`: with `-openNotebook`, start in focus mode (compact pill, other chrome hidden).
 /// - `-pagesOverview YES`: with `-openNotebook`, open the pages overview a few seconds after the notebook.
 /// - `-insertSamplePhoto YES`: with `-openNotebook`, place a generated photo on the page once the notebook is
 ///   up, as the toolbar flyout would (#157; the system picker can't be driven by UI tests).
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
+/// - `-importSamplePDF YES`: start with the import sheet up on a generated 24-page PDF (#119).
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
-/// - `-toolbarCompact YES|NO`: start with the toolbar pinched to the compact pill (or expanded).
 /// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests); also silences
 ///   one-time hints (the "hold a page edge to widen" caption, #129) so screenshots stay deterministic.
-/// - `-penKind fountain|ballpoint|brush`, `-penWidth <0...4>`: pen family and width step (UI tests).
+/// - `-penKind fountain|ballpoint|brush`, `-penSize <mm>`: pen family and size (UI tests).
 /// - `-eraserMode stroke|partial`: eraser mode (no eraser options popover yet).
 /// - `-allowFingerDrawing YES`: fingers ink (one finger draws, two scroll) — the simulator has no Pencil.
 /// - `-fixtureNotebook <pages>`: add a FixtureGen notebook ("Fixture <pages>p · seed 1") to the on-disk
@@ -32,6 +32,15 @@ import Tools
 enum LaunchOptions {
     static var showsNewNotebook: Bool {
         flag("newNotebook")
+    }
+
+    /// `-importSamplePDF YES`: a generated PDF in the import sheet (the system Files picker can't be scripted).
+    static var pdfImport: PDFImportRequest? {
+        #if DEBUG
+            flag("importSamplePDF") ? PDFInbox.sample() : nil
+        #else
+            nil
+        #endif
     }
 
     /// With `-openNotebook`: open the pages overview once the notebook is up (screenshots, timing).
@@ -102,7 +111,7 @@ enum LaunchOptions {
         #endif
     }
 
-    /// Persisted `ToolState` with app defaults; DEBUG launch arguments override dock and compact.
+    /// Persisted `ToolState` with app defaults; DEBUG launch arguments override dock and tools.
     static func makeToolState() -> ToolState {
         #if DEBUG
             let defaults = UserDefaults.standard
@@ -114,15 +123,12 @@ enum LaunchOptions {
             if let raw = arguments["toolbarDock"] as? String, let dock = ToolbarDock(rawValue: raw) {
                 tools.dock = dock
             }
-            if arguments["toolbarCompact"] != nil {
-                tools.isCompact = flag("toolbarCompact")
-            }
             // No pen-family or width picker yet (#26): UI tests choose them here.
             if let raw = arguments["penKind"] as? String, let kind = PenSettings.kinds.first(where: { raw == "\($0)" }) {
                 tools.pen.kind = kind
             }
-            if arguments["penWidth"] != nil {
-                tools.pen.widthIndex = defaults.integer(forKey: "penWidth")
+            if arguments["penSize"] != nil {
+                tools.pen.size.millimetres = defaults.float(forKey: "penSize")
             }
             if let raw = arguments["eraserMode"] as? String, let mode = EraserSettings.Mode(rawValue: raw) {
                 tools.eraser.mode = mode

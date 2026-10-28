@@ -23,7 +23,7 @@ struct ToolStateTests {
         let initial = ToolSettings(quickColors: [.custom(RGBA8(r: 1, g: 2, b: 3)), .primary, .semantic(.accent)])
         let state = try makeState(makeDefaults(), initial: initial)
         #expect(state.settings == initial)
-        #expect(state.dock == .top && !state.isCompact && state.tool == .pen)
+        #expect(state.dock == .top && state.tool == .pen)
     }
 
     @Test func everySettingSurvivesRelaunch() throws {
@@ -31,22 +31,24 @@ struct ToolStateTests {
         let state = makeState(defaults)
         state.select(.eraser)
         state.pen.kind = .brush
-        state.pen.widthIndex = 4
+        state.pen.size.millimetres = 12
+        state.pen.size.saved[2] = 18
         state.pen.pressure = false
-        state.highlighter.widthIndex = 0
+        state.highlighter.size.millimetres = 3
         state.highlighter.color = .semantic(.accent)
         state.eraser.mode = .partial
         state.eraser.widthIndex = 2
         state.eraser.autoDeselect = false
         state.setQuickColor(.custom(RGBA8(r: 0x7E, g: 0x4F, b: 0xD8)), at: 2)
         state.dock = .left
-        state.isCompact = true
         state.flush()
 
         let relaunched = makeState(defaults)
         #expect(relaunched.settings == state.settings)
-        #expect(relaunched.tool == .eraser && relaunched.dock == .left && relaunched.isCompact)
-        #expect(relaunched.pen == PenSettings(kind: .brush, widthIndex: 4, color: .primary, pressure: false))
+        #expect(relaunched.tool == .eraser && relaunched.dock == .left)
+        #expect(relaunched.pen.kind == .brush && relaunched.pen.size == InkSize(12, saved: [6, 10, 18]))
+        #expect(relaunched.pen.sizes[.ballpoint] == PenSettings.defaultSize(for: .ballpoint), "other families keep theirs")
+        #expect(relaunched.highlighter.size.millimetres == 3)
         #expect(relaunched.eraser == EraserSettings(mode: .partial, widthIndex: 2, autoDeselect: false))
     }
 
@@ -86,15 +88,13 @@ struct ToolStateTests {
 
     @Test func missingAndInvalidFieldsFallBackIndividually() throws {
         let defaults = try makeDefaults()
-        let json = #"{"tool":"lasso","dock":"diagonal","pen":{"kind":3,"widthIndex":99,"color":"blue","pressure":true}}"#
+        let json = #"{"tool":"lasso","dock":"diagonal","pen":{"kind":3,"sizes":[],"color":"blue","pressure":true}}"#
         defaults.set(Data(json.utf8), forKey: "tools")
-        let initial = ToolSettings(dock: .right, isCompact: true)
+        let initial = ToolSettings(dock: .right)
         let state = makeState(defaults, initial: initial)
         #expect(state.tool == .lasso)
         #expect(state.dock == .right, "unknown dock → initial")
-        #expect(state.isCompact, "missing → initial")
         #expect(state.pen.kind == .ballpoint, "highlighter is not a pen kind")
-        #expect(state.pen.widthIndex == PenSettings.widths.count - 1)
         #expect(state.pen.color == .semantic(.blue))
         #expect(state.quickColors == initial.quickColors)
     }
@@ -168,14 +168,23 @@ struct ToolStateTests {
     @Test func freshInstallPenIsAFineBallpoint() {
         let pen = PenSettings()
         #expect(pen.kind == .ballpoint)
-        #expect(pen.width == 2.5)
+        #expect(pen.size.millimetres == 0.5)
     }
 
     @Test func settingsClampWidths() {
-        var pen = PenSettings(kind: .highlighter, widthIndex: -3)
-        #expect(pen.kind == .ballpoint && pen.widthIndex == 0)
-        pen.widthIndex = 12
-        #expect(pen.width == PenSettings.widths.last)
+        var pen = PenSettings(kind: .highlighter, sizes: [.ballpoint: InkSize(-3, saved: [9])])
+        #expect(pen.kind == .ballpoint && pen.size == InkSize(0.1, saved: [2, 0.5, 1]))
+        pen.size.millimetres = 1.2345
+        #expect(pen.size.millimetres == 1.2)
+        pen.size.millimetres = 12
+        #expect(pen.size.millimetres == 2)
+        pen.kind = .brush
+        #expect(pen.size.millimetres == 8, "each family has its own size")
+        pen.size.millimetres = 1
+        #expect(pen.size.millimetres == 6, "brush range starts at 6 mm")
+        var highlighter = HighlighterSettings()
+        highlighter.size.millimetres = .nan
+        #expect(highlighter.size.millimetres == HighlighterSettings.sizeRange.lowerBound)
         var eraser = EraserSettings(widthIndex: 9)
         #expect(eraser.width == 32)
         eraser.widthIndex = -1
@@ -231,14 +240,15 @@ struct ToolStateTests {
     @Test func activeToolCarriesOnlyItsOwnSettings() throws {
         let state = try makeState(makeDefaults())
         state.pen.kind = .brush
-        state.pen.widthIndex = 3
+        state.pen.size.millimetres = 10
         state.pen.color = .semantic(.blue)
-        #expect(state.active == .ink(.brush, color: .semantic(.blue), width: 6))
+        let width = 10 * InkSize.pointsPerMillimetre
+        #expect(state.active == .ink(.brush, color: .semantic(.blue), width: width))
         state.pen.pressure = false
-        #expect(state.active == .ink(.brush, color: .semantic(.blue), width: 6, pressure: false)) // #123
+        #expect(state.active == .ink(.brush, color: .semantic(.blue), width: width, pressure: false)) // #123
         state.highlighter.color = .semantic(.accent)
         state.select(.highlighter)
-        #expect(state.active == .ink(.highlighter, color: .semantic(.accent), width: 16))
+        #expect(state.active == .ink(.highlighter, color: .semantic(.accent), width: 5.5 * InkSize.pointsPerMillimetre))
         state.eraser.mode = .partial
         state.select(.eraser)
         #expect(state.active == .eraser(EraserSettings(mode: .partial, widthIndex: 1)))
@@ -253,10 +263,9 @@ struct ToolStateTests {
         state.select(.eraser)
         let eraser = state.active
         state.pen.color = .semantic(.red)
-        state.highlighter.widthIndex = 0
+        state.highlighter.size.millimetres = 3
         state.setQuickColor(.semantic(.accent), at: 1)
         state.dock = .left
-        state.isCompact = true
         #expect(state.active == eraser)
         state.eraser.mode = .partial
         #expect(state.active != eraser, "the eraser's own mode does")

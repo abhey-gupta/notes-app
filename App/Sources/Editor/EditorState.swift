@@ -5,7 +5,6 @@ import Foundation
 import InkModel
 import Observation
 import Tools
-import UIKit
 
 /// A lasso context-bar action (§6). Each one is a single undo step.
 enum SelectionAction: Equatable {
@@ -118,55 +117,13 @@ final class EditorState {
 
     // MARK: Focus mode (§7)
 
-    /// Pen-ups shorter than this keep a writing session "continuous".
-    static let continuityGap: Duration = .milliseconds(700)
-
-    private let clock = ContinuousClock()
-    private var isInking = false
-    private var sessionStart: ContinuousClock.Instant?
-    private var lastPenUp: ContinuousClock.Instant?
-    private var focusTask: Task<Void, Never>?
-
-    /// `engineDidBeginStroke`: after `Tokens.Motion.focusDelay` of continuous inking, collapse chrome.
-    func strokeBegan() {
-        let now = clock.now
-        let continuing = sessionStart != nil && lastPenUp.map { now - $0 < Self.continuityGap } ?? false
-        isInking = true
-        guard !isFocused, !continuing else { return }
-        sessionStart = now
-        let deadline = now + Tokens.Motion.focusDelay
-        focusTask?.cancel()
-        focusTask = Task { [weak self] in
-            try? await Task.sleep(until: deadline, clock: .continuous)
-            guard !Task.isCancelled else { return }
-            self?.focusDeadlineReached()
-        }
-    }
-
-    /// The Pencil (or inking finger) lifted.
-    func strokeEnded() {
-        isInking = false
-        lastPenUp = clock.now
-    }
-
-    private func focusDeadlineReached() {
-        let stillWriting = isInking || lastPenUp.map { clock.now - $0 < Self.continuityGap } ?? false
-        sessionStart = nil
-        // VoiceOver and Switch Control walk the chrome element by element: it doesn't hide itself under them (#45).
-        if stillWriting, !UIAccessibility.isVoiceOverRunning, !UIAccessibility.isSwitchControlRunning {
-            isFocused = true
-        }
-    }
-
+    /// Pinch-in on the toolbar or More → Focus mode. Stays until `exitFocus`: drawing, scrolling and taps don't end it.
     func enterFocus() {
         isFocused = true
     }
 
-    /// Tap on chrome, a scroll, or the pill restores the full toolbar.
+    /// The pill's chevron, pinch-out on the pill, or a Pencil tool-options request.
     func exitFocus() {
-        focusTask?.cancel()
-        sessionStart = nil
-        guard isFocused else { return }
         isFocused = false
     }
 }

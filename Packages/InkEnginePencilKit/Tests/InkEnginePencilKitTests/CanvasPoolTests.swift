@@ -29,6 +29,20 @@ struct CanvasPoolTests {
         #expect(page2.inkHole == CGRect(x: 0, y: 134, width: 595, height: 708))
     }
 
+    /// Every page but the first draws a one-pixel seam along its top edge, over its image (#162).
+    @Test func pagesBelowTheFirstDrawAHairlineSeam() throws {
+        let h = Harness()
+        h.scroll(toY: 0)
+        let page1 = try #require(h.engine.pageViews[h.frames[0].id])
+        #expect(page1.seamLayer.isHidden)
+        h.scroll(toY: 900)
+        let page2 = try #require(h.engine.pageViews[h.frames[1].id])
+        #expect(!page2.seamLayer.isHidden)
+        #expect(page2.seamLayer.frame.minY == 0 && page2.seamLayer.frame.width == 595)
+        #expect(page2.seamLayer.frame.height > 0 && page2.seamLayer.frame.height <= 1)
+        #expect(page2.layer.sublayers?.last === page2.seamLayer)
+    }
+
     /// With the pool exhausted, a visible page without a canvas shows its raster, pending strokes included.
     @Test func pendingStrokesAreInTheRasterOfAPageThatLostItsCanvas() throws {
         let h = Harness()

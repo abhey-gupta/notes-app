@@ -7,7 +7,17 @@ struct PageLayoutTests {
     private let step: CGFloat = 866
 
     private func layout(_ count: Int, footer: CGFloat = 0) -> PageLayout {
-        PageLayout(pageIDs: (0 ..< count).map { _ in PageID() }, footer: footer)
+        PageLayout(pageIDs: (0 ..< count).map { _ in PageID() }, gap: 24, footer: footer)
+    }
+
+    /// Pages touch by default (#162): the next page starts where the last ends.
+    @Test func defaultLayoutHasNoGap() {
+        let l = PageLayout(pageIDs: (0 ..< 3).map { _ in PageID() }, footer: 100)
+        #expect(l.frame(at: 1).minY == l.frame(at: 0).maxY)
+        #expect(l.frame(at: 2) == CGRect(x: 0, y: 2 * 842, width: 595, height: 842))
+        #expect(l.contentSize == CGSize(width: 595, height: 3 * 842 + 100))
+        #expect(l.page(at: CGPoint(x: 10, y: 842)) == 1)
+        #expect(l.nearestPage(toY: 841.5) == 0)
     }
 
     @Test func framesStackA4PagesWithGap() {

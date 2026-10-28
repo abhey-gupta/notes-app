@@ -11,6 +11,12 @@ import UIKit
 /// A lasso drag moves the selected photos' layers in place (``PhotoPreview``), so they stay under the
 /// ink while the lifted ink image moves above; the baked edit then lands them where they were shown.
 extension PencilKitInkEngine {
+    /// Rasters and decoded photos go; page views re-request what they show.
+    @objc func didReceiveMemoryWarning() {
+        rasters.removeAll()
+        photos.removeAll()
+    }
+
     /// Brings a page view's photo layers up to date (frames, bitmaps, drag preview).
     func refreshPhotos(_ view: PageLayerView, snapshot: PageSnapshot) {
         let preview = selection.photoPreview.flatMap { $0.page == snapshot.id ? $0 : nil }
@@ -46,11 +52,11 @@ extension PencilKitInkEngine {
         return nil
     }
 
-    /// Thumbnails and export fallback: paper + template + photos + ink, drawn by PencilKit from the stored
-    /// strokes. Photos not yet decoded are read from ``imageURL`` off main.
+    /// Thumbnails and export fallback: paper + artwork + template + photos + ink, drawn by PencilKit from
+    /// the stored strokes. Photos not yet decoded are read from ``imageURL`` off main.
     public func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage? {
         guard size.width > 0, size.height > 0, scale > 0, page.size.width > 0, page.size.height > 0 else { return nil }
-        var job = RenderJob(page: page, palette: palette, theme: theme)
+        var job = RenderJob(page: page, palette: palette, theme: theme, artwork: pageArtwork?(page.id))
         let sources = photoSources(for: page)
         return await Task.detached(priority: .userInitiated) {
             job.photos = PhotoCache.resolve(sources)

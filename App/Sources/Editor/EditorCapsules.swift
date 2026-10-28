@@ -10,47 +10,89 @@ struct NavCapsule: View {
     /// "Keep exact colors", offered on Night paper.
     @Binding var keepsExactColors: Bool
     let onBack: () -> Void
+    /// Whole capsule's width budget (``maxWidth(_:)``).
+    private var maxWidth: CGFloat = .infinity
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let scale = typeSize.chromeScale
-        GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
-            ToolButton(.back, "Library", action: onBack)
-            Menu {
-                Picker("Paper", selection: $paper) {
-                    ForEach(PaperTheme.allCases) { theme in
-                        Text(theme.displayName).tag(theme)
+        // The title takes what the budget leaves (#176): 64-100 pt (~10 characters), tail-truncated. Below 64
+        // the capsule overflows its budget and a top-docked toolbar drops a row.
+        WidthLimit(max: maxWidth) {
+            GlassCapsule(leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.l, spacing: 0) {
+                ToolButton(.back, "Library", action: onBack)
+                Menu {
+                    // Full title, since the pill truncates it (#176).
+                    Section(title) {
+                        Picker("Paper", selection: $paper) {
+                            ForEach(PaperTheme.allCases) { theme in
+                                Text(theme.displayName).tag(theme)
+                            }
+                        }
+                        Picker("Template", selection: $pattern) {
+                            ForEach(PaperPattern.allCases) { pattern in
+                                Text(pattern.displayName).tag(pattern)
+                            }
+                        }
+                        if paper == .night {
+                            Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
+                        }
                     }
-                }
-                Picker("Template", selection: $pattern) {
-                    ForEach(PaperPattern.allCases) { pattern in
-                        Text(pattern.displayName).tag(pattern)
+                } label: {
+                    HStack(spacing: 6) {
+                        WidthLimit(min: 64 * scale, max: 100 * scale) {
+                            Text(title)
+                                .font(.chromeTitle)
+                                .foregroundStyle(Tokens.Colors.textPrimary)
+                                .lineLimit(1)
+                        }
+                        Image(systemName: Symbol.disclosure.name)
+                            .scaledFont(size: 11, weight: .semibold)
+                            .foregroundStyle(Tokens.Colors.textTertiary)
                     }
+                    .frame(height: Tokens.Size.toolButton.height * scale)
+                    .contentShape(.rect)
                 }
-                if paper == .night {
-                    Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(.chromeTitle)
-                        .foregroundStyle(Tokens.Colors.textPrimary)
-                        .lineLimit(1)
-                        .frame(maxWidth: 220 * scale, alignment: .leading)
-                        .fixedSize(horizontal: true, vertical: false)
-                    Image(systemName: Symbol.disclosure.name)
-                        .scaledFont(size: 11, weight: .semibold)
-                        .foregroundStyle(Tokens.Colors.textTertiary)
-                }
-                .frame(height: Tokens.Size.toolButton.height * scale)
-                .contentShape(.rect)
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(title), notebook options")
+                .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
             }
-            .menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(title), notebook options")
-            .accessibilityValue("\(paper.displayName) paper, \(pattern.displayName)")
         }
+    }
+
+    /// Caps the capsule at `width` by tail-truncating the title (#176).
+    func maxWidth(_ width: CGFloat) -> Self {
+        var capsule = self
+        capsule.maxWidth = width
+        return capsule
+    }
+}
+
+/// Lays its child out at its ideal width if that's within `min...max` (and the proposal), else squeezed to the
+/// clamped width (a title tail-truncates), unless even squeezed it won't fit: then whole, overflowing.
+/// Unlike `frame(maxWidth:)` it never grows past what the child wants.
+private struct WidthLimit: Layout {
+    var min: CGFloat = 0
+    var max: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        return child.sizeThatFits(limited(proposal, child))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        guard let child = subviews.first else { return }
+        child.place(at: bounds.origin, proposal: limited(proposal, child))
+    }
+
+    private func limited(_ proposal: ProposedViewSize, _ child: LayoutSubview) -> ProposedViewSize {
+        let width = Swift.max(Swift.min(proposal.width ?? max, max), min)
+        let whole = ProposedViewSize(width: nil, height: proposal.height)
+        let squeezed = ProposedViewSize(width: width, height: proposal.height)
+        let fits = { (size: ProposedViewSize) in child.sizeThatFits(size).width <= width }
+        return !fits(whole) && fits(squeezed) ? squeezed : whole
     }
 }
 
