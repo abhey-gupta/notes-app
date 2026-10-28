@@ -4,7 +4,7 @@ import UIKit
 
 /// The laser pointer (#159) draws through the shared `InkInputView` and commits nothing: a glowing red dot
 /// under the tip and, in trail mode, the ``LaserTrail`` behind it. Everything stays bright while the Pencil
-/// touches and fades on lift (Core Animation, no display link); touching again mid-fade brings it back.
+/// touches and fades shortly after lift (Core Animation, no display link); touching again mid-fade brings it back.
 /// Drawn in content space on the selection view, so it zooms with the page; widths are divided by zoom to
 /// stay constant on screen.
 extension PencilKitInkEngine {
@@ -40,14 +40,16 @@ extension PencilKitInkEngine {
 /// Layers and timing of the laser pointer.
 @MainActor
 final class LaserPointer {
-    /// Saturated laser red.
-    static let color = UIColor(red: 1, green: 0.08, blue: 0.06, alpha: 1)
+    /// Laser red.
+    static let color = UIColor(red: 1, green: 0.1, blue: 0.08, alpha: 1)
     /// Dot-only fade on lift (the trail takes ``LaserTrail/fadeDuration``).
     static let dotFade: CFTimeInterval = 0.15
-    /// On-screen trail line widths (pt) and opacities, outer glow first.
-    static let trailStrokes: [(CGFloat, Float)] = [(26, 0.14), (12, 0.45), (4.5, 1)]
-    /// On-screen tip diameters (pt) and opacities, outer glow first.
-    static let tipCircles: [(CGFloat, Float)] = [(34, 0.16), (18, 0.45), (9, 1)]
+    /// Neon look, outer first: soft red glow, red rim, thin white core that makes it read bright.
+    static let looks: [UIColor] = [color.withAlphaComponent(0.22), color, .white]
+    /// On-screen trail line widths (pt), per ``looks``.
+    static let trailWidths: [CGFloat] = [11, 5, 1.8]
+    /// On-screen tip diameters (pt), per ``looks``.
+    static let tipDiameters: [CGFloat] = [16, 8, 3.6]
 
     /// Container: its opacity is the fade.
     let layer = CALayer()
@@ -57,22 +59,22 @@ final class LaserPointer {
     /// Viewport zoom when the stroke was drawn (widths are divided by it).
     var zoom: CGFloat = 1
 
-    private let lines = LaserPointer.trailStrokes.map { _ in CAShapeLayer() }
+    private let lines = LaserPointer.looks.map { _ in CAShapeLayer() }
     /// Tip circles, core last.
-    let tip = LaserPointer.tipCircles.map { _ in CAShapeLayer() }
+    let tip = LaserPointer.looks.map { _ in CAShapeLayer() }
     /// Committed samples of the current stroke already in the trail.
     private var followed = 0
 
     init() {
-        for (line, (_, alpha)) in zip(lines, Self.trailStrokes) {
+        for (line, look) in zip(lines, Self.looks) {
             line.fillColor = nil
-            line.strokeColor = Self.color.withAlphaComponent(CGFloat(alpha)).cgColor
+            line.strokeColor = look.cgColor
             line.lineCap = .round
             line.lineJoin = .round
             layer.addSublayer(line)
         }
-        for (circle, (_, alpha)) in zip(tip, Self.tipCircles) {
-            circle.fillColor = Self.color.withAlphaComponent(CGFloat(alpha)).cgColor
+        for (circle, look) in zip(tip, Self.looks) {
+            circle.fillColor = look.cgColor
             layer.addSublayer(circle)
         }
         layer.opacity = 0
@@ -126,7 +128,7 @@ final class LaserPointer {
             for circle in tip {
                 circle.isHidden = true
             }
-            fade(over: LaserTrail.fadeDuration)
+            fade(over: LaserTrail.fadeDuration, after: LaserTrail.hold)
         }
     }
 
@@ -137,11 +139,12 @@ final class LaserPointer {
         layer.opacity = 0
     }
 
-    private func fade(over duration: CFTimeInterval) {
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 1
-        fade.toValue = 0
-        fade.duration = duration
+    /// Fully bright for `hold`, then to 0 over `duration`.
+    private func fade(over duration: CFTimeInterval, after hold: CFTimeInterval = 0) {
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [1, 1, 0]
+        fade.keyTimes = [0, NSNumber(value: hold / (hold + duration)), 1]
+        fade.duration = hold + duration
         layer.opacity = 0
         layer.add(fade, forKey: "fade")
     }
@@ -150,7 +153,7 @@ final class LaserPointer {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        for (circle, (diameter, _)) in zip(tip, Self.tipCircles) {
+        for (circle, diameter) in zip(tip, Self.tipDiameters) {
             let d = diameter / zoom
             circle.path = CGPath(ellipseIn: CGRect(x: center.x - d / 2, y: center.y - d / 2, width: d, height: d), transform: nil)
         }
@@ -164,7 +167,7 @@ final class LaserPointer {
         for stroke in trail.strokes where !stroke.isEmpty {
             path.addLines(between: stroke)
         }
-        for (line, (width, _)) in zip(lines, Self.trailStrokes) {
+        for (line, width) in zip(lines, Self.trailWidths) {
             line.path = path
             line.lineWidth = width / zoom
         }

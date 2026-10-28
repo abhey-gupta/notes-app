@@ -18,9 +18,9 @@ struct LaserTrailTests {
         drawn([0, 10, 20], into: &trail, at: 0)
         #expect(trail.opacity(at: 30) == 1)
         trail.lift(at: 30)
-        #expect(trail.opacity(at: 30) == 1)
-        #expect(abs(trail.opacity(at: 30 + LaserTrail.fadeDuration / 2) - 0.5) < 0.001)
-        #expect(trail.opacity(at: 30 + LaserTrail.fadeDuration + 0.001) == 0)
+        #expect(trail.opacity(at: 30 + LaserTrail.hold) == 1, "holds before fading")
+        #expect(abs(trail.opacity(at: 30 + LaserTrail.hold + LaserTrail.fadeDuration / 2) - 0.5) < 0.001)
+        #expect(trail.opacity(at: 30 + LaserTrail.hold + LaserTrail.fadeDuration + 0.001) == 0)
     }
 
     /// Touching again mid-fade restores full brightness and keeps the old trail; after it is gone it starts empty.
@@ -28,11 +28,11 @@ struct LaserTrailTests {
         var trail = LaserTrail()
         drawn([0, 10], into: &trail, at: 0)
         trail.lift(at: 1)
-        drawn([50, 60], into: &trail, at: 1 + LaserTrail.fadeDuration * 0.9)
+        drawn([50, 60], into: &trail, at: 1 + LaserTrail.hold + LaserTrail.fadeDuration * 0.9)
         #expect(trail.opacity(at: 5) == 1)
         #expect(trail.strokes == [[CGPoint(x: 0, y: 0), CGPoint(x: 10, y: 0)], [CGPoint(x: 50, y: 0), CGPoint(x: 60, y: 0)]])
         trail.lift(at: 5)
-        drawn([90, 100], into: &trail, at: 5 + LaserTrail.fadeDuration)
+        drawn([90, 100], into: &trail, at: 5 + LaserTrail.hold + LaserTrail.fadeDuration + 0.001)
         #expect(trail.strokes == [[CGPoint(x: 90, y: 0), CGPoint(x: 100, y: 0)]])
     }
 
@@ -67,7 +67,7 @@ struct LaserEngineTests {
         #expect(try #require(laser.tip.last?.path).boundingBox.midX == 180)
         #expect(laser.trail.strokes.map(\.count) == [3])
         send(tracker.ended(at(180, 120, now + 0.03)))
-        #expect(laser.layer.opacity == 0 && laser.layer.animation(forKey: "fade")?.duration == LaserTrail.fadeDuration)
+        #expect(laser.layer.opacity == 0 && laser.layer.animation(forKey: "fade")?.duration == LaserTrail.hold + LaserTrail.fadeDuration)
         let tipHidden = laser.tip.allSatisfy(\.isHidden)
         #expect(tipHidden, "tip goes on lift, trail fades")
         #expect(h.recorder.commits.isEmpty && h.recorder.eraser.isEmpty && h.recorder.lassos.isEmpty, "nothing reaches the document")

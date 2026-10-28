@@ -2,11 +2,14 @@ import CoreGraphics
 import Foundation
 
 /// The laser pointer's trail (#159): the tip's paths in content space, one per Pencil stroke. Fully bright
-/// while the Pencil touches; on lift the whole trail fades over ``fadeDuration``. Touching again before it
+/// while the Pencil touches; after lift it stays so for ``hold``, then the whole trail fades over ``fadeDuration``. Touching again before
+/// it
 /// is gone brings it back to full brightness and the new stroke adds to it; after that it starts empty.
 /// Pure, so the timing is testable without Core Animation.
 struct LaserTrail {
-    /// Fade after lift.
+    /// Fully bright after lift before the fade starts.
+    static let hold: TimeInterval = 0.3
+    /// Fade after the hold.
     static let fadeDuration: TimeInterval = 0.7
 
     /// Paths drawn so far, oldest first.
@@ -19,10 +22,11 @@ struct LaserTrail {
         strokes.allSatisfy { $0.count < 2 }
     }
 
-    /// Opacity at `now`: 1 while touching, falling linearly to 0 over ``fadeDuration`` after lift.
+    /// Opacity at `now`: 1 while touching and for ``hold`` after lift, then falling linearly to 0 over
+    /// ``fadeDuration``.
     func opacity(at now: TimeInterval) -> Float {
         guard let liftedAt else { return 1 }
-        let elapsed = now - liftedAt
+        let elapsed = now - liftedAt - Self.hold
         return elapsed >= Self.fadeDuration ? 0 : Float(1 - max(elapsed, 0) / Self.fadeDuration)
     }
 
