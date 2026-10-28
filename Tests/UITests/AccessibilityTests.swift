@@ -108,6 +108,10 @@ final class AccessibilityTests: XCTestCase {
             if issue.auditType == .contrast, let element = issue.element, Self.isSampledArt(element, covers: covers) {
                 return true
             }
+            // The nav title truncates by design (#176); the button speaks it and the menu header shows it whole.
+            if issue.auditType == .textClipped, issue.element?.identifier == "notebookTitle" {
+                return true
+            }
             let element = issue.element.map { "\($0.elementType.rawValue) '\($0.label)' id '\($0.identifier)' \($0.frame)" } ?? "-"
             issues.append("\(issue.compactDescription) [\(element)]")
             return true
