@@ -134,7 +134,7 @@ final class NotebookSession {
                 applyPalette(keepsExactColors: true)
             }
             host.pageExtension = PageExtension(notebook: manifest.notebook)
-            host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
+            host.layout = pageLayout(pages.map(\.id), pageSize: manifest.notebook.pageSize)
             if let window = host.pageWindow {
                 residency.update(window)
             }

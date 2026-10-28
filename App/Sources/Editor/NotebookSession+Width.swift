@@ -74,7 +74,7 @@ extension NotebookSession {
             artworkPlacement.pageExtension = extensions
             residency.setPageGeometry(size: size, leftExtension: leftExtension)
             host.finishSideGrab(
-                layout: PageLayout(pageIDs: residency.pageIDs, pageSize: size, footer: CanvasHostView.footerHeight),
+                layout: pageLayout(residency.pageIDs, pageSize: size),
                 extensions: extensions
             )
             if shift != 0 {

@@ -4,6 +4,19 @@
     /// Sizing: the fitted zoom on first layout and resizes, the content view and scroll content behind the
     /// zoom, and the insets that center narrow content (`CanvasHostView.swift` holds the class).
     extension CanvasHostView {
+        /// Space below the last page (content pt) for pages of `pageSize`: room for the add-page button,
+        /// or 5 % of a page without it (#172).
+        public func footer(for pageSize: CGSize) -> CGFloat {
+            showsAddPage ? Self.footerHeight : (pageSize.height * 0.05).rounded()
+        }
+
+        /// The add-page button came or went: the footer follows.
+        func addPageButtonDidToggle(from oldValue: Bool) {
+            guard showsAddPage != oldValue else { return }
+            layout = PageLayout(pageIDs: layout.pageIDs, pageSize: layout.pageSize, gap: layout.gap, footer: footer(for: layout.pageSize))
+            setNeedsLayout()
+        }
+
         // MARK: Layout
 
         /// First layout and rotation/resizes: fit the page width (unless the user zoomed), keep the content
@@ -58,7 +71,8 @@
         }
 
         /// Centers narrow content horizontally (none at fit width: edge to edge, #130); top/bottom clear
-        /// the chrome. Not while a side grab holds its own insets (`applyGrabGeometry`) or the document is
+        /// the chrome (bottom only with the add-page button: without it the last page's footer is all, #172). Not while a side grab holds
+        /// its own insets (`applyGrabGeometry`) or the document is
         /// widening behind a frozen frame (``endWidening()`` settles them).
         func updateInsets() {
             guard !isUpdatingInsets, sideGrab == nil, !isSettling else { return }
@@ -68,7 +82,7 @@
             let insets = UIEdgeInsets(
                 top: safeAreaInsets.top + margins.top,
                 left: PageLayout.sideInset(contentWidth: width, viewWidth: bounds.width, margin: margins.left),
-                bottom: safeAreaInsets.bottom + margins.bottom,
+                bottom: showsAddPage ? safeAreaInsets.bottom + margins.bottom : 0,
                 right: PageLayout.sideInset(contentWidth: width, viewWidth: bounds.width, margin: margins.right)
             )
             if scrollView.contentInset != insets {

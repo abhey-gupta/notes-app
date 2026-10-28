@@ -70,9 +70,13 @@
         /// Two-finger tap undoes, three-finger tap redoes (#121; Settings → "Tap to undo").
         public var allowsTapUndo = true
 
-        /// The add-page button can be hidden (e.g. read-only previews).
+        /// The add-page button can be hidden (automatic new pages, #172; read-only previews). Without it the
+        /// space below the last page shrinks to ``footer(for:)`` and no bottom margin.
         public var showsAddPage = true {
-            didSet { addPageButton.isHidden = !showsAddPage }
+            didSet {
+                addPageButton.isHidden = !showsAddPage
+                addPageButtonDidToggle(from: oldValue)
+            }
         }
 
         /// VoiceOver / UI-test description of the current page (e.g. "12 strokes"), read on demand.
