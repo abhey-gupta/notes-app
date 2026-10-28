@@ -2,10 +2,11 @@ import InkEngine
 import InkModel
 import UIKit
 
-/// The laser pointer (#159) draws through the shared `InkInputView` and commits nothing: a red glowing dot
-/// under the tip and, in trail mode, a ``LaserTrail`` behind it that fades as it ages. Drawn in content
-/// space on the selection view, so it zooms with the page; widths are divided by zoom to stay constant on
-/// screen. A display link runs only while something is visible.
+/// The laser pointer (#159) draws through the shared `InkInputView` and commits nothing: a glowing red dot
+/// under the tip and, in trail mode, the ``LaserTrail`` behind it. Everything stays bright while the Pencil
+/// touches and fades on lift (Core Animation, no display link); touching again mid-fade brings it back.
+/// Drawn in content space on the selection view, so it zooms with the page; widths are divided by zoom to
+/// stay constant on screen.
 extension PencilKitInkEngine {
     /// The current tool is the laser.
     var usesLaser: Bool {
@@ -38,73 +39,65 @@ extension PencilKitInkEngine {
 
 /// Layers and timing of the laser pointer.
 @MainActor
-final class LaserPointer: NSObject {
-    /// Laser red (`#FF3B30`).
-    static let color = UIColor(red: 1, green: 0x3B / 255, blue: 0x30 / 255, alpha: 1)
-    /// Tip fade on lift.
-    static let tipFade: CFTimeInterval = 0.15
-    /// On-screen widths (pt): trail core and glow, tip core and glow diameters.
-    static let coreWidth: CGFloat = 3
-    static let glowWidth: CGFloat = 9
-    static let tipDiameter: CGFloat = 7
-    static let tipGlowDiameter: CGFloat = 18
+final class LaserPointer {
+    /// Saturated laser red.
+    static let color = UIColor(red: 1, green: 0.08, blue: 0.06, alpha: 1)
+    /// Dot-only fade on lift (the trail takes ``LaserTrail/fadeDuration``).
+    static let dotFade: CFTimeInterval = 0.15
+    /// On-screen trail line widths (pt) and opacities, outer glow first.
+    static let trailStrokes: [(CGFloat, Float)] = [(26, 0.14), (12, 0.45), (4.5, 1)]
+    /// On-screen tip diameters (pt) and opacities, outer glow first.
+    static let tipCircles: [(CGFloat, Float)] = [(34, 0.16), (18, 0.45), (9, 1)]
 
+    /// Container: its opacity is the fade.
     let layer = CALayer()
-    /// Trail in content space.
     private(set) var trail = LaserTrail()
     /// Draw the trail (off: dot only).
     var trails = true
     /// Viewport zoom when the stroke was drawn (widths are divided by it).
     var zoom: CGFloat = 1
 
-    private let glows = (0 ..< LaserTrail.bands).map { _ in CAShapeLayer() }
-    private let cores = (0 ..< LaserTrail.bands).map { _ in CAShapeLayer() }
-    let tipGlow = CAShapeLayer()
-    let tip = CAShapeLayer()
-    private var link: CADisplayLink?
-    /// Committed samples already added to the trail.
+    private let lines = LaserPointer.trailStrokes.map { _ in CAShapeLayer() }
+    /// Tip circles, core last.
+    let tip = LaserPointer.tipCircles.map { _ in CAShapeLayer() }
+    /// Committed samples of the current stroke already in the trail.
     private var followed = 0
 
-    /// Something is fading or following the tip (the display link is running).
-    var isAnimating: Bool {
-        link != nil
-    }
-
-    override init() {
-        super.init()
-        layer.actions = ["sublayers": NSNull()]
-        for (glow, core) in zip(glows, cores) {
-            for (shape, width, alpha) in [(glow, Self.glowWidth, 0.3), (core, Self.coreWidth, 1)] {
-                shape.fillColor = nil
-                shape.strokeColor = Self.color.withAlphaComponent(alpha).cgColor
-                shape.lineWidth = width
-                shape.lineCap = .round
-                shape.lineJoin = .round
-                layer.addSublayer(shape)
-            }
+    init() {
+        for (line, (_, alpha)) in zip(lines, Self.trailStrokes) {
+            line.fillColor = nil
+            line.strokeColor = Self.color.withAlphaComponent(CGFloat(alpha)).cgColor
+            line.lineCap = .round
+            line.lineJoin = .round
+            layer.addSublayer(line)
         }
-        tipGlow.fillColor = Self.color.withAlphaComponent(0.35).cgColor
-        tip.fillColor = UIColor.white.cgColor
-        tip.strokeColor = Self.color.cgColor
-        layer.addSublayer(tipGlow)
-        layer.addSublayer(tip)
+        for (circle, (_, alpha)) in zip(tip, Self.tipCircles) {
+            circle.fillColor = Self.color.withAlphaComponent(CGFloat(alpha)).cgColor
+            layer.addSublayer(circle)
+        }
         layer.opacity = 0
     }
 
-    /// Pen down: the previous trail (still fading) gives way to the new one.
+    /// Pen down: full brightness at once; a trail still fading stays and the new stroke adds to it.
     func begin() {
-        trail.removeAll()
+        trail.begin(at: CACurrentMediaTime())
+        if !trails {
+            trail.removeAll()
+        }
         followed = 0
-        tip.removeAnimation(forKey: "fade")
-        tipGlow.removeAnimation(forKey: "fade")
-        tip.opacity = 1
-        tipGlow.opacity = 1
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.removeAnimation(forKey: "fade")
         layer.opacity = 1
-        startLink()
+        for circle in tip {
+            circle.isHidden = false
+        }
+        CATransaction.commit()
+        redrawTrail()
     }
 
-    /// New samples: the trail takes the committed ones at their touch times; the tip sits on the newest
-    /// sample, predicted ones included.
+    /// New samples: the trail takes the committed ones; the tip sits on the newest sample, predicted ones
+    /// included.
     func follow(_ stroke: LiveStroke) {
         let pageToContent = stroke.viewToPage.inverted()
         func content(_ sample: Sample) -> CGPoint {
@@ -112,87 +105,68 @@ final class LaserPointer: NSObject {
         }
         if trails, stroke.samples.count > followed {
             for sample in stroke.samples[followed...] {
-                trail.append(content(sample), at: stroke.startTimestamp + TimeInterval(sample.t))
+                trail.append(content(sample))
             }
+            redrawTrail()
         }
         followed = stroke.samples.count
         guard let last = stroke.displaySamples.last else { return }
         placeTip(at: content(last))
-        redraw(now: CACurrentMediaTime())
     }
 
-    /// Lift: the tip fades now, the trail ages out on its own.
+    /// Lift: a lone dot fades quickly; with a trail the tip goes and the trail fades out.
     func lift() {
-        for shape in [tip, tipGlow] {
-            let fade = CABasicAnimation(keyPath: "opacity")
-            fade.fromValue = shape.presentation()?.opacity ?? 1
-            fade.toValue = 0
-            fade.duration = Self.tipFade
-            shape.opacity = 0
-            shape.add(fade, forKey: "fade")
-        }
+        trail.lift(at: CACurrentMediaTime())
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
         if trail.isEmpty {
-            stopLink()
+            fade(over: Self.dotFade)
+        } else {
+            for circle in tip {
+                circle.isHidden = true
+            }
+            fade(over: LaserTrail.fadeDuration)
         }
     }
 
     /// Tool switched away: everything goes at once.
     func clear() {
         trail.removeAll()
-        stopLink()
+        layer.removeAnimation(forKey: "fade")
         layer.opacity = 0
+    }
+
+    private func fade(over duration: CFTimeInterval) {
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = duration
+        layer.opacity = 0
+        layer.add(fade, forKey: "fade")
     }
 
     private func placeTip(at center: CGPoint) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        func circle(_ diameter: CGFloat) -> CGPath {
+        for (circle, (diameter, _)) in zip(tip, Self.tipCircles) {
             let d = diameter / zoom
-            return CGPath(ellipseIn: CGRect(x: center.x - d / 2, y: center.y - d / 2, width: d, height: d), transform: nil)
+            circle.path = CGPath(ellipseIn: CGRect(x: center.x - d / 2, y: center.y - d / 2, width: d, height: d), transform: nil)
         }
-        tip.path = circle(Self.tipDiameter)
-        tip.lineWidth = 1.5 / zoom
-        tipGlow.path = circle(Self.tipGlowDiameter)
     }
 
-    private func redraw(now: CFTimeInterval) {
+    private func redrawTrail() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        trail.prune(now: now)
-        let bands = trail.bands(now: now)
-        for index in 0 ..< LaserTrail.bands {
-            let band = index < bands.count ? bands[index] : nil
-            let path = band.map { band -> CGPath in
-                let path = CGMutablePath()
-                path.addLines(between: band.points)
-                return path
-            }
-            for (shape, width) in [(glows[index], Self.glowWidth), (cores[index], Self.coreWidth)] {
-                shape.path = path
-                shape.opacity = band?.opacity ?? 0
-                shape.lineWidth = width / zoom
-            }
+        let path = CGMutablePath()
+        for stroke in trail.strokes where !stroke.isEmpty {
+            path.addLines(between: stroke)
         }
-    }
-
-    private func startLink() {
-        guard link == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
-        link.add(to: .main, forMode: .common)
-        self.link = link
-    }
-
-    private func stopLink() {
-        link?.invalidate()
-        link = nil
-    }
-
-    @objc private func tick(_ link: CADisplayLink) {
-        redraw(now: CACurrentMediaTime())
-        if trail.isEmpty, tip.opacity == 0 {
-            stopLink()
+        for (line, (width, _)) in zip(lines, Self.trailStrokes) {
+            line.path = path
+            line.lineWidth = width / zoom
         }
     }
 }

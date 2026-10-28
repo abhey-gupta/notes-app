@@ -1,68 +1,56 @@
 import CoreGraphics
 import Foundation
 
-/// The laser pointer's trail (#159): tip positions in content space with the time each was reached. A point
-/// lives ``lifetime`` seconds and fades out over it, so the tail thins away while the Pencil moves and the
-/// whole trail is gone that long after lift. Pure, so the fade is testable without a display link.
+/// The laser pointer's trail (#159): the tip's paths in content space, one per Pencil stroke. Fully bright
+/// while the Pencil touches; on lift the whole trail fades over ``fadeDuration``. Touching again before it
+/// is gone brings it back to full brightness and the new stroke adds to it; after that it starts empty.
+/// Pure, so the timing is testable without Core Animation.
 struct LaserTrail {
-    /// How long a point stays visible.
-    static let lifetime: TimeInterval = 0.6
-    /// Opacity steps the trail is drawn in (one shape layer each).
-    static let bands = 8
+    /// Fade after lift.
+    static let fadeDuration: TimeInterval = 0.7
 
-    /// A run of the trail drawn at one opacity.
-    struct Band: Equatable {
-        var points: [CGPoint]
-        var opacity: Float
-    }
+    /// Paths drawn so far, oldest first.
+    private(set) var strokes: [[CGPoint]] = []
+    /// When the Pencil last lifted; `nil` while it touches.
+    private(set) var liftedAt: TimeInterval?
 
-    private(set) var points: [(point: CGPoint, time: TimeInterval)] = []
-
+    /// Nothing to draw (a tap leaves a single point, no line).
     var isEmpty: Bool {
-        points.isEmpty
+        strokes.allSatisfy { $0.count < 2 }
     }
 
-    /// Adds the tip at `time`; skips moves under a quarter point (a resting tip adds nothing).
-    mutating func append(_ point: CGPoint, at time: TimeInterval) {
-        if let last = points.last?.point, hypot(point.x - last.x, point.y - last.y) < 0.25 {
-            points[points.count - 1].time = max(points[points.count - 1].time, time)
+    /// Opacity at `now`: 1 while touching, falling linearly to 0 over ``fadeDuration`` after lift.
+    func opacity(at now: TimeInterval) -> Float {
+        guard let liftedAt else { return 1 }
+        let elapsed = now - liftedAt
+        return elapsed >= Self.fadeDuration ? 0 : Float(1 - max(elapsed, 0) / Self.fadeDuration)
+    }
+
+    /// Pencil down at `now`: a faded-out trail is dropped, a fading one is kept (bright again).
+    mutating func begin(at now: TimeInterval) {
+        if opacity(at: now) == 0 {
+            strokes.removeAll()
+        }
+        liftedAt = nil
+        strokes.append([])
+    }
+
+    /// Adds the tip to the current stroke; skips moves under a quarter point.
+    mutating func append(_ point: CGPoint) {
+        guard !strokes.isEmpty else { return }
+        if let last = strokes[strokes.count - 1].last, hypot(point.x - last.x, point.y - last.y) < 0.25 {
             return
         }
-        points.append((point, time))
+        strokes[strokes.count - 1].append(point)
+    }
+
+    /// Pencil up at `now`: the fade starts.
+    mutating func lift(at now: TimeInterval) {
+        liftedAt = now
     }
 
     mutating func removeAll() {
-        points.removeAll()
-    }
-
-    /// Drops points older than ``lifetime`` at `now`, keeping the newest expired one while a younger point
-    /// follows it, so the tail fades from where it was rather than jumping.
-    mutating func prune(now: TimeInterval) {
-        guard let firstLive = points.firstIndex(where: { now - $0.time < Self.lifetime }) else {
-            points.removeAll()
-            return
-        }
-        points.removeFirst(max(firstLive - 1, 0))
-    }
-
-    /// The trail at `now` in ``bands`` runs, oldest first. Each run starts at the previous run's last
-    /// point, so the line is unbroken; opacity falls linearly with age.
-    func bands(now: TimeInterval) -> [Band] {
-        guard points.count > 1 else { return [] }
-        var bands = [[CGPoint]](repeating: [], count: Self.bands)
-        var previous: (band: Int, point: CGPoint)?
-        for (point, time) in points {
-            let age = min(max(now - time, 0), Self.lifetime)
-            let band = min(Int(age / Self.lifetime * Double(Self.bands)), Self.bands - 1)
-            if let previous, previous.band != band {
-                bands[band].append(previous.point)
-            }
-            bands[band].append(point)
-            previous = (band, point)
-        }
-        return bands.indices.reversed().compactMap { band in
-            guard bands[band].count > 1 else { return nil }
-            return Band(points: bands[band], opacity: 1 - (Float(band) + 0.5) / Float(Self.bands))
-        }
+        strokes.removeAll()
+        liftedAt = nil
     }
 }
