@@ -3,6 +3,7 @@ import CoreGraphics
 import enum DesignSystem.Tokens
 import Document
 import Editing
+import Foundation
 import InkEngine
 import InkEnginePencilKit
 import InkModel
@@ -135,6 +136,7 @@ final class NotebookSession {
             }
             host.pageExtension = PageExtension(notebook: manifest.notebook)
             host.layout = pageLayout(pages.map(\.id), pageSize: manifest.notebook.pageSize)
+            savedPosition().map(host.restore)
             if let window = host.pageWindow {
                 residency.update(window)
             }
@@ -161,6 +163,9 @@ final class NotebookSession {
 
     /// Checkpoints every dirty page and renders pending thumbnails (scene left the foreground).
     func flush() {
+        if store != nil {
+            savePosition()
+        }
         edits?.run("flush") { [store, thumbnails] in
             try await store?.flush()
             await thumbnails?.flush()
@@ -170,6 +175,9 @@ final class NotebookSession {
     /// The editor went away: stop input, finish queued edits, checkpoint, update the library entry.
     func close() {
         guard !isClosed else { return }
+        if store != nil {
+            savePosition()
+        }
         isClosed = true
         engine.delegate = nil
         host.delegate = nil
@@ -198,6 +206,22 @@ final class NotebookSession {
                 Self.closing[id] = nil
             }
         }
+    }
+
+    // MARK: Reading position
+
+    /// Scroll and zoom per notebook, on this device, so a notebook reopens where it was left.
+    private var positionKey: String {
+        "readingPosition.\(notebookID.uuid.uuidString)"
+    }
+
+    private func savedPosition(defaults: UserDefaults = .standard) -> ReadingPosition? {
+        defaults.data(forKey: positionKey).flatMap { try? JSONDecoder().decode(ReadingPosition.self, from: $0) }
+    }
+
+    private func savePosition(defaults: UserDefaults = .standard) {
+        guard let position = host.readingPosition, let data = try? JSONEncoder().encode(position) else { return }
+        defaults.set(data, forKey: positionKey)
     }
 
     // MARK: Settings
