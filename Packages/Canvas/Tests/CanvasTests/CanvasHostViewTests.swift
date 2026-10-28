@@ -81,6 +81,22 @@
             #expect(engine.view.bounds.size == host.layout.contentSize)
         }
 
+        /// Without the add-page button (automatic new pages, #172) the space below the last page is 5 % of a
+        /// page, with no bottom margin; back with the button.
+        @Test func noAddPageButtonLeavesFivePercentBelow() {
+            let scroll = host.canvasScrollView
+            #expect(scroll.contentInset.bottom > 0)
+            host.showsAddPage = false
+            host.layoutIfNeeded()
+            #expect(host.layout.footer == (host.layout.pageSize.height * 0.05).rounded())
+            #expect(host.layout.pageIDs == ids)
+            #expect(scroll.contentInset.bottom == 0)
+            host.showsAddPage = true
+            host.layoutIfNeeded()
+            #expect(host.layout.footer == CanvasHostView.footerHeight)
+            #expect(scroll.contentInset.bottom > 0)
+        }
+
         /// Two- and three-finger taps (#121) undo and redo through the delegate (the default goes to the
         /// host's undo manager); off with the setting and while fingers ink. While on, the system's
         /// three-finger editing gestures are off.

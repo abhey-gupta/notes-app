@@ -53,6 +53,14 @@ final class NotebookSession {
     var thumbnailRegeneration: Task<Void, Never>?
     /// The one path for changes to the notebook (strokes, erasing, selection, pages, undo); set by ``open()``.
     private(set) var edits: EditPipeline?
+    /// Automatic new pages (#172): a blank page waits at the end instead of the add-page button.
+    var addsPagesAutomatically = false {
+        didSet {
+            host.showsAddPage = !addsPagesAutomatically
+            edits?.addsPagesAutomatically = addsPagesAutomatically
+        }
+    }
+
     /// The toolbar's current tool (``setTool(_:allowsFingerDrawing:)``); erasing reads its mode and size.
     private var tool = ActiveTool.ink(.ballpoint, color: .primary, width: 2)
     /// Lift after an eraser stroke (#156: the toolbar may switch back).
@@ -126,7 +134,7 @@ final class NotebookSession {
                 applyPalette(keepsExactColors: true)
             }
             host.pageExtension = PageExtension(notebook: manifest.notebook)
-            host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
+            host.layout = pageLayout(pages.map(\.id), pageSize: manifest.notebook.pageSize)
             if let window = host.pageWindow {
                 residency.update(window)
             }
@@ -139,6 +147,7 @@ final class NotebookSession {
             edits.onPageEdited = { [weak self] page in self?.thumbnailChanged(page) }
             edits.onHistoryWillApply = { [weak self] in self?.clearSelection() }
             edits.onHistoryApplied = { [weak self] pages in self?.reveal(pages) }
+            edits.addsPagesAutomatically = addsPagesAutomatically
             self.edits = edits
             selection = SelectionMachine(edits: edits, display: self)
             state.onUndo = { [weak self] in self?.edits?.undo() }

@@ -1,4 +1,5 @@
 import Canvas
+import CoreGraphics
 import Document
 import Editing
 import InkModel
@@ -66,12 +67,17 @@ extension NotebookSession {
         artworkPlacement.pageExtension = PageExtension(notebook: manifest.notebook)
         residency.setPages(pages)
         host.pageExtension = PageExtension(notebook: manifest.notebook)
-        host.layout = PageLayout(pageIDs: pages.map(\.id), pageSize: manifest.notebook.pageSize, footer: CanvasHostView.footerHeight)
+        host.layout = pageLayout(pages.map(\.id), pageSize: manifest.notebook.pageSize)
         if let window = host.pageWindow {
             residency.update(window)
         }
         syncPagesModel(pages)
         library.documentDidSave(manifest)
+    }
+
+    /// The canvas layout of `ids`, with the space below the last page the add-page setting wants (#172).
+    func pageLayout(_ ids: [PageID], pageSize: CGSize) -> PageLayout {
+        PageLayout(pageIDs: ids, pageSize: pageSize, footer: host.footer(for: pageSize))
     }
 
     func syncPagesModel(_ pages: [(id: PageID, template: PageTemplate)]) {

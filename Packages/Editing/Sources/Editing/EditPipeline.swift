@@ -53,6 +53,7 @@ public final class EditPipeline {
     private var queue: Task<Void, Never>?
     private var eraser = EraserRun()
     private var pendingHistory: [EditEntry] = []
+    private let trailing: TrailingPages
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "editor")
 
     /// Starts editing. With an `undoManager`, ⌘Z / ⇧⌘Z and the system undo gestures drive ``history`` too.
@@ -60,6 +61,7 @@ public final class EditPipeline {
         self.store = store
         self.mirror = mirror
         self.history = history
+        trailing = TrailingPages(store: store, mirror: mirror)
         if let undoManager {
             bridge = UndoManagerBridge(
                 stack: history,
@@ -153,6 +155,7 @@ public final class EditPipeline {
             }
             let id = try await store.insertPage(at: at, template: template)
             await mirror.pagesDidChange()
+            trailing.changed = true
             history.record(structure: [.insert(id, at: at, template: template, strokes: [], images: [])], actionName: "Add Page")
             then(at)
         }
@@ -183,6 +186,19 @@ public final class EditPipeline {
             let edit = PageStructureEdit.move(from: source, to: destination)
             try await applyStructure([edit])
             history.record(structure: [edit], actionName: "Move Page")
+        }
+    }
+
+    // MARK: Automatic new pages
+
+    /// Keeps a blank page waiting at the end (#172): when the last page gets content, a blank page with its
+    /// template is appended; when the pages at the end are blank again, keeps one and removes the extra
+    /// pages it added. Neither is an undo step; pages added any other way are never removed.
+    public var addsPagesAutomatically: Bool {
+        get { trailing.isOn }
+        set {
+            trailing.isOn = newValue
+            enqueue("trailing page") {}
         }
     }
 
@@ -233,6 +249,8 @@ public final class EditPipeline {
         bridge?.detach()
         bridge = nil
         history.removeAll()
+        // No blank page left behind (the store only: the editor is gone).
+        enqueue("close pages") { [trailing] in try await trailing.close() }
     }
 
     // MARK: Private
@@ -246,6 +264,13 @@ public final class EditPipeline {
                 try await operation()
             } catch {
                 Self.log.error("\(name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            }
+            guard trailing.changed else { return }
+            trailing.changed = false
+            do {
+                try await trailing.settle()
+            } catch {
+                Self.log.error("trailing page failed: \(String(describing: error), privacy: .public)")
             }
         }
     }
@@ -289,6 +314,7 @@ public final class EditPipeline {
         }
         mirror.didApply(edit, to: page)
         onPageEdited(page)
+        trailing.didEdit(page)
     }
 
     /// Structure edits (one entry's worth) to the store, the mirror follows once, then restored pages get
@@ -310,6 +336,7 @@ public final class EditPipeline {
             }
         }
         await mirror.pagesDidChange()
+        trailing.changed = true
         for item in restored {
             let page = try await mirror.ensureLoaded(item.id)
             if !item.images.isEmpty {

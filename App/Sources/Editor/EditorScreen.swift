@@ -17,6 +17,7 @@ struct EditorScreen: View {
     @State private var session: NotebookSession
     @State private var pencil: PencilGestures
     @AppStorage(SettingsView.tapToUndoKey) private var tapToUndo = true
+    @AppStorage(SettingsView.newPagesKey) private var newPages = NewPages.manual
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -87,6 +88,9 @@ struct EditorScreen: View {
         }
         .onChange(of: tapToUndo, initial: true) { _, on in
             session.host.allowsTapUndo = on
+        }
+        .onChange(of: newPages, initial: true) { _, mode in
+            session.addsPagesAutomatically = mode == .automatic
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
