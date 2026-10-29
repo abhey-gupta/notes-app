@@ -98,10 +98,11 @@ struct LibraryScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if isCompact {
-                    Text("Library")
+                    Text(library.folder(id: folder)?.name ?? "Library")
                         .font(.libraryTitle)
                         .tracking(-0.5)
                         .foregroundStyle(Tokens.Colors.textPrimary)
+                        .lineLimit(2)
                         .accessibilityAddTraits(.isHeader)
                         .padding(.horizontal, margin)
                         .padding(.bottom, Tokens.Spacing.xxl)

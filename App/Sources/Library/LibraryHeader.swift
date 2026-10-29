@@ -57,6 +57,10 @@ struct LibraryHeader: View {
                 .font(.libraryTitle)
                 .tracking(-0.5)
                 .foregroundStyle(Tokens.Colors.textPrimary)
+                // One line in any window width (#195): shrinks, then truncates, before the controls give way.
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .layoutPriority(1)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("libraryTitle")
                 // Above the title, outside its layout: the title doesn't move between Library and a folder.
@@ -181,8 +185,12 @@ struct LibraryHeader: View {
         }
         .padding(.horizontal, Tokens.Spacing.l)
         .padding(.vertical, Tokens.Spacing.xs)
-        .frame(width: isCompact ? nil : 250 * typeSize.chromeScale)
-        .frame(maxWidth: isCompact ? .infinity : nil, minHeight: 40)
+        // Regular: 250 wide, giving way to the title down to 160 in narrow windows (#195).
+        .frame(
+            minWidth: isCompact ? nil : 160 * typeSize.chromeScale,
+            maxWidth: isCompact ? .infinity : 250 * typeSize.chromeScale,
+            minHeight: 40
+        )
         .glassEffect(.regular.interactive(), in: .capsule)
     }
 
