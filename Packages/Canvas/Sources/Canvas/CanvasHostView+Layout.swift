@@ -90,17 +90,15 @@
             }
         }
 
-        /// New margins: the insets follow, and a viewport above the new top, or resting at the old one, settles
-        /// at the new top (the toolbar left the top edge or came back to it). Not under a finger: the bounce
+        /// New margins: the insets follow, and a viewport above the new top (the toolbar left the top edge)
+        /// settles at it. A bigger top margin leaves the viewport where it is. Not under a finger: the bounce
         /// settles it on release.
         func marginsDidChange(from old: UIEdgeInsets) {
             guard margins != old else { return }
-            let oldTop = -scrollView.contentInset.top
             updateInsets()
             setNeedsLayout()
             let top = -scrollView.contentInset.top
-            let y = scrollView.contentOffset.y
-            guard top != oldTop, !scrollView.isTracking, y < top || abs(y - oldTop) < 0.5 else { return }
+            guard !scrollView.isTracking, scrollView.contentOffset.y < top else { return }
             scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: top), animated: window != nil)
         }
 
