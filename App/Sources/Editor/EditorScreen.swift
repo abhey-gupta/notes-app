@@ -33,9 +33,9 @@ struct EditorScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Room the canvas keeps under the bar: the floating capsule and a gap while the toolbar docks at the top
-    /// (#191), just the gap on any other edge (the page can't scroll down into the empty band).
+    /// (#191), none on any other edge: the page's top rests against the bar.
     private var canvasTopMargin: CGFloat {
-        tools.dock == .top ? 72 : Tokens.Spacing.l
+        tools.dock == .top ? 72 : 0
     }
 
     init(
