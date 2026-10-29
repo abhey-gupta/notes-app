@@ -47,7 +47,7 @@ extension PencilKitInkEngine {
                 showThumbnail(view, for: id)
             }
         }
-        renderQueue.enqueue(id, key: key, job: job, pixelScale: pixelScale) { [weak self, weak view] image in
+        renderQueue.enqueue(id, render: { job.ink(scale: pixelScale) }, completion: { [weak self, weak view] image in
             guard let self else { return }
             if let image {
                 rasters.insert(image, for: id, key: key)
@@ -57,7 +57,7 @@ extension PencilKitInkEngine {
             guard image != nil || !view.hasImage else { return }
             view.setInk(image, key: key)
             delegate?.engine(self, didShowSharpInkOn: id)
-        }
+        })
     }
 
     /// Shows the page's thumbnail if nothing else is on screen: from the cache, else decoded off main
@@ -100,11 +100,23 @@ extension PencilKitInkEngine {
         set { renderQueue.maxConcurrent = newValue }
     }
 
-    /// Debug HUD row: resident image MB and render queue depth.
+    /// Memory-warning observer (caches empty, `+Photos`) and the debug HUD gauges.
+    func installHousekeeping() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(didReceiveMemoryWarning),
+            name: UIApplication.didReceiveMemoryWarningNotification, object: nil
+        )
+        registerGauges()
+    }
+
+    /// Debug HUD row: resident image MB (ink rasters and thumbnails + artwork bitmaps) and queue depths.
     func registerGauges() {
         PerfHUD.register(gauge: PerfGauge(id: "pageImages", label: "page img") { [weak self] in
             guard let self else { return "–" }
-            return String(format: "%.1f MB · q%d", Double(rasters.bytes) / 1_048_576, renderQueue.depth)
+            return String(
+                format: "%.1f+%.1f MB · q%d/%d", Double(rasters.bytes) / 1_048_576, Double(artworkRasters.bytes) / 1_048_576,
+                renderQueue.depth, artworkQueue.depth + artworkDetailQueue.depth
+            )
         })
     }
 

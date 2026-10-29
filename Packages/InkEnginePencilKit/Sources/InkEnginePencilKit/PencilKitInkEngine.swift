@@ -41,7 +41,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     /// renders (#43, #70). `nil`: the page shows flat paper meanwhile.
     public var thumbnailURL: ((PageID) -> URL?)?
     public var imageURL: ((ImageAssetID) -> URL?)?
-    /// Imported artwork (a PDF page) per page, drawn in tiles under the template and ink (#119).
+    /// Imported artwork (a PDF page) per page, drawn as cached bitmaps under the template and ink (#119, #193).
     public var pageArtwork: ((PageID) -> (any PageArtwork)?)? {
         didSet {
             layoutPages()
@@ -69,6 +69,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     let photos = PhotoCache()
     /// Off-main raster renders, nearest the viewport first.
     let renderQueue = RasterRenderQueue()
+    /// Imported artwork bitmaps, their cache and render queues (`+Artwork`, #193).
+    let artworkPipeline = ArtworkPipeline()
     /// Thumbnails being decoded, and pages that have none on disk.
     var thumbnailLoads: Set<PageID> = []
     var thumbnailMisses: Set<PageID> = []
@@ -110,11 +112,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         input.delegate = self
         host.addSubview(input)
         applyTool()
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(didReceiveMemoryWarning),
-            name: UIApplication.didReceiveMemoryWarningNotification, object: nil
-        )
-        registerGauges()
+        installHousekeeping()
     }
 
     // MARK: InkEngine

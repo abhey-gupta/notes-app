@@ -14,6 +14,8 @@ public enum Signpost: String, CaseIterable, Sendable {
     case thumbRender = "thumb.render"
     case exportPDF = "export.pdf"
     case pageImageRender = "page.image.render"
+    /// One imported-artwork (PDF page) bitmap or deep-zoom detail render (#193).
+    case artworkRender = "page.artwork.render"
     /// Pages overview (#32): Pages tap → the overlay's first frame.
     case pagesOverview = "pages.overview"
 
@@ -33,7 +35,7 @@ public enum Signpost: String, CaseIterable, Sendable {
         case .docCheckpoint: .doc
         case .thumbRender: .thumb
         case .exportPDF: .export
-        case .pageImageRender: .page
+        case .pageImageRender, .artworkRender: .page
         case .pagesOverview: .pages
         }
     }
@@ -51,6 +53,7 @@ public enum Signpost: String, CaseIterable, Sendable {
         case .thumbRender: "thumb.render"
         case .exportPDF: "export.pdf"
         case .pageImageRender: "page.image.render"
+        case .artworkRender: "page.artwork.render"
         case .pagesOverview: "pages.overview"
         }
     }

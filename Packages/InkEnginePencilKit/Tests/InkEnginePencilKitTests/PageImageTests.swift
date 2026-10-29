@@ -13,7 +13,7 @@ import UniformTypeIdentifiers
 @MainActor
 struct PageImageTests {
     /// A 44 × 57 HEIC (the 176 × 228 thumbnail's shape) at `thumbs/<id>.heic` in a temp directory.
-    private static func writeThumbnail(for id: PageID) throws -> URL {
+    static func writeThumbnail(for id: PageID) throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appending(path: "thumbs-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let context = try #require(CGContext(

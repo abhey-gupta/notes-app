@@ -271,7 +271,8 @@ final class PageLayerView: UIView {
     /// Shows the page's thumbnail scaled to the page width, top-aligned (it is cut at 176×228 pt, so a
     /// taller page's bottom shows the paper and template layers), until a raster lands.
     func setThumbnail(_ image: CGImage) {
-        guard inkLayer.image == nil else { return }
+        // Not over a page whose ink settled and whose artwork (if any) is up: it decoded too late.
+        guard inkLayer.image == nil, shownKey == nil || !isArtworkReady else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         thumbnailLayer.removeAllAnimations()
@@ -300,8 +301,8 @@ final class PageLayerView: UIView {
         thumbnailLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: min(height, bounds.height))
     }
 
-    private func hideThumbnail(animated: Bool) {
-        guard showsThumbnail else { return }
+    func hideThumbnail(animated: Bool) {
+        guard showsThumbnail, isArtworkReady else { return }
         showsThumbnail = false
         let thumbnail = thumbnailLayer
         guard animated, crossfadeDuration > 0 else {
