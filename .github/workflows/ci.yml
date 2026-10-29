@@ -3,7 +3,7 @@ name: CI
 # PR gate on GitHub's hosted `xcode-27` runner (Apple Silicon, Xcode 27.1, iOS 27 simulators): one job, no
 # XCUI tests (ui.yml). PR-only: squash merges of green PRs don't re-run on main.
 # Minutes: macOS bills at 10× against the plan's included minutes; one run is ~20 min → ~200.
-# The VM renders PencilKit in software; the engine render tests hang there and are skipped (see the step).
+# The VM renders PencilKit in software; one render test hangs there and is skipped (see the step).
 on:
   pull_request:
     paths-ignore: ["docs/**", "design/**", "**/*.md"]
@@ -27,9 +27,34 @@ jobs:
         run: make lint
       - name: Headless packages
         run: make test-packages
-      - name: Simulator tests (no UI tests)
+      - name: DIAG InkEnginePencilKit tests, sampling any test host alive > 60 s (temporary)
         run: |
           SIM=$(scripts/ci-sim.sh CI-iPad)
-          # InkEnginePencilKit's RenderTests hang on the VM (engine.render of any page, > 5 min, even a blank one;
-          # the same render passes in InkEngineMetal's cross-check). They run locally. Root cause: #202.
-          make test-unit SIM="$SIM" UNITFLAGS="-skip-testing:InkEnginePencilKitTests/RenderTests"
+          xcodegen generate --quiet
+          mkdir -p build/samples
+          ( while true; do
+              for pid in $(pgrep -x xctest); do
+                age=$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')
+                if [ -n "$age" ] && [ "$age" -ge 60 ] && [ ! -f "build/samples/$pid.sample.txt" ]; then
+                  sample "$pid" 3 -mayDie -file "build/samples/$pid.sample.txt" || true
+                  sudo spindump "$pid" 3 -file "build/samples/$pid.spindump.txt" || true
+                fi
+              done
+              sleep 10
+            done ) &
+          WD=$!
+          status=0
+          set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace \
+            -destination "platform=iOS Simulator,name=$SIM" -only-testing:InkEnginePencilKitTests \
+            -collect-test-diagnostics never -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 150 -maximum-test-execution-time-allowance 180 | xcbeautify || status=$?
+          kill $WD || true
+          ls -la build/samples
+          exit $status
+      - name: Upload samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-samples
+          path: build/samples
+          if-no-files-found: ignore
