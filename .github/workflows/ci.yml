@@ -1,7 +1,8 @@
 name: CI
 
-# PR gate on the single self-hosted runner: one job (no queueing between jobs), no XCUI tests (ui.yml).
-# PR-only: squash merges of green PRs don't re-run on main.
+# PR gate on GitHub's hosted `xcode-27` runner (Apple Silicon, Xcode 27.1, iOS 27 simulators): one job, no
+# XCUI tests (ui.yml). PR-only: squash merges of green PRs don't re-run on main.
+# Minutes: macOS bills at 10× against the plan's included minutes; one run is ~20 min → ~200.
 on:
   pull_request:
     paths-ignore: ["docs/**", "design/**", "**/*.md"]
@@ -12,25 +13,20 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PATH_PREFIX: /opt/homebrew/bin
-  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
 
 jobs:
   ci:
-    runs-on: [self-hosted, macOS, xcode27]
-    timeout-minutes: 30
+    runs-on: xcode-27
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mac
       - name: Lint
-        run: export PATH="$PATH_PREFIX:$PATH" && make lint
+        run: make lint
       - name: Headless packages
-        run: export PATH="$PATH_PREFIX:$PATH" && make test-packages
+        run: make test-packages
       - name: Simulator tests (no UI tests)
         run: |
-          export PATH="$PATH_PREFIX:$PATH"
           SIM=$(scripts/ci-sim.sh CI-iPad)
           make test-unit SIM="$SIM"
-      # Idle iOS 27 sims burn ~3-4 cores (SpringBoard/widgets); never leave one booted.
-      - name: Shut down simulator
-        if: always()
-        run: xcrun simctl shutdown CI-iPad 2>/dev/null || true

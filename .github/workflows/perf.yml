@@ -1,5 +1,7 @@
 name: Perf
 
+# Stays on the self-hosted runner (the dev Mac): baselines.json was measured there, and hosted 3-core
+# M1 VMs are too noisy for a 10 % gate. Needs that runner online (`~/actions-runner/notespace/svc.sh start`).
 on:
   schedule:
     - cron: "0 21 * * *"

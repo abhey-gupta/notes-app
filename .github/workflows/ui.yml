@@ -1,7 +1,7 @@
 name: UI
 
 # XCUI tests: slow (~12 min) and gesture-flaky, so not in the PR gate. Nightly, on demand, and on PRs
-# that touch the app target or the tests themselves.
+# that touch the app target or the tests themselves. Hosted `xcode-27` runner (see ci.yml).
 on:
   schedule:
     - cron: "0 20 * * *"
@@ -14,20 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PATH_PREFIX: /opt/homebrew/bin
-  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
 
 jobs:
   ui:
-    runs-on: [self-hosted, macOS, xcode27]
-    timeout-minutes: 40
+    runs-on: xcode-27
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mac
       - name: UI tests on iPad simulator
         run: |
-          export PATH="$PATH_PREFIX:$PATH"
           SIM=$(scripts/ci-sim.sh CI-iPad)
           make test-ui SIM="$SIM"
-      - name: Shut down simulator
-        if: always()
-        run: xcrun simctl shutdown CI-iPad 2>/dev/null || true

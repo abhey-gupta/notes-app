@@ -378,10 +378,11 @@ Geometry: capsule height 52, radius 26, blur 24 + saturate 180 %; tool button 44
 - Renderer snapshot tests (simulator): render fixture pages via `engine.render` and compare to golden PNGs with a perceptual tolerance; same fixtures through both engines to keep the PencilKit adapter honest.
 - UI smoke (simulator, `XCUITest`): launch → create notebook → draw a stroke (XCUI drag) → back → cover updated → export produces a PDF.
 - Perf tests (§12).
-- GitHub Actions on a self-hosted macOS runner (the dev Mac, single lane, so jobs are serial):
-  1. `ci` (PRs, one job so nothing queues between steps): `swiftformat --lint .` + `swiftlint --strict`; `swift test` per headless package; `xcodegen generate` → `xcodebuild test` on an iPad simulator with `-skip-testing:NotespaceUITests` (renderer, PencilKit and Metal package tests). ~6 min.
+- GitHub Actions on GitHub's hosted `xcode-27` runner (Apple Silicon, Xcode 27.1 pinned via `DEVELOPER_DIR`, iOS 27 simulators; `.github/actions/setup-mac` brews xcodegen, swiftlint and swiftformat, which the image lacks). macOS minutes bill at 10×, so the PR gate is one job:
+  1. `ci` (PRs): `swiftformat --lint .` + `swiftlint --strict`; `swift test` per headless package; `xcodegen generate` → `xcodebuild test` on an iPad simulator with `-skip-testing:NotespaceUITests` (renderer, PencilKit and Metal package tests). ~20 min hosted.
   2. `ui` (nightly, `workflow_dispatch`, PRs touching `App/**`, `Tests/UITests/**`, `project.yml`): the XCUI tests alone, with one retry (gesture flakes).
-  3. `perf` (nightly + label `run-perf`): `PerfTests`, compares against baselines, posts a summary comment.
+  3. `perf` (nightly + label `run-perf`): `PerfTests`, compares against baselines, posts a summary comment. The one job still on the self-hosted runner on the dev Mac: the baselines were measured there and a hosted VM is too noisy for a 10 % gate.
+  4. `release` (tag `v*`): unsigned `.ipa`.
 - `project.yml` is the source of truth; `*.xcodeproj` is gitignored.
 
 ## 14. Risks

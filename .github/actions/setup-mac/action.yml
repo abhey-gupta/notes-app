@@ -1,0 +1,15 @@
+name: Set up Mac tools
+description: Installs the build tools the Makefile expects that GitHub's xcode-27 image lacks (xcodegen, swiftlint; swiftformat kept current with local).
+
+runs:
+  using: composite
+  steps:
+    - name: Install tools
+      shell: bash
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+        HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      run: |
+        brew install xcodegen swiftlint swiftformat
+        xcodegen --version; swiftlint --version; swiftformat --version; xcbeautify --version
+        xcodebuild -version
