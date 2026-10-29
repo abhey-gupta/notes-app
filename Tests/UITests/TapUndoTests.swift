@@ -68,10 +68,15 @@ final class TapUndoTests: XCTestCase {
         gear.tap()
         let toggle = app.switches["tapToUndo"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Tap with two fingers to undo, three fingers to redo."].exists)
-        if toggle.value as? String != "1" {
-            toggle.switches.firstMatch.tap() // left off by a manual run: back to the default
+        let footer = NSPredicate(format: "label BEGINSWITH %@", "Tap with two fingers to undo")
+        XCTAssertTrue(app.staticTexts.containing(footer).firstMatch.exists)
+        // Hold to snap shapes (#165) sits beside it, also on by default.
+        for toggle in [toggle, app.switches["snapsShapes"]] {
+            XCTAssertTrue(toggle.exists)
+            if toggle.value as? String != "1" {
+                toggle.switches.firstMatch.tap() // left off by a manual run: back to the default
+            }
+            XCTAssertEqual(toggle.value as? String, "1")
         }
-        XCTAssertEqual(toggle.value as? String, "1")
     }
 }
