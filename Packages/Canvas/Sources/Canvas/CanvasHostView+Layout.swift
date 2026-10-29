@@ -90,6 +90,24 @@
             }
         }
 
+        /// New margins: the insets follow, and a viewport above the new top (the toolbar left the top edge)
+        /// glides onto it; setting the smaller inset alone would clamp it in one jump. A bigger top margin
+        /// leaves the viewport where it is. Not under a finger: the bounce settles it on release.
+        func marginsDidChange(from old: UIEdgeInsets) {
+            guard margins != old else { return }
+            setNeedsLayout()
+            guard !scrollView.isTracking else { return updateInsets() }
+            let settle = {
+                self.updateInsets()
+                let top = -self.scrollView.contentInset.top
+                if self.scrollView.contentOffset.y < top {
+                    self.scrollView.contentOffset.y = top
+                }
+            }
+            guard window != nil else { return settle() }
+            UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut, .allowUserInteraction], animations: settle)
+        }
+
         func centeredOffsetX() -> CGFloat {
             let width = layout.contentSize.width * scrollView.zoomScale
             return (width - bounds.width) / 2

@@ -106,6 +106,23 @@
             #expect(engine.view.bounds.size == host.layout.contentSize)
         }
 
+        /// A smaller top margin (toolbar off the top edge) snaps a viewport above it to the new top; a bigger
+        /// one leaves the viewport where it is.
+        @Test func topMarginChangeSnapsTheTopViewport() {
+            let scroll = host.canvasScrollView
+            #expect(scroll.contentOffset.y == -scroll.contentInset.top)
+            host.margins.top = 14
+            #expect(scroll.contentInset.top == 14)
+            #expect(scroll.contentOffset.y == -14)
+            host.margins.top = 72
+            #expect(scroll.contentInset.top == 72)
+            #expect(scroll.contentOffset.y == -14)
+            host.scrollToPage(3, animated: false)
+            let y = scroll.contentOffset.y
+            host.margins.top = 14
+            #expect(scroll.contentOffset.y == y)
+        }
+
         /// Without the add-page button (automatic new pages, #172) the space below the last page is 5 % of a
         /// page, with no bottom margin; back with the button.
         @Test func noAddPageButtonLeavesFivePercentBelow() {
