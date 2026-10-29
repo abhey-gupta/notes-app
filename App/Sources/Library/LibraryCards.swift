@@ -6,6 +6,8 @@ import UIKit
 struct RecentCard: View {
     let notebook: NotebookSummary
     let zoom: Namespace.ID
+    /// Open as an editor tab (#191): the meta line says so.
+    var isOpen = false
     let action: () -> Void
 
     var body: some View {
@@ -29,7 +31,7 @@ struct RecentCard: View {
                     .foregroundStyle(Tokens.Colors.textPrimary)
                     .lineLimit(2)
                     .padding(.top, 12)
-                Text(EditedLabel.recent(notebook))
+                Text(EditedLabel.recent(notebook, isOpen: isOpen))
                     .font(.meta)
                     .foregroundStyle(Tokens.Colors.textSecondary)
                     .lineLimit(2)
@@ -40,7 +42,7 @@ struct RecentCard: View {
         .buttonStyle(PressableStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(notebook.title)
-        .accessibilityValue(EditedLabel.recent(notebook))
+        .accessibilityValue(EditedLabel.recent(notebook, isOpen: isOpen))
         .accessibilityHint("Opens the notebook")
         .accessibilityIdentifier("recent-\(notebook.title)")
     }
@@ -127,6 +129,8 @@ struct CoverTile: View {
     let zoom: Namespace.ID
     /// Narrower in compact windows (#118); the cover scales with it.
     var width = Tokens.Size.cover.width
+    /// Open as an editor tab (#191): the meta line says so.
+    var isOpen = false
     let action: () -> Void
 
     var body: some View {
@@ -142,7 +146,7 @@ struct CoverTile: View {
                     // Narrow compact covers: one line, else long words break mid-word.
                     .lineLimit(width < Tokens.Size.cover.width ? 1 : 2)
                     .padding(.top, 12)
-                Text(EditedLabel.pages(notebook.pageCount))
+                Text(EditedLabel.pages(notebook.pageCount, isOpen: isOpen))
                     .font(.meta)
                     .foregroundStyle(Tokens.Colors.textSecondary)
                     .padding(.top, 3)
@@ -153,7 +157,7 @@ struct CoverTile: View {
         .buttonStyle(PressableStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(notebook.title)
-        .accessibilityValue([folder, EditedLabel.pages(notebook.pageCount)].compactMap(\.self).joined(separator: ", "))
+        .accessibilityValue([folder, EditedLabel.pages(notebook.pageCount, isOpen: isOpen)].compactMap(\.self).joined(separator: ", "))
         .accessibilityHint("Opens the notebook")
         .accessibilityIdentifier("cover-\(notebook.title)")
     }
@@ -168,14 +172,16 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// "Edited 2 min ago · 11 pages", "Yesterday · 4 pages", "Mon · 31 pages".
+/// "Edited 2 min ago · 11 pages", "Yesterday · 4 pages", "Mon · 31 pages"; "Open · 11 pages" for a notebook
+/// that is an editor tab (#191).
 enum EditedLabel {
-    static func recent(_ notebook: NotebookSummary, now: Date = Date()) -> String {
-        "\(edited(notebook.modifiedAt, now: now)) · \(pages(notebook.pageCount))"
+    static func recent(_ notebook: NotebookSummary, now: Date = Date(), isOpen: Bool = false) -> String {
+        isOpen ? pages(notebook.pageCount, isOpen: true) : "\(edited(notebook.modifiedAt, now: now)) · \(pages(notebook.pageCount))"
     }
 
-    static func pages(_ count: Int) -> String {
-        count == 1 ? "1 page" : "\(count) pages"
+    static func pages(_ count: Int, isOpen: Bool = false) -> String {
+        let pages = count == 1 ? "1 page" : "\(count) pages"
+        return isOpen ? "Open · \(pages)" : pages
     }
 
     static func edited(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {

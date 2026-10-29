@@ -5,7 +5,8 @@ import Perf
 import SwiftUI
 import Tools
 
-/// Library → editor navigation (§8). The editor zooms out of the tapped cover or recent card.
+/// Library → editor navigation (§8). The editor zooms out of the tapped cover or recent card; the notebook
+/// becomes (or already is) a tab (#191).
 struct RootView: View {
     @State private var library: any LibraryModel
     @State private var path: [EditorRoute]
@@ -13,7 +14,12 @@ struct RootView: View {
     /// A PDF in the import sheet (#119): from the library's + menu, or opened in Notespace from elsewhere.
     @State private var pdfImport: PDFImportRequest?
     /// App-wide tool choice and toolbar placement (§6); persisted, flushed when the scene backgrounds.
-    @State private var tools = LaunchOptions.makeToolState()
+    @State private var tools: ToolState
+    /// Open editor tabs (#191), persisted; their sessions live only while the editor is up.
+    @State private var tabs: TabsModel
+    @State private var sessions: SessionStore
+    /// Settings → "Hide status bar" (#191): the bar sits flush at the top edge.
+    @AppStorage(SettingsView.hidesStatusBarKey) private var hidesStatusBar = false
     @Environment(\.scenePhase) private var scenePhase
     @Namespace private var zoom
 
@@ -24,8 +30,17 @@ struct RootView: View {
     /// - Parameter library: Defaults to the on-disk library (or a DEBUG launch-argument one); previews pass a sample.
     init(library: (any LibraryModel)? = nil) {
         let library = library ?? LaunchOptions.makeLibrary()
+        let tools = LaunchOptions.makeToolState()
+        let tabs = LaunchOptions.makeTabs()
+        let path = LaunchOptions.initialPath(in: library)
+        for route in path {
+            tabs.open(route.id)
+        }
         _library = State(initialValue: library)
-        _path = State(initialValue: LaunchOptions.initialPath(in: library))
+        _tools = State(initialValue: tools)
+        _tabs = State(initialValue: tabs)
+        _sessions = State(initialValue: SessionStore(library: library, tools: tools))
+        _path = State(initialValue: path)
         _showsNewNotebook = State(initialValue: LaunchOptions.showsNewNotebook)
         _pdfImport = State(initialValue: LaunchOptions.pdfImport)
     }
@@ -33,18 +48,23 @@ struct RootView: View {
     var body: some View {
         NavigationStack(path: $path) {
             LibraryScreen(
-                library: library, zoom: zoom, showsNewNotebook: $showsNewNotebook, pdfImport: $pdfImport, showsGallery: galleryBinding
+                library: library, zoom: zoom, tabs: tabs, showsNewNotebook: $showsNewNotebook, pdfImport: $pdfImport,
+                showsGallery: galleryBinding
             ) { route in
                 OpenTrace.begin()
-                path.append(route)
+                open(route)
             }
             .navigationDestination(for: EditorRoute.self) { route in
                 if let notebook = library.notebook(id: route.id) {
-                    EditorScreen(notebook: notebook, library: library, tools: tools, startsFocused: route.startsFocused)
-                        .navigationTransition(.zoom(sourceID: route.transitionID, in: zoom))
+                    EditorScreen(
+                        notebook: notebook, library: library, tools: tools, tabs: tabs, sessions: sessions,
+                        startsFocused: route.startsFocused
+                    )
+                    .navigationTransition(.zoom(sourceID: route.transitionID, in: zoom))
                 }
             }
         }
+        .statusBarHidden(hidesStatusBar)
         // Compact chrome and room for the window controls (#118).
         .readsChromeLayout()
         // Library and editor chrome follow Dynamic Type up to AX1; capsules grow with it (#45).
@@ -77,6 +97,14 @@ struct RootView: View {
             DesignSystemGallery()
         }
         #endif
+    }
+
+    /// The notebook becomes the showing tab (closing the coldest one past the limit) and the editor opens on it.
+    private func open(_ route: EditorRoute) {
+        if let evicted = tabs.open(route.id) {
+            sessions.close(evicted)
+        }
+        path.append(route)
     }
 
     private var galleryBinding: Binding<Bool>? {

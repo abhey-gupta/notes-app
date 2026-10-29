@@ -6,6 +6,8 @@ struct SettingsView: View {
     static let tapToUndoKey = "tapToUndo"
     /// `UserDefaults` key of "New pages" (#172).
     static let newPagesKey = "newPages"
+    /// `UserDefaults` key of "Hide status bar" (#191).
+    static let hidesStatusBarKey = "hidesStatusBar"
 
     /// DEBUG: opens the DesignSystem gallery.
     let showsGallery: Binding<Bool>?
@@ -13,6 +15,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(tapToUndoKey) private var tapToUndo = true
     @AppStorage(newPagesKey) private var newPages = NewPages.manual
+    @AppStorage(hidesStatusBarKey) private var hidesStatusBar = false
 
     var body: some View {
         Form {
@@ -35,6 +38,14 @@ struct SettingsView: View {
             } footer: {
                 Text("Automatic adds a page when you write on the last one.")
             }
+            Section {
+                Toggle("Hide status bar", isOn: $hidesStatusBar)
+                    .accessibilityIdentifier("hidesStatusBar")
+            } header: {
+                Text("Display")
+            } footer: {
+                Text("Hides the time and battery everywhere in Notespace.")
+            }
             #if DEBUG
                 Section {
                     if let showsGallery {
@@ -51,7 +62,7 @@ struct SettingsView: View {
                 LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
             }
         }
-        .frame(width: 340, height: 420)
+        .frame(width: 340, height: 500)
     }
 }
 
