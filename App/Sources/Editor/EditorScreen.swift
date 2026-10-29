@@ -32,8 +32,11 @@ struct EditorScreen: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Room the canvas keeps under the bar: the floating capsule and a gap, as before the bar (#191).
-    private static let canvasTopMargin: CGFloat = 72
+    /// Room the canvas keeps under the bar: the floating capsule and a gap while the toolbar docks at the top
+    /// (#191), just the gap on any other edge (the page can't scroll down into the empty band).
+    private var canvasTopMargin: CGFloat {
+        tools.dock == .top ? 72 : Tokens.Spacing.l
+    }
 
     init(
         notebook: NotebookSummary, library: any LibraryModel, tools: ToolState, tabs: TabsModel, sessions: SessionStore,
@@ -118,7 +121,8 @@ struct EditorScreen: View {
         }
         .onChange(of: tapToUndo) { _, on in session.host.allowsTapUndo = on }
         .onChange(of: newPages) { _, mode in session.addsPagesAutomatically = mode == .automatic }
-        .onChange(of: barHeight) { _, height in session.host.margins.top = height + Self.canvasTopMargin }
+        .onChange(of: barHeight) { _, height in session.host.margins.top = height + canvasTopMargin }
+        .onChange(of: tools.dock) { session.host.margins.top = barHeight + canvasTopMargin }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 sessions.flushAll()
@@ -145,7 +149,7 @@ struct EditorScreen: View {
         session.setTool(tools.active, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing)
         session.host.allowsTapUndo = tapToUndo
         session.addsPagesAutomatically = newPages == .automatic
-        session.host.margins.top = barHeight + Self.canvasTopMargin
+        session.host.margins.top = barHeight + canvasTopMargin
     }
 
     /// The showing tab changed: swap in its session. No tab left → back to the library.

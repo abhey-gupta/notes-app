@@ -59,7 +59,7 @@
         /// Breathing room inside the safe area: top clears the floating chrome (6 pt + 52 pt capsule) with a
         /// 14 pt gap, sides keep a desk margin when zoomed in, bottom clears the page pill.
         public var margins = UIEdgeInsets(top: 72, left: 16, bottom: 96, right: 16) {
-            didSet { setNeedsLayout() }
+            didSet { marginsDidChange(from: oldValue) }
         }
 
         /// "Draw with finger": one finger inks (until a Pencil is seen) and scrolling takes two fingers.
