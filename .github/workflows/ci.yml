@@ -31,5 +31,5 @@ jobs:
         run: |
           SIM=$(scripts/ci-sim.sh CI-iPad)
           # InkEnginePencilKit's RenderTests hang on the VM (engine.render of any page, > 5 min, even a blank one;
-          # the same render passes in InkEngineMetal's cross-check). They run locally. Root cause: #201.
+          # the same render passes in InkEngineMetal's cross-check). They run locally. Root cause: #202.
           make test-unit SIM="$SIM" UNITFLAGS="-skip-testing:InkEnginePencilKitTests/RenderTests"
