@@ -1,15 +1,26 @@
 import DesignSystem
+import Library
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Library header (mock §01): serif title · search · settings · New. Compact chrome (#118): sidebar (folders)
-/// on the left, search · settings · + on the right; search swaps the row for the field and Cancel. Either way
-/// it starts clear of an iPadOS window's controls.
+/// Library header (mock §01): serif title (the folder showing, under its breadcrumb, #117) · search · settings ·
+/// New, with a sidebar button while the sidebar is hidden. Compact chrome (#118): sidebar on the left,
+/// search · settings · + on the right; search swaps the row for the field and Cancel. Either way it starts
+/// clear of an iPadOS window's controls.
 struct LibraryHeader: View {
     @Binding var query: String
     @Binding var showsNewNotebook: Bool
     @Binding var pdfImport: PDFImportRequest?
-    @Binding var showsFolders: Bool
+    /// "Library", or the folder showing (#117).
+    var title = "Library"
+    /// The showing folder's ancestors, top level first: a breadcrumb over the title.
+    var ancestors: [LibraryFolder] = []
+    /// Shows the sidebar; nil while it's docked and showing.
+    var showSidebar: (() -> Void)?
+    /// A breadcrumb was tapped (`nil` = Library).
+    var pickFolder: (FolderID?) -> Void = { _ in }
+    /// The header starts at the window's leading edge (no docked sidebar), so it clears the window controls.
+    var hugsLeadingEdge = true
     /// DEBUG: DesignSystem gallery toggle, surfaced in Settings.
     let showsGallery: Binding<Bool>?
 
@@ -38,11 +49,25 @@ struct LibraryHeader: View {
 
     private var header: some View {
         HStack(spacing: Tokens.Spacing.m) {
-            Text("Library")
+            if let showSidebar {
+                circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
+                    .accessibilityIdentifier("sidebarButton")
+            }
+            Text(title)
                 .font(.libraryTitle)
                 .tracking(-0.5)
                 .foregroundStyle(Tokens.Colors.textPrimary)
+                .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("libraryTitle")
+                // Above the title, outside its layout: the title doesn't move between Library and a folder.
+                .overlay(alignment: .topLeading) {
+                    if !ancestors.isEmpty {
+                        breadcrumb
+                            .fixedSize()
+                            .alignmentGuide(.top) { $0[.bottom] + 6 }
+                    }
+                }
             Spacer(minLength: Tokens.Spacing.xxl)
             GlassChrome(spacing: Tokens.Spacing.s) {
                 HStack(spacing: Tokens.Spacing.m) {
@@ -54,7 +79,7 @@ struct LibraryHeader: View {
             // the pill's glass kept taps from the menu's first row.
             newButton
         }
-        .padding(.leading, margin + chrome.windowControls.leading)
+        .padding(.leading, margin + (hugsLeadingEdge ? chrome.windowControls.leading : 0))
         .padding(.trailing, margin - 4)
         .padding(.top, Tokens.Spacing.l)
         .padding(.bottom, Tokens.Spacing.s)
@@ -75,8 +100,8 @@ struct LibraryHeader: View {
                 .buttonStyle(.plain)
                 .frame(minHeight: 40)
             } else {
-                circleButton("Folders", systemImage: "sidebar.leading") { showsFolders = true }
-                    .accessibilityIdentifier("foldersButton")
+                circleButton("Show Sidebar", systemImage: "sidebar.leading") { showSidebar?() }
+                    .accessibilityIdentifier("sidebarButton")
                 Spacer(minLength: Tokens.Spacing.m)
                 GlassChrome(spacing: Tokens.Spacing.s) {
                     HStack(spacing: Tokens.Spacing.m) {
@@ -95,6 +120,31 @@ struct LibraryHeader: View {
         .padding(.trailing, margin - 4)
         .padding(.top, Tokens.Spacing.s)
         .padding(.bottom, Tokens.Spacing.s)
+    }
+
+    /// Library › University › — each crumb goes up to that level.
+    private var breadcrumb: some View {
+        HStack(spacing: 4) {
+            crumb("Library", id: nil)
+            ForEach(ancestors) { folder in
+                Image(systemName: "chevron.right")
+                    .scaledFont(size: 9, weight: .semibold)
+                    .foregroundStyle(Tokens.Colors.textTertiary)
+                    .accessibilityHidden(true)
+                crumb(folder.name, id: folder.id)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Path")
+    }
+
+    private func crumb(_ name: String, id: FolderID?) -> some View {
+        Button(name) { pickFolder(id) }
+            .scaledFont(size: 13, weight: .medium)
+            .foregroundStyle(Tokens.Colors.textTertiary)
+            .lineLimit(1)
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("crumb-\(name)")
     }
 
     private func circleButton(_ label: String, systemImage: String, action: @escaping () -> Void) -> some View {

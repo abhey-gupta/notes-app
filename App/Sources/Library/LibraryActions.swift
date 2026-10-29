@@ -5,8 +5,10 @@ import SwiftUI
 enum LibraryPrompt: Hashable {
     case renameNotebook(NotebookSummary)
     case deleteNotebook(NotebookSummary)
-    case newFolder
+    /// In `parent` (`nil` = top level).
+    case newFolder(parent: FolderID?)
     case renameFolder(LibraryFolder)
+    case deleteFolder(LibraryFolder)
 }
 
 /// Cover / recent-card context menu: Rename, Move to Folder, Duplicate, Delete.
@@ -18,21 +20,44 @@ struct NotebookMenu: View {
     var body: some View {
         Button("Rename", systemImage: "pencil") { prompt = .renameNotebook(notebook) }
         Menu("Move to Folder", systemImage: "folder") {
-            folderButton("None", id: nil)
-            ForEach(library.folders) { folder in
-                folderButton(folder.name, id: folder.id)
-            }
+            FolderMenuItems(folders: library.folders, selected: notebook.folderID) { library.move(notebook.id, to: $0) }
         }
         Button("Duplicate", systemImage: "plus.square.on.square") { library.duplicate(notebook.id) }
         Divider()
         Button("Delete", systemImage: "trash", role: .destructive) { prompt = .deleteNotebook(notebook) }
     }
+}
 
-    private func folderButton(_ name: String, id: FolderID?) -> some View {
+/// Folder picker rows for a menu (#117): None, then the folder tree. A folder with subfolders is a submenu
+/// whose first row picks the folder itself.
+struct FolderMenuItems: View {
+    let folders: [LibraryFolder]
+    var parent: FolderID?
+    let selected: FolderID?
+    let pick: (FolderID?) -> Void
+
+    var body: some View {
+        if parent == nil {
+            item("None", id: nil)
+        }
+        ForEach(folders.children(of: parent)) { folder in
+            if folders.children(of: folder.id).isEmpty {
+                item(folder.name, id: folder.id)
+            } else {
+                Menu(folder.name) {
+                    item(folder.name, id: folder.id)
+                    Divider()
+                    FolderMenuItems(folders: folders, parent: folder.id, selected: selected, pick: pick)
+                }
+            }
+        }
+    }
+
+    private func item(_ name: String, id: FolderID?) -> some View {
         Button {
-            library.move(notebook.id, to: id)
+            pick(id)
         } label: {
-            if notebook.folderID == id {
+            if selected == id {
                 Label(name, systemImage: "checkmark")
             } else {
                 Text(name)
@@ -63,17 +88,18 @@ private struct LibraryPrompts: ViewModifier {
                     Button("Delete", role: .destructive) { library.delete(notebook.id) }
                 case let .renameNotebook(notebook):
                     nameField("Title", confirm: "Rename") { library.rename(notebook.id, to: text) }
-                case .newFolder:
-                    nameField("Folder name", confirm: "Create") { library.createFolder(named: text) }
+                case let .newFolder(parent):
+                    nameField("Folder name", confirm: "Create") { library.createFolder(named: text, in: parent) }
                 case let .renameFolder(folder):
                     nameField("Folder name", confirm: "Rename") { library.renameFolder(folder.id, to: text) }
+                case let .deleteFolder(folder):
+                    Button("Cancel", role: .cancel) {}
+                    Button("Delete", role: .destructive) { library.deleteFolder(folder.id) }
                 case nil:
                     EmptyView()
                 }
             } message: {
-                if case .deleteNotebook = current {
-                    Text("It stays in the trash for 30 days.")
-                }
+                message(current)
             }
             .onChange(of: prompt) { _, prompt in
                 switch prompt {
@@ -82,6 +108,20 @@ private struct LibraryPrompts: ViewModifier {
                 default: text = ""
                 }
             }
+    }
+
+    @ViewBuilder
+    private func message(_ prompt: LibraryPrompt?) -> some View {
+        switch prompt {
+        case .deleteNotebook:
+            Text("It stays in the trash for 30 days.")
+        case let .deleteFolder(folder):
+            if let contents = Self.contents(of: folder, in: library) {
+                Text("Its \(contents) will be deleted too. Notebooks stay in the trash for 30 days.")
+            }
+        default:
+            EmptyView()
+        }
     }
 
     @ViewBuilder
@@ -107,7 +147,19 @@ private struct LibraryPrompts: ViewModifier {
         case .renameNotebook: "Rename Notebook"
         case .newFolder: "New Folder"
         case .renameFolder: "Rename Folder"
+        case let .deleteFolder(folder): "Delete “\(folder.name)”?"
         case nil: ""
         }
+    }
+
+    /// "2 folders and 4 notebooks"; nil when empty.
+    static func contents(of folder: LibraryFolder, in library: any LibraryModel) -> String? {
+        let folders = library.folders.subtree(of: folder.id).count - 1
+        let notebooks = library.notebookCount(inSubtree: folder.id)
+        let parts = [
+            folders == 0 ? nil : folders == 1 ? "1 folder" : "\(folders) folders",
+            notebooks == 0 ? nil : EditedLabel.notebooks(notebooks),
+        ].compactMap(\.self)
+        return parts.isEmpty ? nil : parts.joined(separator: " and ")
     }
 }

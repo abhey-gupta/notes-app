@@ -124,27 +124,7 @@ public actor LibraryStore {
     public func delete(_ id: NotebookID) async throws(LibraryError) {
         var next = await loadedIndex()
         let entry = try next.notebooks.remove(at: Self.position(of: id, in: next))
-        let source = locations.packageURL(for: entry)
-        let trashed = trashURL(for: entry)
-        let fm = FileManager.default
-        do {
-            try fm.createDirectory(at: locations.trashDirectory, withIntermediateDirectories: true)
-            if fm.fileExists(atPath: trashed.path(percentEncoded: false)) {
-                try fm.removeItem(at: trashed)
-            }
-            if fm.fileExists(atPath: source.path(percentEncoded: false)) {
-                try fm.moveItem(at: source, to: trashed)
-            }
-        } catch {
-            throw .io(source, reason: "\(error)")
-        }
-        next.trash.append(TrashedNotebook(entry: entry, trashedAt: now()))
-        do {
-            try commit(next)
-        } catch {
-            try? fm.moveItem(at: trashed, to: source)
-            throw error
-        }
+        try trash([entry], in: &next)
     }
 
     /// Moves a trashed notebook back (to no folder if its folder is gone).
@@ -269,11 +249,12 @@ public actor LibraryStore {
 
     // MARK: Folders
 
-    /// Adds a folder at the end. Blank names become "New Folder".
+    /// Adds a folder at the end, in `parent` (`nil` = top level). Blank names become "New Folder".
     @discardableResult
-    public func createFolder(named name: String) async throws(LibraryError) -> LibraryFolder {
+    public func createFolder(named name: String, in parent: FolderID? = nil) async throws(LibraryError) -> LibraryFolder {
         var next = await loadedIndex()
-        let folder = LibraryFolder(name: Self.cleaned(name, fallback: "New Folder"))
+        try Self.check(parent, in: next)
+        let folder = LibraryFolder(name: Self.cleaned(name, fallback: "New Folder"), parentID: parent)
         next.folders.append(folder)
         try commit(next)
         return folder
@@ -287,14 +268,14 @@ public actor LibraryStore {
         try commit(next)
     }
 
-    /// Removes a folder; its notebooks stay in the library, unfiled.
+    /// Removes a folder, every folder nested in it, and their notebooks (to the trash, #117).
     public func deleteFolder(_ id: FolderID) async throws(LibraryError) {
         var next = await loadedIndex()
-        guard let i = next.folders.firstIndex(where: { $0.id == id }) else { throw .unknownFolder(id) }
-        next.folders.remove(at: i)
-        for n in next.notebooks.indices where next.notebooks[n].folderID == id {
-            next.notebooks[n].folderID = nil
-        }
-        try commit(next)
+        guard next.folders.contains(where: { $0.id == id }) else { throw .unknownFolder(id) }
+        let removed = next.folders.subtree(of: id)
+        next.folders.removeAll { removed.contains($0.id) }
+        let notebooks = next.notebooks.filter { $0.folderID.map(removed.contains) ?? false }
+        next.notebooks.removeAll { $0.folderID.map(removed.contains) ?? false }
+        try trash(notebooks, in: &next)
     }
 }

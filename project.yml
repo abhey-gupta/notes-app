@@ -93,6 +93,10 @@ targets:
             UTTypeConformsTo: [com.apple.package, public.composite-content]
             UTTypeTagSpecification:
               public.filename-extension: [nb]
+          # A notebook dragged from a cover onto a sidebar folder (#117); in-app only.
+          - UTTypeIdentifier: com.abhey.notespace.notebook-reference
+            UTTypeDescription: Notespace Notebook Reference
+            UTTypeConformsTo: [public.data]
         CFBundleDocumentTypes:
           - CFBundleTypeName: Notespace Notebook
             CFBundleTypeRole: Editor

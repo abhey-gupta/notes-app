@@ -22,11 +22,12 @@ final class SampleLibrary: LibraryModel {
     let isLoaded = true
 
     init(now: Date = Date(), empty: Bool = false) {
-        let physics = LibraryFolder(name: "Physics II")
-        let semester = LibraryFolder(name: "Semester 3")
+        let university = LibraryFolder(name: "University")
+        let semester = LibraryFolder(name: "Semester 3", parentID: university.id)
+        let physics = LibraryFolder(name: "Physics II", parentID: semester.id)
         let work = LibraryFolder(name: "Work")
         let personal = LibraryFolder(name: "Personal")
-        folders = [physics, semester, work, personal]
+        folders = [university, semester, physics, work, personal]
         guard !empty else {
             notebooks = []
             return
@@ -180,8 +181,8 @@ final class SampleLibrary: LibraryModel {
         notebooks.removeAll { $0.id == id }
     }
 
-    func createFolder(named name: String) {
-        folders.append(LibraryFolder(name: name))
+    func createFolder(named name: String, in parent: FolderID?) {
+        folders.append(LibraryFolder(name: name, parentID: parent))
     }
 
     func renameFolder(_ id: FolderID, to name: String) {
@@ -190,9 +191,8 @@ final class SampleLibrary: LibraryModel {
     }
 
     func deleteFolder(_ id: FolderID) {
-        folders.removeAll { $0.id == id }
-        for index in notebooks.indices where notebooks[index].folderID == id {
-            notebooks[index].folderID = nil
-        }
+        let removed = folders.subtree(of: id)
+        folders.removeAll { removed.contains($0.id) }
+        notebooks.removeAll { $0.folderID.map(removed.contains) ?? false }
     }
 }

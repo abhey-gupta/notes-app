@@ -15,25 +15,25 @@ final class CompactChromeTests: XCTestCase {
     }
 
     @MainActor
-    func testFoldersSheetFiltersLibrary() {
+    func testSidebarSlidesOverAndFiltersLibrary() {
         let app = launch()
-        let folders = app.buttons["foldersButton"]
-        XCTAssertTrue(folders.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["newFolder"].exists, "no folder chips in compact")
-        folders.tap()
+        let button = app.buttons["sidebarButton"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        let sidebar = app.descendants(matching: .any)["librarySidebar"]
+        XCTAssertFalse(sidebar.exists, "no docked sidebar in compact")
+        button.tap()
 
-        let sheet = app.descendants(matching: .any)["foldersSheet"]
-        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
-        app.buttons["folder-Work"].tap()
-        XCTAssertTrue(sheet.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 3))
+        app.descendants(matching: .any)["folder-Work"].tap()
+        XCTAssertTrue(sidebar.waitForNonExistence(timeout: 3), "picking a folder closes it")
         XCTAssertTrue(app.staticTexts["Work"].waitForExistence(timeout: 2), "section shows the folder")
         XCTAssertTrue(app.buttons["cover-Product Specs"].exists)
         XCTAssertFalse(app.buttons["cover-Thermodynamics"].exists, "other folders' notebooks hidden")
 
-        folders.tap()
-        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
-        app.buttons["Close"].tap()
-        XCTAssertTrue(sheet.waitForNonExistence(timeout: 3))
+        button.tap()
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 3))
+        app.buttons["hideSidebar"].tap()
+        XCTAssertTrue(sidebar.waitForNonExistence(timeout: 3))
     }
 
     @MainActor
