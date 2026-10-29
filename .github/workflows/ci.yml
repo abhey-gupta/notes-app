@@ -27,19 +27,34 @@ jobs:
         run: make lint
       - name: Headless packages
         run: make test-packages
-      - name: DIAG InkEnginePencilKit tests with spindump on hang (temporary)
+      - name: DIAG InkEnginePencilKit tests, sampling any test host alive > 60 s (temporary)
         run: |
           SIM=$(scripts/ci-sim.sh CI-iPad)
           xcodegen generate --quiet
+          mkdir -p build/samples
+          ( while true; do
+              for pid in $(pgrep -x xctest); do
+                age=$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')
+                if [ -n "$age" ] && [ "$age" -ge 60 ] && [ ! -f "build/samples/$pid.sample.txt" ]; then
+                  sample "$pid" 3 -mayDie -file "build/samples/$pid.sample.txt" || true
+                  sudo spindump "$pid" 3 -file "build/samples/$pid.spindump.txt" || true
+                fi
+              done
+              sleep 10
+            done ) &
+          WD=$!
+          status=0
           set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace \
             -destination "platform=iOS Simulator,name=$SIM" -only-testing:InkEnginePencilKitTests \
-            -collect-test-diagnostics on-failure -test-timeouts-enabled YES \
-            -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 \
-            -resultBundlePath build/diag.xcresult | xcbeautify
-      - name: Upload diagnostics
+            -collect-test-diagnostics never -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 150 -maximum-test-execution-time-allowance 180 | xcbeautify || status=$?
+          kill $WD || true
+          ls -la build/samples
+          exit $status
+      - name: Upload samples
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diag-xcresult
-          path: build/diag.xcresult
+          name: diag-samples
+          path: build/samples
           if-no-files-found: ignore
