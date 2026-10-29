@@ -57,9 +57,11 @@ test: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' $(TESTFLAGS) $(TIMEOUTS) $(XCB)
 
 # PR gate: everything in the scheme but the XCUI tests (simulator-only package tests: InkEnginePencilKit, InkEngineMetal).
+# UNITFLAGS: CI passes `-parallel-testing-enabled NO` (PencilKit rasters deadlock under parallel tests on the hosted VM).
+UNITFLAGS ?=
 test-unit: gen
 	set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace -destination '$(DEST)' \
-		-skip-testing:NotespaceUITests -collect-test-diagnostics never $(TIMEOUTS) $(XCB)
+		-skip-testing:NotespaceUITests -collect-test-diagnostics never $(TIMEOUTS) $(UNITFLAGS) $(XCB)
 
 # XCUI tests only (slow, gesture-flaky): nightly and on PRs that touch the app (ui.yml).
 test-ui: gen
