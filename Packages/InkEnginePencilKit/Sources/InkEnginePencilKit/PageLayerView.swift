@@ -27,12 +27,11 @@ final class PageLayerView: UIView {
     let photosLayer = CALayer()
     var photoLayers: [ImageID: CALayer] = [:]
     /// Highlight bands in stroke order, the live one (if any) last. Beneath the thumbnail (which has them
-    /// baked in) and the ink image; the canvas above draws ink only.
+    /// baked in) and the ink image; the canvas above draws ink only. Multiplied with the page beneath as
+    /// one group (#196): a compositing filter on a band itself only sees this layer's (empty) content.
     private let highlightsLayer = CALayer()
     private var highlightLayers: [StrokeID: (stroke: Stroke, layer: CAShapeLayer)] = [:]
     private var liveHighlight: CAShapeLayer?
-    /// Highlights multiply with the page beneath (``Highlight/multiplies(on:artwork:)``, #196).
-    private var multipliesHighlights = true
     /// Holds the thumbnail and ink layers.
     private let imageLayer = CALayer()
     /// The scaled-up thumbnail (opaque: paper, template and ink at thumbnail resolution).
@@ -295,7 +294,7 @@ extension PageLayerView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         highlightKey = key
-        multipliesHighlights = Highlight.multiplies(on: key.theme, artwork: artworkLayer != nil)
+        Highlight.blend(highlightsLayer, multiply: Highlight.multiplies(on: key.theme, artwork: artworkLayer != nil))
         var kept: [StrokeID: (stroke: Stroke, layer: CAShapeLayer)] = [:]
         kept.reserveCapacity(strokes.count)
         var ordered: [CALayer] = []
@@ -307,18 +306,21 @@ extension PageLayerView {
             } else {
                 Highlight.tint(layer, color(stroke))
             }
-            Highlight.blend(layer, multiply: multipliesHighlights)
             kept[stroke.id] = (stroke, layer)
             ordered.append(layer)
         }
         if let liveHighlight {
-            Highlight.blend(liveHighlight, multiply: multipliesHighlights)
             ordered.append(liveHighlight)
         }
         highlightLayers = kept
         if highlightsLayer.sublayers ?? [] != ordered {
             highlightsLayer.sublayers = ordered
         }
+    }
+
+    /// The highlights' compositing filter (tests).
+    var highlightsFilter: String? {
+        highlightsLayer.compositingFilter as? String
     }
 
     /// The layers of the highlights on show, in order (tests).
@@ -330,7 +332,6 @@ extension PageLayerView {
     func addLiveHighlight(_ layer: CAShapeLayer) {
         liveHighlight?.removeFromSuperlayer()
         layer.contentsScale = linesLayer.contentsScale
-        Highlight.blend(layer, multiply: multipliesHighlights)
         liveHighlight = layer
         highlightsLayer.addSublayer(layer)
     }

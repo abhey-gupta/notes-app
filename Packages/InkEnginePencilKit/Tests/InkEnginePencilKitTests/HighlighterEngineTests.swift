@@ -117,23 +117,12 @@ struct HighlighterEngineTests {
         for page in [plain, pdf] {
             try h.engine.apply(#require(h.engine.snapshots[page]).page.addEdit([Fixtures.highlight]), to: page)
         }
-        let filter = { (page: PageID) in h.engine.pageViews[page]?.highlightShapeLayers.first?.compositingFilter as? String }
+        let filter = { (page: PageID) in h.engine.pageViews[page]?.highlightsFilter }
         #expect(filter(plain) == Highlight.multiplyFilter)
         #expect(filter(pdf) == Highlight.multiplyFilter)
         h.engine.setTheme(.night)
         #expect(filter(plain) == nil)
         #expect(filter(pdf) == Highlight.multiplyFilter)
-
-        // The live band follows its page.
-        h.engine.setTool(Fixtures.tool)
-        var tracker = InkInputTracker()
-        let touch = TouchRecord(id: TouchID(1), location: CGPoint(x: 100, y: 1800), timestamp: 0)
-        for event in tracker.began(touch, target: { h.engine.inkInputView(h.engine.input, targetAt: $0) }) {
-            h.engine.inkInputView(h.engine.input, didProduce: event)
-        }
-        let live = try #require(h.engine.selection.liveHighlight)
-        #expect(live.page == pdf)
-        #expect(live.layer.compositingFilter as? String == Highlight.multiplyFilter)
     }
 
     @Test func erasingAHighlightTakesItsLayerAway() throws {

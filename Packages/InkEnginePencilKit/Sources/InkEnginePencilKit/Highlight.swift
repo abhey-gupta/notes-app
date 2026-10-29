@@ -126,7 +126,8 @@ enum Highlight {
         tint(layer, color)
     }
 
-    /// Multiplies `layer` with the page beneath, or not (``multiplies(on:artwork:)``).
+    /// Multiplies `layer` with what's beneath it, or not (``multiplies(on:artwork:)``). Only the layer's
+    /// siblings below count: set it on the highlights' container, not on a band in it.
     static func blend(_ layer: CALayer, multiply: Bool) {
         let filter: String? = multiply ? multiplyFilter : nil
         if layer.compositingFilter as? String != filter {
