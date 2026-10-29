@@ -27,9 +27,19 @@ jobs:
         run: make lint
       - name: Headless packages
         run: make test-packages
-      - name: Simulator tests (no UI tests)
+      - name: DIAG InkEnginePencilKit tests with spindump on hang (temporary)
         run: |
           SIM=$(scripts/ci-sim.sh CI-iPad)
-          # RenderTests.rendersPaperTemplateAndInk hangs on the VM (PKDrawing.image of the all-pens page, > 5 min,
-          # serial or parallel) while the same render passes in InkEngineMetal's cross-check; it runs locally.
-          make test-unit SIM="$SIM" UNITFLAGS="-skip-testing:'InkEnginePencilKitTests/RenderTests/rendersPaperTemplateAndInk()'"
+          xcodegen generate --quiet
+          set -o pipefail; xcodebuild test -project Notespace.xcodeproj -scheme Notespace \
+            -destination "platform=iOS Simulator,name=$SIM" -only-testing:InkEnginePencilKitTests \
+            -collect-test-diagnostics on-failure -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 \
+            -resultBundlePath build/diag.xcresult | xcbeautify
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-xcresult
+          path: build/diag.xcresult
+          if-no-files-found: ignore
