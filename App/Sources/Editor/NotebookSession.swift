@@ -62,7 +62,7 @@ final class NotebookSession {
         }
     }
 
-    /// The toolbar's current tool (``setTool(_:allowsFingerDrawing:)``); erasing reads its mode and size.
+    /// The toolbar's current tool (``setTool(_:allowsFingerDrawing:snapsShapes:)``); erasing reads its mode and size.
     private var tool = ActiveTool.ink(.ballpoint, color: .primary, width: 2)
     /// Lift after an eraser stroke (#156: the toolbar may switch back).
     var onErased: (() -> Void)?
@@ -231,12 +231,12 @@ final class NotebookSession {
 
     // MARK: Settings
 
-    func setTool(_ tool: ActiveTool, allowsFingerDrawing: Bool) {
+    func setTool(_ tool: ActiveTool, allowsFingerDrawing: Bool, snapsShapes: Bool) {
         if tool != .lasso {
             clearSelection()
         }
         self.tool = tool
-        engine.setTool(tool.configuration(allowsFingerDrawing: allowsFingerDrawing))
+        engine.setTool(tool.configuration(allowsFingerDrawing: allowsFingerDrawing, snapsShapes: snapsShapes))
         host.allowsFingerDrawing = allowsFingerDrawing
     }
 

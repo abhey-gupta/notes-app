@@ -57,14 +57,8 @@ extension PencilKitInkEngine {
             showFlatPen()
         case let .ended(live):
             selection.flatPenLive = nil
-            if let (stroke, canvas) = commitFlatPen(live) {
-                selection.flatPenSettling.append(stroke)
-                selection.flatPenSettlingPage = live.page
-                selection.flatPenCanvas = canvas
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.flatPenRenderCap) { [weak self, weak canvas] in
-                    guard let self, let canvas, selection.flatPenCanvas === canvas else { return }
-                    settleFlatPen()
-                }
+            if let template = selection.flatPenStroke, !live.samples.isEmpty {
+                commitPen(Self.flatStroke(template, samples: live.samples), to: live.page)
             }
             selection.flatPenStroke = nil
             showFlatPen()
@@ -81,7 +75,20 @@ extension PencilKitInkEngine {
         settleFlatPen()
     }
 
-    private func settleFlatPen() {
+    /// Reports `stroke` (a finished pressure-off stroke or a snapped shape, `+ShapeSnap`), drawn so far in
+    /// `selection.flatPen`, which keeps it until its canvas has drawn it.
+    func commitPen(_ stroke: Stroke, to page: PageID) {
+        guard let canvas = commitFlatPen(stroke, to: page) else { return }
+        selection.flatPenSettling.append(stroke)
+        selection.flatPenSettlingPage = page
+        selection.flatPenCanvas = canvas
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.flatPenRenderCap) { [weak self, weak canvas] in
+            guard let self, let canvas, selection.flatPenCanvas === canvas else { return }
+            settleFlatPen()
+        }
+    }
+
+    func settleFlatPen() {
         selection.flatPenCanvas = nil
         selection.flatPenSettling = []
         selection.flatPenSettlingPage = nil
@@ -89,14 +96,19 @@ extension PencilKitInkEngine {
     }
 
     /// Renders the live stroke (the samples so far, predicted ones too) as the stroke it will commit to,
-    /// plus the committed strokes still settling, into `selection.flatPen` over the visible part of their
-    /// bounds; hides it when there is nothing to show.
-    private func showFlatPen() {
+    /// or a pen's snapped shape (`+ShapeSnap`), plus the committed strokes still settling, into
+    /// `selection.flatPen` over the visible part of their bounds; hides it when there is nothing to show.
+    func showFlatPen() {
         var strokes = selection.flatPenSettling
+        var pageID = selection.flatPenLive?.page ?? selection.flatPenSettlingPage
         if let live = selection.flatPenLive, let template = selection.flatPenStroke {
             strokes.append(Self.flatStroke(template, samples: live.displaySamples))
         }
-        guard let pageID = selection.flatPenLive?.page ?? selection.flatPenSettlingPage, let page = viewport.page(pageID),
+        if let shape = shapeSnap.session, shape.layer == nil {
+            strokes.append(shape.stroke)
+            pageID = shape.page
+        }
+        guard let pageID, let page = viewport.page(pageID),
               !strokes.isEmpty
         else {
             hideFlatPen()
@@ -129,22 +141,20 @@ extension PencilKitInkEngine {
 
     /// Reports the finished stroke and shows it on its page's canvas (if it has one) as pending, like a
     /// stroke PencilKit drew, until the document echoes it back.
-    /// - Returns: The stroke and the canvas now drawing it; `nil` if nothing was committed or no canvas has it.
-    private func commitFlatPen(_ live: LiveStroke) -> (Stroke, PageCanvas)? {
-        guard !live.samples.isEmpty, let template = selection.flatPenStroke else { return nil }
-        let stroke = Self.flatStroke(template, samples: live.samples)
+    /// - Returns: The canvas now drawing it; `nil` if no canvas has it.
+    private func commitFlatPen(_ stroke: Stroke, to page: PageID) -> PageCanvas? {
         let pk = PencilKitConversion.pkStroke(from: stroke, color: uiColor(stroke.color))
-        pending[live.page, default: []].append(PendingStroke(stroke: stroke, pk: pk))
+        pending[page, default: []].append(PendingStroke(stroke: stroke, pk: pk))
         var drawnBy: PageCanvas?
-        if let canvas = canvas(for: live.page), !canvas.isUsingTool {
+        if let canvas = canvas(for: page), !canvas.isUsingTool {
             isSettingDrawing = true
             canvas.view.drawing.strokes.append(pk)
             isSettingDrawing = false
             canvas.ids.append(stroke.id)
             drawnBy = canvas
         }
-        delegate?.engine(self, didCommit: stroke, to: live.page)
-        return drawnBy.map { (stroke, $0) }
+        delegate?.engine(self, didCommit: stroke, to: page)
+        return drawnBy
     }
 
     /// The point every sample of a pressure-off stroke renders with: the pen's PencilKit width for the

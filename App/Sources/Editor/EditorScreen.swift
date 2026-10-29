@@ -26,6 +26,7 @@ struct EditorScreen: View {
     /// The bar's height, measured: the toolbar docks below it, the canvas rests under it.
     @State private var barHeight: CGFloat = 0
     @AppStorage(SettingsView.tapToUndoKey) private var tapToUndo = true
+    @AppStorage(SettingsView.snapsShapesKey) private var snapsShapes = true
     @AppStorage(SettingsView.newPagesKey) private var newPages = NewPages.manual
 
     @Environment(\.dismiss) private var dismiss
@@ -117,7 +118,10 @@ struct EditorScreen: View {
         }
         .onChange(of: tabs.active) { _, id in show(id) }
         .onChange(of: tools.active) { _, tool in
-            session.setTool(tool, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing)
+            session.setTool(tool, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: snapsShapes)
+        }
+        .onChange(of: snapsShapes) { _, on in
+            session.setTool(tools.active, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: on)
         }
         .onChange(of: tapToUndo) { _, on in session.host.allowsTapUndo = on }
         .onChange(of: newPages) { _, mode in session.addsPagesAutomatically = mode == .automatic }
@@ -146,7 +150,7 @@ struct EditorScreen: View {
 
     /// Settings and the current tool, applied to a session when it comes on screen.
     private func configure(_ session: NotebookSession) {
-        session.setTool(tools.active, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing)
+        session.setTool(tools.active, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: snapsShapes)
         session.host.allowsTapUndo = tapToUndo
         session.addsPagesAutomatically = newPages == .automatic
         session.host.margins.top = barHeight + canvasTopMargin

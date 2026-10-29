@@ -7,10 +7,13 @@ import Tools
 extension ActiveTool {
     /// What the engine needs (§6): a pen profile (the highlighter is one) with its color and width, the
     /// eraser's diameter, the lasso, or the laser's mode. Stroke vs partial erase stays with the session.
-    func configuration(allowsFingerDrawing: Bool) -> ToolConfiguration {
+    func configuration(allowsFingerDrawing: Bool, snapsShapes: Bool = true) -> ToolConfiguration {
         switch self {
         case let .ink(kind, color, width, pressure):
-            ToolConfiguration(tool: .pen(kind), color: color, width: width, allowsFingerDrawing: allowsFingerDrawing, pressure: pressure)
+            ToolConfiguration(
+                tool: .pen(kind), color: color, width: width, allowsFingerDrawing: allowsFingerDrawing, pressure: pressure,
+                snapsShapes: snapsShapes
+            )
         case let .eraser(eraser):
             ToolConfiguration(tool: .eraser, width: eraser.width, allowsFingerDrawing: allowsFingerDrawing)
         case .lasso:

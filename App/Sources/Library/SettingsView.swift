@@ -4,6 +4,8 @@ import SwiftUI
 struct SettingsView: View {
     /// `UserDefaults` key of "Tap to undo" (#121): two fingers undo, three redo, on the canvas.
     static let tapToUndoKey = "tapToUndo"
+    /// `UserDefaults` key of "Hold to snap shapes" (#165).
+    static let snapsShapesKey = "snapsShapes"
     /// `UserDefaults` key of "New pages" (#172).
     static let newPagesKey = "newPages"
     /// `UserDefaults` key of "Hide status bar" (#191).
@@ -14,6 +16,7 @@ struct SettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage(tapToUndoKey) private var tapToUndo = true
+    @AppStorage(snapsShapesKey) private var snapsShapes = true
     @AppStorage(newPagesKey) private var newPages = NewPages.manual
     @AppStorage(hidesStatusBarKey) private var hidesStatusBar = false
 
@@ -22,10 +25,12 @@ struct SettingsView: View {
             Section {
                 Toggle("Tap to undo", isOn: $tapToUndo)
                     .accessibilityIdentifier("tapToUndo")
+                Toggle("Hold to snap shapes", isOn: $snapsShapes)
+                    .accessibilityIdentifier("snapsShapes")
             } header: {
                 Text("Gestures")
             } footer: {
-                Text("Tap with two fingers to undo, three fingers to redo.")
+                Text("Tap with two fingers to undo, three to redo. Hold the Pencil still at a stroke's end to make it a perfect shape.")
             }
             Section {
                 Picker("New pages", selection: $newPages) {
