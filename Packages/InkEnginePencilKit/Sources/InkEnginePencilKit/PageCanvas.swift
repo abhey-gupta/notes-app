@@ -33,6 +33,9 @@ final class PageCanvas {
 
     /// A PencilKit stroke is in progress; the drawing can't be replaced until it ends.
     var isUsingTool = false
+    /// The stroke in progress was cut short by a shape snap (#165): whatever PencilKit adds for it is
+    /// dropped, never reported. Cleared when the next stroke begins.
+    var discardsStroke = false
     var needsRebuild = false
     /// Where the canvas sits (`nil`: hidden).
     var placement: CanvasPlacement?

@@ -26,14 +26,25 @@ public struct ToolConfiguration: Hashable, Sendable {
     /// Pressure modulates pen width (the pen popover's toggle, #123). Off: every sample is recorded at
     /// ``InkModel/Sample/neutralForce`` and the live stroke draws at constant width.
     public var pressure: Bool
+    /// "Hold to snap shapes" setting (#165, on by default): a pen stroke held still at its end becomes a
+    /// perfect line, ellipse or polygon.
+    public var snapsShapes: Bool
 
     /// Creates a configuration.
-    public init(tool: Tool, color: InkColor = .primary, width: Float = 2, allowsFingerDrawing: Bool = false, pressure: Bool = true) {
+    public init(
+        tool: Tool,
+        color: InkColor = .primary,
+        width: Float = 2,
+        allowsFingerDrawing: Bool = false,
+        pressure: Bool = true,
+        snapsShapes: Bool = true
+    ) {
         self.tool = tool
         self.color = color
         self.width = width
         self.allowsFingerDrawing = allowsFingerDrawing
         self.pressure = pressure
+        self.snapsShapes = snapsShapes
     }
 
     /// Primary ballpoint, 2 pt.

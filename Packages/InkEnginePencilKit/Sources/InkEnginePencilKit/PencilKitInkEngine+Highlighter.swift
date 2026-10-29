@@ -43,7 +43,7 @@ extension PencilKitInkEngine {
         Highlight.configure(current.layer, stroke: stroke, color: highlightColor(stroke))
     }
 
-    private func cancelLiveHighlight() {
+    func cancelLiveHighlight() {
         selection.liveHighlight?.layer.removeFromSuperlayer()
         selection.liveHighlight = nil
     }
@@ -56,16 +56,24 @@ extension PencilKitInkEngine {
             current.layer.removeFromSuperlayer()
             return
         }
-        let stroke = Highlight.stroke(current.template, samples: live.samples)
-        Highlight.configure(current.layer, stroke: stroke, color: highlightColor(stroke))
-        if let view = pageViews[live.page] {
-            view.adoptLiveHighlight(current.layer, as: stroke)
+        commitHighlight(Highlight.stroke(current.template, samples: live.samples), layer: current.layer, to: live.page)
+    }
+
+    /// Reports `stroke` (a finished highlight or a snapped shape, `+ShapeSnap`) and makes `layer`, its live
+    /// band, the stroke's own.
+    func commitHighlight(_ stroke: Stroke, layer: CAShapeLayer, to page: PageID) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        Highlight.configure(layer, stroke: stroke, color: highlightColor(stroke))
+        CATransaction.commit()
+        if let view = pageViews[page] {
+            view.adoptLiveHighlight(layer, as: stroke)
         } else {
-            current.layer.removeFromSuperlayer()
+            layer.removeFromSuperlayer()
         }
-        pending[live.page, default: []].append(PendingStroke(stroke: stroke, pk: nil))
+        pending[page, default: []].append(PendingStroke(stroke: stroke, pk: nil))
         layoutPages()
-        delegate?.engine(self, didCommit: stroke, to: live.page)
+        delegate?.engine(self, didCommit: stroke, to: page)
     }
 
     /// Brings a page view's highlight layers up to date: the snapshot's highlights plus pending ones, in

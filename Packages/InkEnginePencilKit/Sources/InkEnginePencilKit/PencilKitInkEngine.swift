@@ -78,6 +78,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     let selection = SelectionLayers()
     /// Laser pointer dot and trail, on the selection view (`+Laser`, #159).
     let laser = LaserPointer()
+    /// Hold to snap: the drawing touch and the shape following it (`+ShapeSnap`, #165).
+    let shapeSnap = ShapeSnap()
 
     private(set) var viewport = Viewport.empty
     private(set) var snapshots: [PageID: PageSnapshot] = [:]
@@ -111,6 +113,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         input.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         input.delegate = self
         host.addSubview(input)
+        setUpShapeSnap()
         applyTool()
         installHousekeeping()
     }
@@ -152,6 +155,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         if tool.tool != self.tool.tool {
             input.cancelActiveStroke()
         }
+        cancelShapeSnap(unlessKeptBy: tool)
         self.tool = tool
         applyTool()
     }
@@ -295,7 +299,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     private func absorbCanvasStrokes(_ canvas: PageCanvas) {
         guard let page = canvas.page else { return }
         let strokes = canvas.view.drawing.strokes
-        guard strokes.count > canvas.ids.count else {
+        // A stroke a shape snap cut short (`+ShapeSnap`) is dropped, not reported.
+        guard strokes.count > canvas.ids.count, !dropCutStroke(canvas) else {
             if strokes.count < canvas.ids.count {
                 rebuildCanvas(canvas) // something outside the seam removed strokes; restore the snapshot
             }
@@ -363,6 +368,7 @@ extension PencilKitInkEngine {
 extension PencilKitInkEngine: PKCanvasViewDelegate {
     public func canvasViewDidBeginUsingTool(_ view: PKCanvasView) {
         canvas(of: view)?.isUsingTool = true
+        canvas(of: view)?.discardsStroke = false
         delegate?.engineDidBeginStroke(self)
     }
 
