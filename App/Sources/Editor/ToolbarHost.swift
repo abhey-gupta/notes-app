@@ -15,6 +15,10 @@ import Tools
 /// Tapping the active tool on the expanded toolbar opens its options popover (``ToolPopover``, #27),
 /// anchored to that button with the arrow toward the toolbar on every dock. The pill's tool and color are
 /// display only; the pill has no popover.
+///
+/// Compact chrome (#118: iPhone, iPad windows under 600 pt): the toolbar is a fixed bottom bar (no dragging,
+/// no focus mode); share and photos move into the pages capsule's ⋯ menu. In an iPadOS window the top row
+/// (and a focus-mode pill at the top or left) moves clear of the window controls.
 struct ToolbarHost: View {
     let tools: ToolState
     let state: EditorState
@@ -26,6 +30,7 @@ struct ToolbarHost: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.chromeLayout) private var chrome
     @Namespace private var glass
     @State private var drag: Drag?
     @State private var pinch: CGFloat = 1
@@ -78,42 +83,62 @@ struct ToolbarHost: View {
         state.isFocused
     }
 
+    /// Compact chrome keeps the toolbar at the bottom, whatever the saved dock.
+    private var dock: ToolbarDock {
+        chrome.isCompact ? .bottom : tools.dock
+    }
+
     var body: some View {
         GlassChrome {
             ZStack {
                 if !state.isFocused {
                     HStack(alignment: .top) {
-                        NavCapsule(title: title, paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, onBack: onBack)
-                            .maxWidth(layout.navMaxWidth(at: tools.dock, toolbarLength: restingLength(.horizontal)))
+                        BackCapsule(title: title, onBack: onBack)
                             .chromeID(.nav, in: glass, transition: glassTransition)
                             .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
+                            .padding(.leading, chrome.windowControls.leading)
                             .accessibilitySortPriority(ChromeOrder.nav)
                         Spacer(minLength: Tokens.Spacing.m)
-                        PagesCapsule(tools: tools, state: state, page: page, paper: paper)
-                            .chromeID(.pages, in: glass, transition: glassTransition)
-                            .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
-                            .accessibilitySortPriority(ChromeOrder.pages)
+                        PagesCapsule(
+                            tools: tools, state: state, title: title, page: page,
+                            paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, isCompact: chrome.isCompact
+                        )
+                        .chromeID(.pages, in: glass, transition: glassTransition)
+                        .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
+                        .accessibilitySortPriority(ChromeOrder.pages)
                     }
-                    .padding(.top, Tokens.Spacing.s)
+                    // Slim capsules sit on the toolbar's centre line when it's docked at the top.
+                    .padding(.top, Tokens.Spacing.s + (Tokens.Size.capsuleHeight - Tokens.Size.focusPillHeight) / 2 * typeSize.chromeScale)
                     .frame(maxHeight: .infinity, alignment: .top)
                 }
                 if let drag {
-                    dockHint(drag.target)
+                    let length = restingLength(drag.target.axis)
+                    DockHint(
+                        dock: drag.target, length: length, isFocused: isCompact,
+                        placement: layout.placement(for: drag.target, length: length)
+                    )
                 }
                 toolbar
                     .accessibilitySortPriority(ChromeOrder.tools)
-                pagePill
+                PageIndicator(page: page, isFocused: isCompact, isCompactChrome: chrome.isCompact) { metrics.pill = $0 }
                     .accessibilitySortPriority(ChromeOrder.pagePill)
             }
             // VoiceOver order, whatever the dock: nav, tools, pages, page pill (#45).
             .accessibilityElement(children: .contain)
             .coordinateSpace(.named(Self.space))
             .onGeometryChange(for: CGSize.self, of: \.size) { metrics.container = $0 }
-            .padding(.horizontal, Tokens.Spacing.chromeInset)
+            // Compact: a little tighter, so the bottom bar fits a 375 pt phone.
+            .padding(.horizontal, chrome.isCompact ? Tokens.Spacing.l : Tokens.Spacing.chromeInset)
         }
         .animation(morphAnimation, value: isCompact)
-        .animation(dockAnimation, value: tools.dock)
+        .animation(dockAnimation, value: dock)
         .chromeGlass(for: paper)
+        // Focus mode is regular chrome only: a window narrowed to compact leaves it.
+        .onChange(of: chrome.isCompact, initial: true) { _, compact in
+            if compact, state.isFocused {
+                state.exitFocus()
+            }
+        }
     }
 
     private var ink: Color {
@@ -136,7 +161,7 @@ struct ToolbarHost: View {
     // MARK: Toolbar
 
     private var toolbar: some View {
-        let dock = tools.dock
+        let dock = dock
         let placement = layout.placement(for: dock, length: restingLength(dock.axis))
         return toolbarBody(axis: dock.axis)
             // Reduce Motion: a dock change swaps identity, so it crossfades instead of flying.
@@ -172,6 +197,7 @@ struct ToolbarHost: View {
                     state: state,
                     paper: paper,
                     axis: axis, arrowEdge: optionsArrowEdge,
+                    isCompact: chrome.isCompact,
                     onReselect: toggleOptions,
                     onToolFrame: { toolFrames[$0] = $1 }
                 )
@@ -201,8 +227,9 @@ struct ToolbarHost: View {
         .accessibilityAction(named: compact ? "Show toolbar" : "Compact toolbar") {
             compact ? expand() : collapse()
         }
-        .gesture(FingerPan(onBegan: dragBegan, onChanged: dragChanged, onEnded: dragEnded))
-        .gesture(FingerPinch(onChanged: pinchChanged, onEnded: pinchEnded))
+        // Compact chrome's bar stays put and never collapses: buttons only.
+        .gesture(FingerPan(isEnabled: !chrome.isCompact, onBegan: dragBegan, onChanged: dragChanged, onEnded: dragEnded))
+        .gesture(FingerPinch(isEnabled: !chrome.isCompact, onChanged: pinchChanged, onEnded: pinchEnded))
     }
 
     private var contentTransition: AnyTransition {
@@ -281,6 +308,7 @@ struct ToolbarHost: View {
     }
 
     private func collapse() {
+        guard !chrome.isCompact else { return }
         options = nil
         withAnimation(morphAnimation) {
             state.enterFocus()
@@ -294,16 +322,6 @@ struct ToolbarHost: View {
         withAnimation(morphAnimation) {
             state.exitFocus()
         }
-    }
-
-    private var pagePill: some View {
-        GlassPill.pageIndicator(current: page.current, total: page.total)
-            .onGeometryChange(for: CGSize.self, of: \.size) { metrics.pill = $0 }
-            .opacity(isCompact ? 0.7 : 1)
-            .accessibilityIdentifier("pageIndicator")
-            .accessibilityHint("Current page")
-            .padding(.bottom, Tokens.Spacing.chromeInset)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 }
 
@@ -343,7 +361,7 @@ extension ToolbarHost {
     /// `arrowEdge` is the popover's own edge carrying the arrow: the one facing the dock, so it opens away
     /// from the toolbar (below a top dock, beside a side dock).
     private var optionsArrowEdge: Edge {
-        switch tools.dock {
+        switch dock {
         case .top: .top
         case .bottom: .bottom
         case .left: .leading
@@ -369,27 +387,10 @@ extension ToolbarHost {
             containerWidth: metrics.container.width,
             nav: state.isFocused ? 0 : metrics.nav,
             pages: state.isFocused ? 0 : metrics.pages,
-            pagePill: metrics.pill,
+            pagePill: chrome.isCompact ? .zero : metrics.pill,
             isFocused: state.isFocused,
+            windowControls: chrome.windowControls,
             scale: typeSize.chromeScale
         )
-    }
-
-    /// Drop slot at the drag target: the toolbar's footprint once docked there.
-    private func dockHint(_ dock: ToolbarDock) -> some View {
-        let length = restingLength(dock.axis)
-        let thickness = (isCompact ? Tokens.Size.focusPillHeight : Tokens.Size.capsuleHeight) * typeSize.chromeScale
-        let size = dock.isVertical ? CGSize(width: thickness, height: length) : CGSize(width: length, height: thickness)
-        let placement = layout.placement(for: dock, length: length)
-        return Capsule()
-            .fill(Tokens.Colors.dockHint)
-            .overlay(Capsule().strokeBorder(Tokens.Colors.dockHintBorder, lineWidth: 1))
-            .frame(width: size.width, height: size.height)
-            .padding(placement.insets)
-            .offset(x: placement.shift)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: dock.alignment)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .transition(.opacity)
     }
 }

@@ -10,6 +10,7 @@ import UIKit
 /// underneath, so a drag that starts on a tool never selects it; a tap (under 10 pt of travel) fails the pan
 /// and the button gets it. A second finger (pinch) cancels the drag.
 struct FingerPan: UIGestureRecognizerRepresentable {
+    var isEnabled = true
     var onBegan: () -> Void
     var onChanged: (CGSize) -> Void
     /// Translation, velocity (pt/s), cancelled.
@@ -20,6 +21,10 @@ struct FingerPan: UIGestureRecognizerRepresentable {
         pan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         pan.maximumNumberOfTouches = 1
         return pan
+    }
+
+    func updateUIGestureRecognizer(_ pan: UIPanGestureRecognizer, context _: Context) {
+        pan.isEnabled = isEnabled
     }
 
     func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context _: Context) {
@@ -54,6 +59,7 @@ struct FingerPan: UIGestureRecognizerRepresentable {
 /// UIKit-backed: SwiftUI's `MagnifyGesture` (and a stock `UIPinchGestureRecognizer`) on the capsule is
 /// prevented by SwiftUI's touch-forwarding recognizer for the buttons under the fingers and never fires.
 struct FingerPinch: UIGestureRecognizerRepresentable {
+    var isEnabled = true
     var onChanged: (CGFloat) -> Void = { _ in }
     var onEnded: (CGFloat) -> Void
 
@@ -61,6 +67,10 @@ struct FingerPinch: UIGestureRecognizerRepresentable {
         let pinch = UnpreventablePinch()
         pinch.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         return pinch
+    }
+
+    func updateUIGestureRecognizer(_ pinch: UIPinchGestureRecognizer, context _: Context) {
+        pinch.isEnabled = isEnabled
     }
 
     func handleUIGestureRecognizerAction(_ pinch: UIPinchGestureRecognizer, context _: Context) {
@@ -187,6 +197,9 @@ struct DockLayout {
     var pagePill: CGSize
     /// Focus mode: the toolbar is the compact pill.
     var isFocused: Bool
+    /// Window controls in the top leading corner (#118): the top row starts after them, a left-docked pill
+    /// below them.
+    var windowControls = WindowControls()
     /// Dynamic Type chrome scale (``DynamicTypeSize/chromeScale``): capsules are thicker at large sizes.
     var scale: CGFloat = 1
 
@@ -200,11 +213,9 @@ struct DockLayout {
     /// melts into the nav or pages capsule (#176).
     static let rowGap = Tokens.Spacing.glassBlend + Tokens.Spacing.xs
 
-    /// Widest the nav capsule can be at the top with a `toolbarLength` toolbar docked there beside it, so the
-    /// title truncates instead of pushing the toolbar off the row (#176). Unbounded for other docks.
-    func navMaxWidth(at dock: ToolbarDock, toolbarLength: CGFloat) -> CGFloat {
-        guard dock == .top, containerWidth > 0 else { return .infinity }
-        return containerWidth - pages - toolbarLength - 2 * Self.rowGap - 1
+    /// Top row width taken at the leading end: the nav capsule after the window controls.
+    private var leadingReserve: CGFloat {
+        nav > 0 ? windowControls.leading + nav : windowControls.leading
     }
 
     /// Padding and nudge that put a `length`-long toolbar at `dock`:
@@ -217,11 +228,18 @@ struct DockLayout {
         let spacing = Tokens.Spacing.self
         let capsule = Tokens.Size.capsuleHeight * scale
         let pillInset = isFocused ? (capsule - Tokens.Size.focusPillHeight * scale) / 2 : 0
-        let belowTopRow = spacing.s + capsule + spacing.m
+        // Past the glass blend distance, so a dropped toolbar doesn't melt into the row above.
+        let belowTopRow = spacing.s + capsule + Self.rowGap
         let abovePagePill = spacing.chromeInset + pagePill.height + spacing.m
         switch dock {
         case .top:
-            if let shift = DockGeometry.rowShift(width: length, in: containerWidth, leading: nav, trailing: pages, gap: Self.rowGap) {
+            if let shift = DockGeometry.rowShift(
+                width: length,
+                in: containerWidth,
+                leading: leadingReserve,
+                trailing: pages,
+                gap: Self.rowGap
+            ) {
                 return Placement(insets: EdgeInsets(top: spacing.s + pillInset, leading: 0, bottom: 0, trailing: 0), shift: shift)
             }
             return Placement(insets: EdgeInsets(top: belowTopRow + pillInset, leading: 0, bottom: 0, trailing: 0))
@@ -232,8 +250,9 @@ struct DockLayout {
             }
             return Placement(insets: EdgeInsets(top: 0, leading: 0, bottom: abovePagePill + pillInset, trailing: 0))
         case .left, .right:
+            let focusedTop = spacing.s + (dock == .left ? windowControls.top : 0)
             return Placement(insets: EdgeInsets(
-                top: isFocused ? spacing.s : belowTopRow,
+                top: isFocused ? focusedTop : belowTopRow,
                 leading: dock == .left ? pillInset : 0,
                 bottom: abovePagePill,
                 trailing: dock == .right ? pillInset : 0
@@ -247,5 +266,31 @@ extension View {
     func chromeID(_ id: ToolbarHost.ChromeID, in namespace: Namespace.ID, transition: GlassEffectTransition) -> some View {
         glassEffectID(id, in: namespace)
             .glassEffectTransition(transition)
+    }
+}
+
+/// Drop slot at a drag's target dock: the toolbar's footprint once docked there.
+struct DockHint: View {
+    let dock: ToolbarDock
+    let length: CGFloat
+    /// Focus mode: the slot is the compact pill's.
+    let isFocused: Bool
+    let placement: DockLayout.Placement
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let thickness = (isFocused ? Tokens.Size.focusPillHeight : Tokens.Size.capsuleHeight) * typeSize.chromeScale
+        let size = dock.isVertical ? CGSize(width: thickness, height: length) : CGSize(width: length, height: thickness)
+        Capsule()
+            .fill(Tokens.Colors.dockHint)
+            .overlay(Capsule().strokeBorder(Tokens.Colors.dockHintBorder, lineWidth: 1))
+            .frame(width: size.width, height: size.height)
+            .padding(placement.insets)
+            .offset(x: placement.shift)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: dock.alignment)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .transition(.opacity)
     }
 }

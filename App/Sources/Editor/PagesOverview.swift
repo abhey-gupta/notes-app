@@ -26,6 +26,7 @@ struct PagesOverview: View {
     let paper: DesignSystem.PaperTheme
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.chromeLayout) private var chrome
     @State private var isSelecting = false
     @State private var selected: Set<PageID> = []
     @State private var confirmsDelete = false
@@ -126,7 +127,9 @@ struct PagesOverview: View {
                 onDone: { flight.close(to: nil, current: currentIndex, reduceMotion: reduceMotion) }
             )
         }
-        .padding(.horizontal, Tokens.Spacing.libraryMargin)
+        // Clear of an iPadOS window's controls (#118).
+        .padding(.leading, chrome.margin + chrome.windowControls.leading)
+        .padding(.trailing, chrome.margin)
         .padding(.top, Tokens.Spacing.xxl)
         .padding(.bottom, Tokens.Spacing.xl)
     }
@@ -141,7 +144,7 @@ struct PagesOverview: View {
                         cell(entry, at: index)
                     }
                 }
-                .padding(.horizontal, Tokens.Spacing.libraryMargin)
+                .padding(.horizontal, chrome.margin)
                 .padding(.top, Tokens.Spacing.s)
                 .padding(.bottom, Tokens.Size.templateCapsuleHeight + 2 * Tokens.Spacing.xxl)
             }

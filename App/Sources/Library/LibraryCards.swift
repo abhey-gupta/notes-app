@@ -125,26 +125,29 @@ struct CoverTile: View {
     let notebook: NotebookSummary
     let folder: String?
     let zoom: Namespace.ID
+    /// Narrower in compact windows (#118); the cover scales with it.
+    var width = Tokens.Size.cover.width
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
-                NotebookCover(title: notebook.title, caption: folder, color: notebook.cover.style)
+                NotebookCover(title: notebook.title, caption: folder, color: notebook.cover.style, width: width)
                     .matchedTransitionSource(id: EditorRoute.TransitionID(id: notebook.id, source: .cover), in: zoom) {
                         $0.clipShape(.rect(cornerRadius: Tokens.Radius.coverEdge))
                     }
                 Text(notebook.title)
                     .scaledFont(size: 13.5, weight: .semibold)
                     .foregroundStyle(Tokens.Colors.textPrimary)
-                    .lineLimit(2)
+                    // Narrow compact covers: one line, else long words break mid-word.
+                    .lineLimit(width < Tokens.Size.cover.width ? 1 : 2)
                     .padding(.top, 12)
                 Text(EditedLabel.pages(notebook.pageCount))
                     .font(.meta)
                     .foregroundStyle(Tokens.Colors.textSecondary)
                     .padding(.top, 3)
             }
-            .frame(width: Tokens.Size.cover.width, alignment: .leading)
+            .frame(width: width, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(PressableStyle())
