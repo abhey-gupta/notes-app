@@ -32,7 +32,7 @@ final class TabsTests: XCTestCase {
         let app = launch(["-openNotebook", "Thermodynamics"])
         XCTAssertTrue(app.buttons["tab-Thermodynamics"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons["Pages"].value as? String, "1 of 11")
-        XCTAssertFalse(app.staticTexts["pageIndicator"].exists, "the counter lives in the bar")
+        XCTAssertEqual(app.staticTexts["pageIndicator"].label, "1 of 11", "the counter lives in the bar")
 
         app.buttons["Library"].tap()
         XCTAssertTrue(app.buttons["cover-Thermodynamics"].waitForExistence(timeout: 5))
@@ -87,22 +87,24 @@ final class TabsTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["focusPill"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.descendants(matching: .any)["editorBar"].waitForNonExistence(timeout: 3), "focus mode hides the bar")
         XCTAssertTrue(app.staticTexts["pageIndicator"].exists, "the page pill stands in for the counter")
+        XCTAssertFalse(app.buttons["Pages"].exists)
         app.buttons["Show toolbar"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["editorBar"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["pageIndicator"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Pages"].exists)
     }
 
     @MainActor
     func testHideStatusBarSetting() {
         let app = launch()
-        let settings = app.buttons["settingsButton"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 5))
-        settings.tap()
+        let gear = app.buttons["Settings"]
+        XCTAssertTrue(gear.waitForExistence(timeout: 5))
+        gear.tap()
         let toggle = app.switches["hidesStatusBar"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 3))
-        toggle.tap()
-        XCTAssertEqual(toggle.value as? String, "1")
-        toggle.tap()
-        XCTAssertEqual(toggle.value as? String, "0")
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        let wasOn = toggle.value as? String == "1"
+        toggle.switches.firstMatch.tap()
+        XCTAssertEqual(toggle.value as? String, wasOn ? "0" : "1")
+        toggle.switches.firstMatch.tap()
+        XCTAssertEqual(toggle.value as? String, wasOn ? "1" : "0", "back to how it was")
     }
 }

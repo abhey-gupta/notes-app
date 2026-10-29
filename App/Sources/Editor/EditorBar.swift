@@ -77,30 +77,26 @@ struct EditorBar: View {
         }
     }
 
-    /// Pages grid with the page counter: opens the overview.
+    /// Pages grid and the "1 of 11" counter: both open the overview. The counter is the same element the
+    /// focus pill is (`pageIndicator`), so VoiceOver and the UI tests find the current page in one place.
     private var pages: some View {
         let scale = typeSize.chromeScale
-        return Button {
-            state.pages.present()
-        } label: {
-            HStack(spacing: Tokens.Spacing.s) {
-                Image(systemName: Symbol.pages.name)
-                    .font(.system(size: Tokens.Size.toolIcon * scale))
-                    .foregroundStyle(Tokens.Colors.icon)
-                Text("\(page.current) / \(page.total)")
-                    .font(.pill)
-                    .foregroundStyle(Tokens.Colors.pillText)
-                    .contentTransition(.numericText())
-            }
-            .padding(.horizontal, Tokens.Spacing.m)
-            .frame(height: Tokens.Size.compactToolButton.height * scale)
-            .contentShape(.capsule)
+        return HStack(spacing: 0) {
+            ToolButton(.pages, "Pages", size: Tokens.Size.compactToolButton) { state.pages.present() }
+                .accessibilityValue("\(page.current) of \(page.total)")
+                .accessibilityHint("Shows all pages")
+            Text("\(page.current) of \(page.total)")
+                .font(.pill)
+                .foregroundStyle(Tokens.Colors.textSecondary)
+                .contentTransition(.numericText())
+                .padding(.trailing, Tokens.Spacing.m)
+                .padding(.leading, Tokens.Spacing.hairline)
+                .frame(height: Tokens.Size.compactToolButton.height * scale)
+                .contentShape(.rect)
+                .onTapGesture { state.pages.present() }
+                .accessibilityIdentifier("pageIndicator")
+                .accessibilityHint("Current page")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Pages")
-        .accessibilityValue("\(page.current) of \(page.total)")
-        .accessibilityHint("Shows all pages")
-        .accessibilityIdentifier("pages")
     }
 }
 
