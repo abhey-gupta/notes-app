@@ -32,4 +32,4 @@ jobs:
           SIM=$(scripts/ci-sim.sh CI-iPad)
           # RenderTests.rendersPaperTemplateAndInk hangs on the VM (PKDrawing.image of the all-pens page, > 5 min,
           # serial or parallel) while the same render passes in InkEngineMetal's cross-check; it runs locally.
-          make test-unit SIM="$SIM" UNITFLAGS="-skip-testing:InkEnginePencilKitTests/RenderTests/rendersPaperTemplateAndInk()"
+          make test-unit SIM="$SIM" UNITFLAGS="-skip-testing:'InkEnginePencilKitTests/RenderTests/rendersPaperTemplateAndInk()'"
