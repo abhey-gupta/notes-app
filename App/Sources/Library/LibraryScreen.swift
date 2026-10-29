@@ -30,7 +30,8 @@ struct LibraryScreen: View {
     @State private var screenWidth: CGFloat = 0
     /// Narrow windows: the sidebar is over the covers.
     @State private var showsOverlay = false
-    @AppStorage(Self.sidebarHiddenKey) private var sidebarHidden = false
+    /// Persisted, but @State: an @AppStorage write drops the `withAnimation` transaction, so the sidebar popped.
+    @State private var sidebarHidden = UserDefaults.standard.bool(forKey: Self.sidebarHiddenKey)
     /// Open folders, as space-separated UUIDs.
     @AppStorage(Self.openFoldersKey) private var openFolders = ""
 
@@ -266,10 +267,10 @@ extension LibraryScreen {
         }
     }
 
-    @ViewBuilder
+    /// The container stays; scrim and sidebar come and go inside it, so each gets its own transition.
     private var overlaySidebar: some View {
-        if !docks, showsOverlay {
-            ZStack(alignment: .leading) {
+        ZStack(alignment: .leading) {
+            if !docks, showsOverlay {
                 Rectangle()
                     .fill(.black.opacity(0.18))
                     .ignoresSafeArea()
@@ -277,6 +278,8 @@ extension LibraryScreen {
                     .accessibilityLabel("Close Sidebar")
                     .accessibilityAddTraits(.isButton)
                     .transition(.opacity)
+            }
+            if !docks, showsOverlay {
                 sidebar(leadingInset: chrome.windowControls.leading)
                     .frame(width: min(Tokens.Size.sidebarWidth, screenWidth - 56))
                     .background {
@@ -288,12 +291,15 @@ extension LibraryScreen {
                     .transition(.move(edge: .leading))
             }
         }
+        // Empty, it takes no touches; mid-transition, the sidebar stays on the leading edge.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
     private func showSidebar() {
         withAnimation(Tokens.Motion.dock) {
             if docks {
                 sidebarHidden = false
+                UserDefaults.standard.set(false, forKey: Self.sidebarHiddenKey)
             } else {
                 showsOverlay = true
             }
@@ -304,6 +310,7 @@ extension LibraryScreen {
         withAnimation(Tokens.Motion.dock) {
             if docks {
                 sidebarHidden = true
+                UserDefaults.standard.set(true, forKey: Self.sidebarHiddenKey)
             } else {
                 showsOverlay = false
             }

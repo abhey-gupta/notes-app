@@ -57,7 +57,6 @@ struct LibraryHeader: View {
                 .font(.libraryTitle)
                 .tracking(-0.5)
                 .foregroundStyle(Tokens.Colors.textPrimary)
-                .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("libraryTitle")
                 // Above the title, outside its layout: the title doesn't move between Library and a folder.
