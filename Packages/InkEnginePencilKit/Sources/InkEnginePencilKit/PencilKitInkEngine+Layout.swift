@@ -109,10 +109,7 @@ extension PencilKitInkEngine {
             view.removeFromSuperview()
             pageViews[id] = nil
         }
-        renderQueue.dropWaiting { !visible.contains($0) }
-        let center = CGPoint(x: visibleRect.midX, y: visibleRect.midY)
-        let frames = Dictionary(viewport.pages.map { ($0.id, $0.frame) }, uniquingKeysWith: { _, last in last })
-        renderQueue.priority = { page in frames[page].map { Self.distance(center, $0) } ?? .greatestFiniteMagnitude }
+        prepareRenderQueues(visible: visible)
         let colors = PageLayerView.Colors(paper: palette.paper(theme).cgColor, line: palette.templateLine(theme).cgColor)
         let screenScale = host.window?.screen.scale ?? host.traitCollection.displayScale
         // Template marks re-rasterize at the zoom; not mid-pinch (the last settled zoom holds until then).
@@ -131,6 +128,7 @@ extension PencilKitInkEngine {
                 artwork: pageArtwork?(page.id),
                 markScale: markScale, colors: colors
             )
+            layoutArtwork(view, page: page, screenScale: screenScale)
             let canvas = canvas(for: page.id)
             guard var snapshot else { continue }
             refreshPhotos(view, snapshot: snapshot)
@@ -158,6 +156,25 @@ extension PencilKitInkEngine {
             }
             refreshInk(view, snapshot: snapshot, pixelScale: pixelScale(for: page.frame.size, screenScale: screenScale))
         }
+        prefetchArtwork(visible: visible, screenScale: screenScale)
+    }
+
+    /// Drops the queued renders of pages that left, and orders the rest nearest the viewport center first.
+    private func prepareRenderQueues(visible: Set<PageID>) {
+        renderQueue.dropWaiting { !visible.contains($0) }
+        artworkDetailQueue.dropWaiting { !visible.contains($0) }
+        // Artwork bitmaps are also prefetched for resident pages; only pages gone from both are dropped.
+        artworkQueue.dropWaiting { id in
+            guard !visible.contains(id), snapshots[id] == nil else { return false }
+            artworkRequests[id] = nil
+            return true
+        }
+        let center = CGPoint(x: visibleRect.midX, y: visibleRect.midY)
+        let frames = Dictionary(viewport.pages.map { ($0.id, $0.frame) }, uniquingKeysWith: { _, last in last })
+        let priority: (PageID) -> Double = { page in frames[page].map { Self.distance(center, $0) } ?? .greatestFiniteMagnitude }
+        renderQueue.priority = priority
+        artworkQueue.priority = priority
+        artworkDetailQueue.priority = priority
     }
 
     /// Screen scale × zoom rounded up to a power of two (0.5...4), capped by ``maximumRasterDimension``.

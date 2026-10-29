@@ -14,6 +14,7 @@ extension PencilKitInkEngine {
     /// Rasters and decoded photos go; page views re-request what they show.
     @objc func didReceiveMemoryWarning() {
         rasters.removeAll()
+        artworkRasters.removeAll()
         photos.removeAll()
     }
 

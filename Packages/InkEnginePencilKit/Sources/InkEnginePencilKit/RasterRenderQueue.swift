@@ -7,8 +7,9 @@ import Perf
 /// One waiting job per page (a newer request for the same page replaces the older one, so an edited page
 /// never renders twice); ``maxConcurrent`` run at once on detached tasks; when one finishes the waiting
 /// job with the lowest ``priority`` (distance from the viewport center) starts. Each render is a
-/// `page.image.render` signpost. Results come back on the main actor in `completion`, superseded or not
-/// (the caller caches them and checks whether they are still wanted).
+/// `signpost` interval. Results come back on the main actor in `completion`, superseded or not (the
+/// caller caches them and checks whether they are still wanted). The engine runs one queue for ink
+/// rasters and others for imported artwork (`+Artwork`, #193).
 @MainActor
 final class RasterRenderQueue {
     /// Renders in flight at once. 2 keeps a scroll fed without starving the main thread; tests set 1.
@@ -17,14 +18,17 @@ final class RasterRenderQueue {
     var priority: (PageID) -> Double = { _ in 0 }
 
     private struct Job {
-        var key: PageLayerView.InkKey
-        var render: RenderJob
-        var pixelScale: CGFloat
+        var render: @Sendable () -> CGImage?
         var completion: @MainActor (CGImage?) -> Void
     }
 
+    private let signpost: Signpost
     private var waiting: [PageID: Job] = [:]
     private var running: Set<PageID> = []
+
+    init(signpost: Signpost = .pageImageRender) {
+        self.signpost = signpost
+    }
 
     /// Jobs waiting or running.
     var depth: Int {
@@ -35,12 +39,12 @@ final class RasterRenderQueue {
         waiting.count
     }
 
-    /// Queues a render of `job` for `page` (replacing one waiting for the same page).
+    /// Queues `render` for `page` (replacing one waiting for the same page).
     func enqueue(
-        _ page: PageID, key: PageLayerView.InkKey, job: RenderJob, pixelScale: CGFloat,
+        _ page: PageID, render: @escaping @Sendable () -> CGImage?,
         completion: @escaping @MainActor (CGImage?) -> Void
     ) {
-        waiting[page] = Job(key: key, render: job, pixelScale: pixelScale, completion: completion)
+        waiting[page] = Job(render: render, completion: completion)
         pump()
     }
 
@@ -61,10 +65,10 @@ final class RasterRenderQueue {
             let (page, job) = next
             waiting[page] = nil
             running.insert(page)
-            let (render, scale) = (job.render, job.pixelScale)
+            let (render, signpost) = (job.render, signpost)
             Task { [weak self] in
                 let image = await Task.detached(priority: .userInitiated) {
-                    Signpost.pageImageRender.measure { render.ink(scale: scale) }
+                    signpost.measure { render() }
                 }.value
                 guard let self else { return }
                 running.remove(page)

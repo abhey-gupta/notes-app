@@ -15,10 +15,6 @@ struct RasterRenderQueueTests {
         return (id, RenderJob(page: snapshot, palette: FixturePalette(), theme: .white))
     }
 
-    private func key(_ page: UInt8) -> PageLayerView.InkKey {
-        PageLayerView.InkKey(rev: 1, theme: .white, pixelScale: 1, strokeCount: 1, pendingCount: 0)
-    }
-
     /// With one render at a time, the queued pages start nearest the viewport first, and the depth gauge
     /// counts what waits and runs.
     @Test func nearestTheViewportRendersFirst() async throws {
@@ -29,10 +25,10 @@ struct RasterRenderQueueTests {
         var done: [PageID] = []
         for n: UInt8 in [1, 2, 3] {
             let (id, render) = job(n)
-            queue.enqueue(id, key: key(n), job: render, pixelScale: 1) { image in
+            queue.enqueue(id, render: { render.ink(scale: 1) }, completion: { image in
                 #expect(image != nil)
                 done.append(id)
-            }
+            })
         }
         #expect(queue.depth == 3 && queue.waitingCount == 2, "one running, two waiting")
         for _ in 0 ..< 500 where done.count < 3 {
@@ -48,12 +44,12 @@ struct RasterRenderQueueTests {
         queue.maxConcurrent = 1
         var completed: [CGFloat] = []
         let (first, firstJob) = job(1)
-        queue.enqueue(first, key: key(1), job: firstJob, pixelScale: 1) { _ in completed.append(1) }
+        queue.enqueue(first, render: { firstJob.ink(scale: 1) }, completion: { _ in completed.append(1) })
         let (second, secondJob) = job(2)
-        queue.enqueue(second, key: key(2), job: secondJob, pixelScale: 1) { _ in completed.append(2) }
-        queue.enqueue(second, key: key(2), job: secondJob, pixelScale: 2) { _ in completed.append(2.5) }
+        queue.enqueue(second, render: { secondJob.ink(scale: 1) }, completion: { _ in completed.append(2) })
+        queue.enqueue(second, render: { secondJob.ink(scale: 2) }, completion: { _ in completed.append(2.5) })
         let (third, thirdJob) = job(3)
-        queue.enqueue(third, key: key(3), job: thirdJob, pixelScale: 1) { _ in completed.append(3) }
+        queue.enqueue(third, render: { thirdJob.ink(scale: 1) }, completion: { _ in completed.append(3) })
         queue.cancel(third)
         #expect(queue.waitingCount == 1)
         for _ in 0 ..< 500 where queue.depth > 0 {
