@@ -14,7 +14,7 @@ import Observation
 protocol LibraryModel: AnyObject, Observable {
     /// All notebooks, most recently modified first.
     var notebooks: [NotebookSummary] { get }
-    /// One level of folders, display order.
+    /// Folders, any depth (`parentID`), display order.
     var folders: [LibraryFolder] { get }
     /// `false` only while the index is still being read or rebuilt off the main thread; the empty state
     /// waits for it so a slow load never flashes "No notebooks yet".
@@ -42,9 +42,10 @@ protocol LibraryModel: AnyObject, Observable {
     func duplicate(_ id: NotebookID)
     /// Moves to the trash (purged after 30 days).
     func delete(_ id: NotebookID)
-    func createFolder(named name: String)
+    /// Adds a folder in `parent` (`nil` = top level).
+    func createFolder(named name: String, in parent: FolderID?)
     func renameFolder(_ id: FolderID, to name: String)
-    /// Removes the folder; its notebooks stay, unfiled.
+    /// Removes the folder, its subfolders and every notebook in them (to the trash, #117).
     func deleteFolder(_ id: FolderID)
 }
 
@@ -65,9 +66,20 @@ extension LibraryModel {
         id.flatMap { id in folders.first { $0.id == id } }
     }
 
-    /// Title search: case/diacritic-insensitive, in memory (§8).
+    /// Title search: case/diacritic-insensitive, in memory (§8). A folder shows the notebooks directly in it;
+    /// a search there also finds those in its subfolders.
     func notebooks(in folder: FolderID?, matching query: String) -> [NotebookSummary] {
-        notebooks.filtered(folder: folder, matching: query)
+        guard let folder, !query.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return notebooks.filtered(folder: folder, matching: query)
+        }
+        let subtree = folders.subtree(of: folder)
+        return notebooks.filtered(matching: query).filter { $0.folderID.map(subtree.contains) ?? false }
+    }
+
+    /// Notebooks in `folder` and its subfolders.
+    func notebookCount(inSubtree folder: FolderID) -> Int {
+        let subtree = folders.subtree(of: folder)
+        return notebooks.count { $0.folderID.map(subtree.contains) ?? false }
     }
 }
 

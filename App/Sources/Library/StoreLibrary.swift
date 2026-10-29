@@ -156,8 +156,8 @@ final class StoreLibrary: LibraryModel {
 
     // MARK: Folders
 
-    func createFolder(named name: String) {
-        perform("create folder") { try await $0.createFolder(named: name) }
+    func createFolder(named name: String, in parent: FolderID?) {
+        perform("create folder") { try await $0.createFolder(named: name, in: parent) }
     }
 
     func renameFolder(_ id: FolderID, to name: String) {
@@ -168,7 +168,9 @@ final class StoreLibrary: LibraryModel {
     }
 
     func deleteFolder(_ id: FolderID) {
-        folders.removeAll { $0.id == id }
+        let removed = folders.subtree(of: id)
+        folders.removeAll { removed.contains($0.id) }
+        notebooks.removeAll { $0.folderID.map(removed.contains) ?? false }
         perform("delete folder") { try await $0.deleteFolder(id) }
     }
 
@@ -230,8 +232,10 @@ final class StoreLibrary: LibraryModel {
         private func seed(count: Int) async {
             let sample = SampleLibrary()
             var folders: [String: FolderID] = [:]
+            // Parents come first in the sample.
             for folder in sample.folders {
-                folders[folder.name] = try? await store.createFolder(named: folder.name).id
+                let parent = sample.folder(id: folder.parentID).flatMap { folders[$0.name] }
+                folders[folder.name] = try? await store.createFolder(named: folder.name, in: parent).id
             }
             for i in 0 ..< count {
                 let fixture = sample.notebooks[i % sample.notebooks.count]

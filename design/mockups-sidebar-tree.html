@@ -1,0 +1,190 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Sidebar tree mocks</title>
+<style>
+:root{--bg:#F3F1EC;--side:#ECE9E3;--ink:#1E2129;--fg2:#4A4D55;--fg3:#7d8087;--fill:rgba(30,33,41,.07);--hair:rgba(0,0,0,.08);
+ --glass:rgba(255,255,255,.62);--ui:-apple-system,"SF Pro Text",system-ui,sans-serif;--serif:"New York","Iowan Old Style",Georgia,serif}
+body{margin:0;font-family:var(--ui)}
+.wrap{display:flex;flex-direction:column;gap:38px}
+.cap{margin:0 0 10px 2px;max-width:780px}
+.cap b{font-size:15px;color:var(--foreground)}
+.cap span{display:block;font-size:13px;color:var(--muted-foreground);margin-top:3px;line-height:1.45}
+.fit{width:728px;height:512px;position:relative}
+.fit.p{width:512px;height:728px}
+.dev{position:absolute;left:0;top:0;transform:scale(.6);transform-origin:0 0;width:1214px;height:854px;padding:10px;box-sizing:border-box;background:#0E0E10;border-radius:40px;box-shadow:0 24px 50px -20px rgba(0,0,0,.4)}
+.p .dev{width:854px;height:1214px}
+.scr{position:relative;width:100%;height:100%;border-radius:30px;overflow:hidden;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;display:flex}
+.status{position:absolute;top:0;left:0;right:0;height:26px;display:flex;justify-content:space-between;padding:0 28px;font:600 13px var(--ui);align-items:center;z-index:9;color:var(--fg2)}
+.ico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* sidebar */
+.side{width:300px;flex:none;box-sizing:border-box;padding:34px 12px 20px;display:flex;flex-direction:column;background:var(--side);border-right:.5px solid var(--hair);position:relative;z-index:3}
+.side.glass{background:var(--glass);backdrop-filter:blur(30px) saturate(170%);border:.5px solid rgba(0,0,0,.06);border-radius:26px;margin:10px 0 10px 10px;height:calc(100% - 20px);
+ box-shadow:0 14px 40px -12px rgba(20,20,30,.18)}
+.stop{display:flex;align-items:center;justify-content:space-between;height:44px;padding:0 4px 0 6px;margin-bottom:12px}
+.ib{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#3a3d45}
+.row{height:40px;border-radius:10px;display:flex;align-items:center;gap:8px;padding:0 10px 0 calc(6px + var(--d,0) * 18px);font:400 15.5px var(--ui);color:var(--ink);position:relative}
+.row .chev{width:14px;height:14px;color:var(--fg3);stroke-width:2.2;flex:none;transition:transform .2s}
+.row .chev.closed{transform:rotate(-90deg)}
+.row .sp{width:14px;flex:none}
+.row .fi{color:var(--fg2)}
+.row .n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .c{font:500 13px var(--ui);color:var(--fg3);font-variant-numeric:tabular-nums}
+.row.sel{background:var(--fill);font-weight:600}
+.row.sel .fi{color:var(--ink)}
+.row.drop{background:rgba(44,79,214,.12);box-shadow:inset 0 0 0 1.5px rgba(44,79,214,.55)}
+.row.drop .fi,.row.drop .n{color:#2C4FD6}
+.row.nb{font-size:14.5px;color:var(--fg2)}
+.bk{width:13px;height:17px;border-radius:2.5px;flex:none;margin:0 3px 0 3px;box-shadow:inset 2px 0 0 rgba(0,0,0,.14)}
+.lbl{font:600 12px var(--ui);letter-spacing:.07em;color:var(--fg3);padding:18px 10px 6px;text-transform:uppercase}
+.new{color:var(--fg3);font-weight:500;font-size:14.5px}
+.grow{flex:1}
+/* content */
+.main{flex:1;position:relative;padding:34px 36px 0 40px;overflow:hidden}
+.hdr{display:flex;align-items:center;gap:12px;height:56px}
+.crumb{font:500 13px var(--ui);color:var(--fg3);margin:-4px 0 0;height:18px}
+.title{font:500 40px/1 var(--serif);letter-spacing:-.5px}
+.search{margin-left:auto;width:220px;height:44px;border-radius:22px;background:rgba(255,255,255,.7);border:.5px solid var(--hair);display:flex;align-items:center;gap:8px;padding:0 14px;color:#9a9ca1;font:15px var(--ui)}
+.gear{width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,.7);border:.5px solid var(--hair);display:grid;place-items:center;color:#3a3d45}
+.newb{height:44px;border-radius:22px;background:#1E2129;color:#fff;display:flex;align-items:center;gap:6px;padding:0 18px;font:600 16px var(--ui)}
+.sec{font:600 13px var(--ui);letter-spacing:.07em;color:var(--fg3);text-transform:uppercase;margin:26px 0 14px;display:flex;justify-content:space-between}
+.sec i{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500;color:var(--fg2)}
+.rec{display:flex;gap:26px}
+.rc{width:250px;flex:none}
+.rc .pg{height:140px;border-radius:8px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.06),0 8px 22px -12px rgba(40,30,10,.25);
+ background-image:radial-gradient(circle,rgba(30,33,41,.14) 1px,transparent 1.3px);background-size:16px 16px}
+.rc b{display:block;font:600 15px var(--ui);margin-top:10px}
+.rc small{font:13px var(--ui);color:var(--fg3)}
+.grid{display:flex;flex-wrap:wrap;gap:28px 34px}
+.cv{width:140px}
+.cv .k{height:182px;border-radius:5px 9px 9px 5px;position:relative;box-shadow:inset 7px 0 0 rgba(0,0,0,.08),0 10px 20px -12px rgba(0,0,0,.35)}
+.cv .k::after{content:attr(data-t);position:absolute;left:22px;right:12px;top:26px;background:rgba(255,255,255,.88);font:14px/1.15 var(--serif);padding:8px 9px;border-radius:2px;color:#2a2c33}
+.cv b{display:block;font:600 15px var(--ui);margin-top:11px}
+.cv small{font:13px var(--ui);color:var(--fg3)}
+.cv.ghost{opacity:.35}
+.drag{position:absolute;width:118px;transform:rotate(-4deg);z-index:20;filter:drop-shadow(0 18px 24px rgba(0,0,0,.28))}
+.drag .k{height:154px}
+.drag .k::after{top:20px;font-size:12px}
+.badge{position:absolute;right:-8px;top:-8px;background:#2C4FD6;color:#fff;font:600 12px var(--ui);width:24px;height:24px;border-radius:12px;display:grid;place-items:center}
+.scrim{position:absolute;inset:0;background:rgba(20,20,24,.18);z-index:2}
+.side.ov{position:absolute;left:0;top:0;bottom:0;z-index:4;box-shadow:12px 0 40px -14px rgba(0,0,0,.25)}
+.menu{position:absolute;width:240px;border-radius:16px;padding:6px;z-index:10;font:400 15px var(--ui);background:rgba(255,255,255,.94);backdrop-filter:blur(20px);box-shadow:0 18px 40px -10px rgba(0,0,0,.25);border:.5px solid var(--hair)}
+.menu div{padding:9px 12px;border-radius:9px;display:flex;align-items:center;justify-content:space-between;color:var(--ink)}
+.menu div.red{color:#D2402F}
+.menu hr{border:0;border-top:.5px solid rgba(0,0,0,.1);margin:5px 4px}
+.alert{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:300px;border-radius:26px;background:rgba(250,250,250,.96);z-index:12;text-align:center;padding:22px 20px 16px;box-shadow:0 30px 60px -20px rgba(0,0,0,.4)}
+.alert b{font:600 17px var(--ui);display:block}
+.alert p{font:14px/1.4 var(--ui);color:var(--fg2);margin:8px 0 18px}
+.alert .bt{display:flex;gap:10px}
+.alert .bt div{flex:1;height:44px;border-radius:22px;display:grid;place-items:center;font:600 16px var(--ui);background:rgba(0,0,0,.06)}
+.alert .bt div.red{background:#D2402F;color:#fff}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.22);z-index:11}
+.note{position:absolute;font:600 13px var(--ui);color:#2C4FD6;z-index:30}
+</style></head><body>
+<div class="wrap" id="w"></div>
+<script>
+const I={
+ side:'<svg class="ico" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M9.5 5v14"/></svg>',
+ fplus:'<svg class="ico" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 012-2h4l2 2.2h7a2 2 0 012 2V17a2 2 0 01-2 2h-13a2 2 0 01-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></svg>',
+ folder:'<svg class="ico fi" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 012-2h4l2 2.2h7a2 2 0 012 2V17a2 2 0 01-2 2h-13a2 2 0 01-2-2z"/></svg>',
+ folderOpen:'<svg class="ico fi" viewBox="0 0 24 24"><path d="M3.5 17V7.5a2 2 0 012-2h4l2 2.2h6a2 2 0 012 2v1"/><path d="M3.5 17l2.3-5.6a1.6 1.6 0 011.5-1h12.3a1 1 0 01.9 1.4L18.3 17.6a2 2 0 01-1.8 1.4H5.4a1.9 1.9 0 01-1.9-2z"/></svg>',
+ books:'<svg class="ico fi" viewBox="0 0 24 24"><rect x="4" y="4.5" width="4.5" height="15" rx="1"/><rect x="10" y="4.5" width="4.5" height="15" rx="1"/><path d="M16.5 6.2l3.6-1 3 13.4-3.6 1"/></svg>',
+ clock:'<svg class="ico fi" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><path d="M12 7.5V12l3 2"/></svg>',
+ trash:'<svg class="ico fi" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5h5v2M6.5 7l1 12h9l1-12"/></svg>',
+ chev:'<svg class="ico chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+ search:'<svg class="ico" viewBox="0 0 24 24" style="width:18px"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>',
+ gear:'<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/></svg>',
+ plus:'<svg class="ico" viewBox="0 0 24 24" style="width:18px;stroke-width:2.2"><path d="M12 5v14M5 12h14"/></svg>',
+};
+const C={sage:'linear-gradient(#a3b29a,#8a9c82)',navy:'linear-gradient(#4a5672,#344059)',clay:'linear-gradient(#cf9475,#b9775a)',sky:'linear-gradient(#b3c6d8,#97adc3)',sand:'linear-gradient(#ddd0b8,#c9b99c)',plum:'linear-gradient(#8b5c70,#6c4457)',slate:'linear-gradient(#5d5f66,#43454b)',rose:'linear-gradient(#e7b2ae,#d4928d)'};
+// tree: [depth, name, count, state('open'|'closed'|'leaf'), extra]
+const TREE=[
+ [0,'University',5,'open'],[1,'Semester 3',3,'open'],[2,'Physics II',2,'closed'],[2,'Linear Algebra',1,'leaf'],[1,'Semester 2',2,'closed'],
+ [0,'Work',4,'open'],[1,'Product',2,'leaf'],[1,'Meetings',2,'leaf'],
+ [0,'Personal',2,'leaf'],
+];
+function row(d,name,count,state,o={}){
+ const ch= state==='leaf'?'<span class="sp"></span>':I.chev.replace('chev','chev'+(state==='closed'?' closed':''));
+ const fi= o.sel&&o.openIcon? I.folderOpen : I.folder;
+ return `<div class="row ${o.sel?'sel':''} ${o.drop?'drop':''}" style="--d:${d}">${ch}${fi}<span class="n">${name}</span><span class="c">${o.noCount?'':count}</span></div>`;
+}
+function nb(d,name,color){return `<div class="row nb" style="--d:${d}"><span class="sp"></span><i class="bk" style="background:${C[color]}"></i><span class="n">${name}</span></div>`}
+function sidebar(o={}){
+ const LEAVES={'Linear Algebra':[['Lin. Alg. notes','plum']],'Product':[['Product Specs','navy'],['Launch Plan','sky']],'Personal':[['Studio Journal','clay'],['Field Recordings','rose']]};
+ let rows='';
+ for(const [d,n,c,s] of TREE){
+  const L=o.leaves&&LEAVES[n];
+  rows+=row(d,n,c,L?'open':s,{sel:o.sel===n,drop:o.drop===n,openIcon:o.openIcon,noCount:o.noCount||!!L});
+  if(L)for(const [t,col] of L)rows+=nb(d+1,t,col);
+ }
+ return `<div class="side ${o.glass?'glass':''} ${o.ov?'ov':''}">
+  <div class="stop"><div class="ib">${I.side}</div><div class="ib" style="color:var(--fg3)">${I.fplus}</div></div>
+  <div class="row ${!o.sel?'sel':''}" style="--d:0"><span class="sp" style="width:0"></span>${I.books}<span class="n">All Notebooks</span><span class="c">${o.noCount?'':'8'}</span></div>
+  <div class="lbl">Folders</div>
+  ${rows}
+  <div class="row new" style="--d:0"><span class="sp"></span><svg class="ico" viewBox="0 0 24 24" style="width:18px"><path d="M12 5v14M5 12h14"/></svg><span class="n">New Folder</span></div>
+ </div>`;
+}
+function header(title,crumb,o={}){
+ return `${crumb!==undefined?`<div class="crumb">${crumb}</div>`:''}<div class="hdr">${o.toggle?`<div class="ib" style="margin-left:-10px">${I.side}</div>`:''}<div class="title">${title}</div>
+ <div class="search">${I.search}Search</div><div class="gear">${I.gear}</div><div class="newb">${I.plus}New</div></div>`;
+}
+function cover(t,c,meta,o={}){return `<div class="cv ${o.ghost?'ghost':''}"><div class="k" data-t="${t}" style="background:${C[c]}"></div><b>${t}</b><small>${meta}</small></div>`}
+const ALL=[['Thermodynamics','sage','11 pages'],['Product Specs','navy','4 pages'],['Studio Journal','clay','31 pages'],['Launch Plan','sky','3 pages'],['Sketchbook','sand','48 pages'],['Linear Algebra','plum','9 pages']];
+function allMain(o={}){
+ return `<div class="main">${header('Library',undefined,o)}
+  <div class="sec">Continue</div>
+  <div class="rec"><div class="rc"><div class="pg"></div><b>Thermodynamics</b><small>Edited 2 min ago · 11 pages</small></div><div class="rc"><div class="pg"></div><b>Product Specs</b><small>Yesterday · 4 pages</small></div>${o.wide?'<div class="rc"><div class="pg"></div><b>Studio Journal</b><small>Tue · 31 pages</small></div>':''}</div>
+  <div class="sec">All Notebooks <i>Sorted by recent ⌄</i></div>
+  <div class="grid">${ALL.slice(0,o.n||6).map(a=>cover(...a)).join('')}</div></div>`;
+}
+function folderMain(o={}){
+ return `<div class="main">${header('Semester 3','University ›',o)}
+  <div class="sec">2 notebooks <i>Sorted by recent ⌄</i></div>
+  <div class="grid">${cover('Linear Algebra','plum','9 pages')}${cover('Quantum Notes','slate','14 pages')}</div></div>`;
+}
+const frames=[
+['A · Flat sidebar, folders only (recommended)',
+ 'Sidebar shares the library’s warm paper tone, one shade deeper, hairline edge — same flat language as the editor bar. Top: sidebar toggle + new-folder icon. All Notebooks, then a FOLDERS tree to any depth: ⌄ disclosure · outline folder icon · name · count (count = everything inside, nested too). 18 pt indent per level. Selected = soft fill + semibold. Continue row only on All Notebooks.',
+ `<div class="status"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>${sidebar()}${allMain()}`],
+['A · inside a folder',
+ 'Picking “Semester 3”: open-folder icon on the selected row, serif title = folder name, small breadcrumb above it (tap a crumb to go up). Grid = notebooks directly in this folder; subfolders live only in the tree, so the grid stays covers-only and calm.',
+ `<div class="status"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>${sidebar({sel:'Semester 3',openIcon:true})}${folderMain()}`],
+['B · Tree shows notebooks too',
+ 'Same as A, but expanded folders also list their notebooks as leaves with a tiny cover-coloured book icon (tap = open notebook). Truer “file tree”, but the sidebar gets long fast and duplicates the grid. Counts drop off folders whose contents are listed.',
+ `<div class="status"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>${sidebar({leaves:true})}${allMain()}`],
+['C · Floating glass sidebar',
+ 'iPadOS 26 system look: sidebar is a Liquid Glass panel inset from the edges. More “native”, but it’s the layered-glass feel you rejected on the editor bar.',
+ `<div class="status"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>${sidebar({glass:true})}${allMain()}`],
+['Collapsed (any orientation)',
+ 'Toggle hides the sidebar; the same icon sits left of the title to bring it back. Grid reflows wider; remembered across launches.',
+ `<div class="status"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>${allMain({toggle:true,wide:true})}`],
+['Drag a cover onto a folder',
+ 'Long-press a cover and drag: it lifts, folder rows become drop targets (blue tint on hover). Hovering a collapsed folder ~0.7 s springs it open so you can drop deeper. Context-menu “Move to Folder” stays, as a nested menu.',
+ `<div class="status"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>${sidebar({drop:'Physics II'})}
+  <div class="drag" style="left:236px;top:248px"><div class="cv"><div class="k" data-t="Thermodynamics" style="background:${C.sage}"></div></div></div>
+  <div class="main">${header('Library')}<div class="sec">Continue</div><div class="rec"><div class="rc"><div class="pg"></div><b>Thermodynamics</b><small>Edited 2 min ago · 11 pages</small></div><div class="rc"><div class="pg"></div><b>Product Specs</b><small>Yesterday · 4 pages</small></div></div>
+  <div class="sec">All Notebooks <i>Sorted by recent ⌄</i></div><div class="grid">${cover('Thermodynamics','sage','11 pages',{ghost:true})}${ALL.slice(1).map(a=>cover(...a)).join('')}</div></div>`],
+['Folder menu + delete',
+ 'Long-press a folder: New Subfolder · Rename · Delete. Delete removes the folder, every subfolder and every notebook inside; notebooks go to the trash (30 days), so it’s recoverable. Alert states exactly what goes.',
+ `<div class="status"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>${sidebar({sel:'Work'})}${allMain()}
+  <div class="dim"></div>
+  <div class="alert"><b>Delete “Work”?</b><p>Its 2 folders and 4 notebooks will be deleted too. Notebooks stay in the trash for 30 days.</p><div class="bt"><div>Cancel</div><div class="red">Delete</div></div></div>`],
+];
+const portrait=['Portrait · overlay',
+ 'Portrait (and narrow windows): sidebar starts hidden, slides over the grid with a light scrim; picking a folder closes it. Replaces today’s full-screen Folders sheet on iPhone too.',
+ `<div class="status" style="z-index:9"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>
+  <div class="main" style="padding-left:36px">${header('Library',undefined,{toggle:true})}<div class="sec">Continue</div><div class="rec"><div class="rc"><div class="pg"></div><b>Thermodynamics</b><small>Edited 2 min ago</small></div><div class="rc"><div class="pg"></div><b>Product Specs</b><small>Yesterday</small></div></div>
+  <div class="sec">All Notebooks</div><div class="grid">${ALL.map(a=>cover(...a)).join('')}</div></div>
+  <div class="scrim"></div>${sidebar({ov:true,sel:'Semester 3',openIcon:true})}`];
+const ctxMenu=`<div class="menu" style="left:180px;top:300px"><div>New Subfolder ${I.fplus}</div><div>Rename <span>✎</span></div><hr><div class="red">Delete Folder <span>${I.trash}</span></div></div>`;
+let h='';
+for(const [t,s,body] of frames){
+ h+=`<div><div class="cap"><b>${t}</b><span>${s}</span></div><div class="fit"><div class="dev"><div class="scr">${body}</div></div></div></div>`;
+ if(t.startsWith('Drag')){
+  h+=`<div><div class="cap"><b>Folder context menu</b><span>Long-press any folder row.</span></div><div class="fit"><div class="dev"><div class="scr"><div class="status"><span>8:16 PM&nbsp; Thu 29 Oct</span><span>100%</span></div>${sidebar({sel:'Work'})}${allMain()}${ctxMenu}</div></div></div></div>`;
+ }
+}
+h+=`<div><div class="cap"><b>${portrait[0]}</b><span>${portrait[1]}</span></div><div class="fit p"><div class="dev"><div class="scr">${portrait[2]}</div></div></div></div>`;
+document.getElementById('w').innerHTML=h;
+</script>
+</body></html>

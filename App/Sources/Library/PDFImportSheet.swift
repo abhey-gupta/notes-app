@@ -140,10 +140,7 @@ struct PDFImportSheet: View {
 
     private var folderPicker: some View {
         Menu {
-            folderButton("None", id: nil)
-            ForEach(library.folders) { folder in
-                folderButton(folder.name, id: folder.id)
-            }
+            FolderMenuItems(folders: library.folders, selected: folderID) { folderID = $0 }
         } label: {
             let folderName = library.folder(id: folderID)?.name
             HStack(spacing: Tokens.Spacing.m) {
@@ -173,18 +170,6 @@ struct PDFImportSheet: View {
         .accessibilityLabel("Folder")
         .accessibilityValue(library.folder(id: folderID)?.name ?? "None")
         .accessibilityIdentifier("pdfFolder")
-    }
-
-    private func folderButton(_ name: String, id: FolderID?) -> some View {
-        Button {
-            folderID = id
-        } label: {
-            if folderID == id {
-                Label(name, systemImage: "checkmark")
-            } else {
-                Text(name)
-            }
-        }
     }
 
     @ViewBuilder

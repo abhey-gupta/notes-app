@@ -119,7 +119,8 @@ struct RootView: View {
 /// Push target for the editor. `source` picks which thumbnail the zoom transition grows from.
 struct EditorRoute: Hashable {
     enum Source: Hashable {
-        case recent, cover
+        /// A notebook row in the library sidebar (#117).
+        case recent, cover, sidebar
     }
 
     let id: NotebookID

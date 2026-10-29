@@ -95,6 +95,16 @@
 				</array>
 			</dict>
 		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Notespace Notebook Reference</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.abhey.notespace.notebook-reference</string>
+		</dict>
 	</array>
 </dict>
 </plist>

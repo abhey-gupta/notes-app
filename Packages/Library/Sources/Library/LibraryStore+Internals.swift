@@ -129,6 +129,43 @@ extension LibraryStore {
         }
     }
 
+    /// Moves `entries`' packages to the trash and commits `index` (from which the caller removed them) with
+    /// their trash records; on failure, puts the packages back.
+    func trash(_ entries: [LibraryEntry], in index: inout LibraryIndex) throws(LibraryError) {
+        let fm = FileManager.default
+        var moved: [(from: URL, to: URL)] = []
+        func undo() {
+            for move in moved {
+                try? fm.moveItem(at: move.to, to: move.from)
+            }
+        }
+        let date = now()
+        for entry in entries {
+            let source = locations.packageURL(for: entry)
+            let trashed = trashURL(for: entry)
+            do {
+                try fm.createDirectory(at: locations.trashDirectory, withIntermediateDirectories: true)
+                if fm.fileExists(atPath: trashed.path(percentEncoded: false)) {
+                    try fm.removeItem(at: trashed)
+                }
+                if fm.fileExists(atPath: source.path(percentEncoded: false)) {
+                    try fm.moveItem(at: source, to: trashed)
+                    moved.append((source, trashed))
+                }
+            } catch {
+                undo()
+                throw .io(source, reason: "\(error)")
+            }
+            index.trash.append(TrashedNotebook(entry: entry, trashedAt: date))
+        }
+        do {
+            try commit(index)
+        } catch {
+            undo()
+            throw error
+        }
+    }
+
     static func position(of id: NotebookID, in index: LibraryIndex) throws(LibraryError) -> Int {
         guard let i = index.notebooks.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
         return i

@@ -19,7 +19,7 @@ public struct LibraryEntry: Hashable, Sendable, Identifiable {
     public let id: NotebookID
     /// Display title.
     public var title: String
-    /// Folder, if any (one level).
+    /// Folder, if any.
     public var folderID: FolderID?
     /// Cover swatch.
     public var cover: CoverColor
@@ -144,17 +144,55 @@ extension LibraryEntry: Codable {
     }
 }
 
-/// A folder (one level; a notebook is in at most one).
+/// A folder, nested to any depth (#117); a notebook is in at most one.
 public struct LibraryFolder: Hashable, Sendable, Codable, Identifiable {
     /// Stable identity.
     public let id: FolderID
     /// Display name.
     public var name: String
+    /// The folder it sits in; `nil` = top level.
+    public var parentID: FolderID?
 
     /// Creates a folder.
-    public init(id: FolderID = FolderID(), name: String) {
+    public init(id: FolderID = FolderID(), name: String, parentID: FolderID? = nil) {
         self.id = id
         self.name = name
+        self.parentID = parentID
+    }
+}
+
+public extension Collection<LibraryFolder> {
+    /// Folders directly in `parent` (`nil` = top level), display order. A folder whose parent is missing
+    /// counts as top level, so a damaged index never hides it.
+    func children(of parent: FolderID?) -> [LibraryFolder] {
+        guard let parent else {
+            let ids = Set(map(\.id))
+            return filter { $0.parentID.map { !ids.contains($0) } ?? true }
+        }
+        return filter { $0.parentID == parent }
+    }
+
+    /// `folder` and every folder nested in it.
+    func subtree(of folder: FolderID) -> Set<FolderID> {
+        var result: Set<FolderID> = [folder]
+        var frontier = [folder]
+        while let next = frontier.popLast() {
+            for child in self where child.parentID == next && result.insert(child.id).inserted {
+                frontier.append(child.id)
+            }
+        }
+        return result
+    }
+
+    /// Top-level folder first, `folder` last; empty if `folder` is unknown.
+    func path(to folder: FolderID) -> [LibraryFolder] {
+        var path: [LibraryFolder] = []
+        var current: FolderID? = folder
+        while let id = current, let item = first(where: { $0.id == id }), !path.contains(item) {
+            path.insert(item, at: 0)
+            current = item.parentID
+        }
+        return path
     }
 }
 

@@ -113,10 +113,10 @@ struct LibraryStoreTests {
         try await store.renameFolder(physics.id, to: "Physics II")
         #expect(await store.snapshot().folders.map(\.name) == ["Physics II", "New Folder"])
 
-        try await store.deleteFolder(physics.id)
+        try await store.deleteFolder(work.id)
         let snapshot = await lib.store().snapshot()
-        #expect(snapshot.folders.map(\.name) == ["New Folder"])
-        #expect(snapshot.notebook(entry.id)?.folderID == nil, "notebooks survive their folder, unfiled")
+        #expect(snapshot.folders.map(\.name) == ["Physics II"])
+        #expect(snapshot.notebook(entry.id)?.folderID == physics.id)
     }
 
     @Test func duplicateCopiesPackageUnderNewID() async throws {

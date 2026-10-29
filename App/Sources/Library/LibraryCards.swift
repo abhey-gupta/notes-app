@@ -179,6 +179,10 @@ enum EditedLabel {
         isOpen ? pages(notebook.pageCount, isOpen: true) : "\(edited(notebook.modifiedAt, now: now)) · \(pages(notebook.pageCount))"
     }
 
+    static func notebooks(_ count: Int) -> String {
+        count == 1 ? "1 notebook" : "\(count) notebooks"
+    }
+
     static func pages(_ count: Int, isOpen: Bool = false) -> String {
         let pages = count == 1 ? "1 page" : "\(count) pages"
         return isOpen ? "Open · \(pages)" : pages

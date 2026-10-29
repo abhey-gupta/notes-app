@@ -7,6 +7,8 @@ public enum Tokens {
     public enum Colors {
         public static let desk = DynamicColor(light: RGBA(0xEDEAE4), dark: RGBA(0x0F1012))
         public static let libraryBackground = DynamicColor(light: RGBA(0xF3F1EC), dark: RGBA(0x141517))
+        /// Library sidebar (#117): the library's paper, one shade deeper (lighter in dark).
+        public static let librarySidebar = DynamicColor(light: RGBA(0xECE9E3), dark: RGBA(0x1B1C1F))
 
         public static let inkPrimary = DynamicColor(light: RGBA(0x1E2129), dark: RGBA(0xE9E8E4))
         public static let inkBlue = DynamicColor(light: RGBA(0x2C4FD6), dark: RGBA(0x5FD3C4))
@@ -50,6 +52,8 @@ public enum Tokens {
         /// Library folder chips at rest.
         public static let chipText = DynamicColor(light: RGBA(0x4A4D55), dark: RGBA(0xC8CBD1))
         /// Subtle selected fill for chips / segmented rows (`rgba(30,33,41,.07)`).
+        /// Sidebar folder under a dragged notebook (#117).
+        public static let dropTarget = DynamicColor(light: RGBA(0x2C4FD6, alpha: 0.12), dark: RGBA(0x5FD3C4, alpha: 0.16))
         public static let subtleFill = DynamicColor(light: RGBA(0x1E2129, alpha: 0.07), dark: RGBA(0xFFFFFF, alpha: 0.10))
         /// New-notebook sheet: cover preview panel and text field.
         public static let sheetPanel = DynamicColor(light: RGBA(0xEFECE6), dark: RGBA(0x1C1D21))
@@ -121,6 +125,8 @@ public enum Tokens {
 
     public enum Size {
         public static let capsuleHeight: CGFloat = 52
+        /// Library sidebar (#117).
+        public static let sidebarWidth: CGFloat = 300
         public static let toolButton = CGSize(width: 44, height: 40)
         public static let compactToolButton = CGSize(width: 40, height: 40)
         public static let toolIcon: CGFloat = 19
