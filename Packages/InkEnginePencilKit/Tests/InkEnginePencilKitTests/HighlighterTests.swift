@@ -75,6 +75,30 @@ struct HighlighterLookTests {
         #expect(RGBAPixels(marked)[500, 180] != RGBAPixels(plain)[500, 180])
     }
 
+    /// Over artwork (a PDF's text) the band multiplies (#196): dark artwork stays dark, on night paper too.
+    @Test(arguments: [PaperTheme.white, .night])
+    func highlightOverArtworkKeepsItDark(theme: PaperTheme) throws {
+        let art = CountingArtwork() // red over the top-left quarter
+        let band = RenderFixtures.line(
+            3, from: CGPoint(x: 40, y: 100), to: CGPoint(x: 400, y: 100), tool: .highlighter, color: .semantic(.blue), width: 24
+        )
+        let size = RenderFixtures.pageSize
+        let render = { (strokes: [Stroke]) in
+            RenderJob(page: Fixtures.page(strokes), palette: FixturePalette(), theme: theme, artwork: art).page(size: size, scale: 2)
+        }
+        let plain = try RGBAPixels(#require(render([])))
+        let marked = try RGBAPixels(#require(render([band])))
+        let red = plain[100, 200]
+        let blue = FixturePalette().ink(.semantic(.blue), on: theme)
+        let a = Highlight.opacity
+        let expected = RGBA8(
+            r: UInt8((CGFloat(red.r) * (1 - a + a * CGFloat(blue.r) / 255)).rounded()),
+            g: UInt8((CGFloat(red.g) * (1 - a + a * CGFloat(blue.g) / 255)).rounded()),
+            b: UInt8((CGFloat(red.b) * (1 - a + a * CGFloat(blue.b) / 255)).rounded()), a: 255
+        )
+        #expect(Fixtures.isClose(marked[100, 200], expected), "multiplied: \(marked[100, 200]) vs \(expected)")
+    }
+
     @Test func bandIsConstantWidthWithFlatEnds() throws {
         let job = RenderJob(page: Fixtures.page([Fixtures.highlight]), palette: FixturePalette(), theme: .white)
         let px = try RGBAPixels(#require(job.ink(scale: 2)))
