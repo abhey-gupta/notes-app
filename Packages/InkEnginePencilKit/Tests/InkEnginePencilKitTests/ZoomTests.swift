@@ -9,7 +9,7 @@ import UIKit
 
 /// Zoom (ARCHITECTURE.md §3): the engine view sits in the host's zoom view, so paper and ink share one
 /// transform; canvases are left alone during a pinch and re-tiled once at the end, in place.
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct ZoomTests {
     // MARK: Math

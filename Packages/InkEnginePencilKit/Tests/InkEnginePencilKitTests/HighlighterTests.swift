@@ -45,7 +45,7 @@ enum HighlighterFixtures {
 
 /// The highlighter (#120): a constant-width, flat-ended, translucent band the engine draws itself beneath
 /// all other ink, one fill per stroke, in rasters, thumbnails and the popover preview.
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct HighlighterLookTests {
     typealias Fixtures = HighlighterFixtures

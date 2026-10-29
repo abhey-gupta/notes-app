@@ -38,7 +38,7 @@ final class Recorder: InkEngineDelegate {
 
 /// Three stacked A4 pages (content y 0, 866, 1732) shown through a 1024 × 1366 viewport, page 2 holding
 /// one stroke. The engine view is content-sized, as in the host.
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct Harness {
     let engine = PencilKitInkEngine(palette: FixturePalette())
@@ -82,7 +82,7 @@ extension PageSnapshot {
     }
 }
 
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct EngineTests {
     @Test func visiblePagesGetCanvasesOverTheirVisiblePart() throws {
@@ -293,7 +293,7 @@ struct EngineTests {
     }
 }
 
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct RenderTests {
     @Test func rendersPaperTemplateAndInk() async throws {
@@ -345,7 +345,7 @@ struct RenderTests {
 }
 
 /// Redraws a `CGImage` into 8-bit sRGB RGBA for pixel checks.
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 struct RGBAPixels {
     let width: Int
     let bytes: [UInt8]

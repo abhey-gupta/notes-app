@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 
 /// The page-image cache in use (#70) and the thumbnail-first open (#43): what a page shows while its
 /// strokes load and its raster renders, and when the app learns it is sharp.
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct PageImageTests {
     /// A 44 × 57 HEIC (the 176 × 228 thumbnail's shape) at `thumbs/<id>.heic` in a temp directory.

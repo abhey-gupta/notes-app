@@ -5,7 +5,7 @@ import InkEngineTestSupport
 import InkModel
 import Testing
 
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct RasterRenderQueueTests {
     private func job(_ page: UInt8) -> (PageID, RenderJob) {

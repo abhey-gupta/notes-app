@@ -5,7 +5,7 @@ import PencilKit
 import Testing
 import UIKit
 
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 struct InkPreviewTests {
     static let size = CGSize(width: 296, height: 72)
     static let kinds: [PenKind] = [.fountain, .ballpoint, .brush, .highlighter]

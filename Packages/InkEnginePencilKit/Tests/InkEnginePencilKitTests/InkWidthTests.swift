@@ -16,7 +16,7 @@ import UIKit
 ///
 /// Serialized: PencilKit's renderer sets up shared Metal resources (paper textures) lazily, and
 /// concurrent first renders have deadlocked it in the simulator.
-@Suite(.serialized, .timeLimit(.minutes(2)))
+@Suite(.serialized, .timeLimit(.minutes(5)))
 @MainActor
 struct InkWidthTests {
     struct Case: CustomStringConvertible, Sendable {

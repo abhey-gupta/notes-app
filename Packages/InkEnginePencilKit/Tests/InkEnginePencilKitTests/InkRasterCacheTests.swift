@@ -3,7 +3,7 @@ import CoreGraphics
 import InkModel
 import Testing
 
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct InkRasterCacheTests {
     /// 16 × 16 RGBA: 1 KiB.

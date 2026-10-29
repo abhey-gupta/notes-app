@@ -7,7 +7,7 @@ import PencilKit
 import Testing
 import UIKit
 
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 struct ConversionTests {
     @Test(arguments: PenKind.allCases)
     func strokeRoundTripPreservesSamplesAndBounds(kind: PenKind) {

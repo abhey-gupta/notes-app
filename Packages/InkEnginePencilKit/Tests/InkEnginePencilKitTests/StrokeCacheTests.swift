@@ -7,7 +7,7 @@ import Testing
 import UIKit
 
 /// `PKStrokeCache`: loaded pages are converted off main (`prepare`), rebuilds reuse conversions.
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct StrokeCacheTests {
     /// A page prepared off main reaches its canvas without converting strokes on main (zoom-open hitch).

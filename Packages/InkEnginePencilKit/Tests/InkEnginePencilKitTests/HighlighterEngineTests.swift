@@ -10,7 +10,7 @@ import UIKit
 
 /// The highlighter on the engine (#120): drawn live and committed through the input view as shape layers
 /// in its page view, never on a PencilKit canvas; lifted and put back; recolored with the theme.
-@Suite(.timeLimit(.minutes(2)))
+@Suite(.timeLimit(.minutes(5)))
 @MainActor
 struct HighlighterEngineTests {
     typealias Fixtures = HighlighterFixtures

@@ -3,6 +3,8 @@ name: CI
 # PR gate on GitHub's hosted `xcode-27` runner (Apple Silicon, Xcode 27.1, iOS 27 simulators): one job, no
 # XCUI tests (ui.yml). PR-only: squash merges of green PRs don't re-run on main.
 # Minutes: macOS bills at 10× against the plan's included minutes; one run is ~20 min → ~200.
+# The VM renders PencilKit in software: the first PKDrawing raster can take > 2 min, so the
+# InkEnginePencilKit suites allow 5 min each (xcodebuild's per-test allowance is 300 s).
 on:
   pull_request:
     paths-ignore: ["docs/**", "design/**", "**/*.md"]
