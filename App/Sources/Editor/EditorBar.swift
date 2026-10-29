@@ -5,8 +5,9 @@ import Tools
 
 /// The editor's fixed top bar (#191): ‹ library · tabs · + on the left; undo · redo │ pages with "3 / 11" │ ⋯
 /// on the right. Everything about the notebook lives here; the floating capsule keeps only the writing
-/// tools. One Liquid Glass slab edge to edge, under the status bar, with a hairline below; the paper scrolls
-/// under it. Hidden in focus mode (the page pill stands in for the counter).
+/// tools. A flat surface edge to edge, under the status bar, with a hairline below; the controls sit on it in
+/// slim Liquid Glass capsules (the bar itself isn't glass: user decision). Hidden in focus mode (the page
+/// pill stands in for the counter).
 ///
 /// Compact chrome (#118): no undo/redo (the bottom bar has undo; redo is the three-finger tap).
 struct EditorBar: View {
@@ -26,40 +27,58 @@ struct EditorBar: View {
 
     @Environment(\.chromeLayout) private var chrome
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// Width of the slot between the back circle and the right-hand capsule.
+    @State private var slotWidth: CGFloat = 0
+
+    /// Bar thickness: the slim capsules plus a little air above and below.
+    static let height: CGFloat = Tokens.Size.focusPillHeight + 2 * Tokens.Spacing.s
 
     var body: some View {
         let scale = typeSize.chromeScale
-        HStack(spacing: Tokens.Spacing.xs) {
-            ToolButton(.back, "Library", size: Tokens.Size.compactToolButton, action: onBack)
-                .accessibilityHint("Back to the library; tabs stay open")
-            ChromeSeparator()
-            TabStrip(
-                tabs: strip, active: tabs.active,
-                onSelect: { tabs.activate($0) },
-                onClose: onCloseTab,
-                onCloseOthers: closeOthers,
-                onAdd: onBack
-            )
-            if !chrome.isCompact {
-                ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
-                    .disabled(!state.canUndo)
-                ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
-                    .disabled(!state.canRedo)
-                ChromeSeparator()
+        // Separate glass per capsule (no `GlassChrome`): they must not melt together across the gaps.
+        HStack(spacing: Tokens.Spacing.m) {
+            SlimCapsule {
+                ToolButton(.back, "Library", size: Tokens.Size.focusToolButton, action: onBack)
+                    .accessibilityHint("Back to the library; tabs stay open")
             }
-            pages
-            ChromeSeparator()
-            MoreMenu(
-                tools: tools, state: state, tabs: tabs, title: notebook.title, page: page,
-                paper: $paper, pattern: $pattern, keepsExactColors: $keepsExactColors, isCompact: chrome.isCompact,
-                onCloseTab: { onCloseTab(notebook.id) }, onCloseOthers: closeOthers
-            )
+            ZStack(alignment: .leading) {
+                Color.clear
+                    .onGeometryChange(for: CGFloat.self, of: \.size.width) { slotWidth = $0 }
+                SlimCapsule {
+                    TabStrip(
+                        tabs: strip, active: tabs.active,
+                        onSelect: { tabs.activate($0) },
+                        onClose: onCloseTab,
+                        onCloseOthers: closeOthers,
+                        onAdd: onBack,
+                        availableWidth: max(slotWidth - 6, 0)
+                    )
+                }
+                .fixedSize()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            SlimCapsule {
+                if !chrome.isCompact {
+                    ToolButton(.undo, "Undo", size: Tokens.Size.focusToolButton, action: state.undo)
+                        .disabled(!state.canUndo)
+                    ToolButton(.redo, "Redo", size: Tokens.Size.focusToolButton, action: state.redo)
+                        .disabled(!state.canRedo)
+                    ChromeSeparator(height: 18)
+                }
+                pages
+                ChromeSeparator(height: 18)
+                MoreMenu(
+                    tools: tools, state: state, tabs: tabs, title: notebook.title, page: page,
+                    paper: $paper, pattern: $pattern, keepsExactColors: $keepsExactColors, isCompact: chrome.isCompact,
+                    onCloseTab: { onCloseTab(notebook.id) }, onCloseOthers: closeOthers
+                )
+            }
         }
-        .padding(.leading, Tokens.Spacing.m + chrome.windowControls.leading)
-        .padding(.trailing, Tokens.Spacing.m)
-        .frame(height: Tokens.Size.capsuleHeight * scale)
+        .padding(.leading, Tokens.Spacing.l + chrome.windowControls.leading)
+        .padding(.trailing, Tokens.Spacing.l)
+        .frame(height: Self.height * scale)
         .frame(maxWidth: .infinity)
-        .background { BarGlass() }
+        .background { BarSurface() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("editorBar")
     }
@@ -82,7 +101,7 @@ struct EditorBar: View {
     private var pages: some View {
         let scale = typeSize.chromeScale
         return HStack(spacing: 0) {
-            ToolButton(.pages, "Pages", size: Tokens.Size.compactToolButton) { state.pages.present() }
+            ToolButton(.pages, "Pages", size: Tokens.Size.focusToolButton) { state.pages.present() }
                 .accessibilityValue("\(page.current) of \(page.total)")
                 .accessibilityHint("Shows all pages")
             Text("\(page.current) of \(page.total)")
@@ -91,7 +110,7 @@ struct EditorBar: View {
                 .contentTransition(.numericText())
                 .padding(.trailing, Tokens.Spacing.m)
                 .padding(.leading, Tokens.Spacing.hairline)
-                .frame(height: Tokens.Size.compactToolButton.height * scale)
+                .frame(height: Tokens.Size.focusToolButton.height * scale)
                 .contentShape(.rect)
                 .onTapGesture { state.pages.present() }
                 .accessibilityIdentifier("pageIndicator")
@@ -100,26 +119,28 @@ struct EditorBar: View {
     }
 }
 
-/// The bar's glass: the chrome's Liquid Glass in a rectangle reaching under the status bar, with the
-/// paper-white backing and a hairline along its bottom edge (``ChromeGlass``).
-private struct BarGlass: View {
+/// Slim glass capsule for the bar's controls: focus-pill thickness, 3 pt ends, so a lone button is a circle.
+private struct SlimCapsule<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GlassCapsule(height: Tokens.Size.focusPillHeight, leading: 3, trailing: 3, spacing: 0) { content }
+    }
+}
+
+/// The bar's flat surface, reaching under the status bar, with a hairline along its bottom edge
+/// (``ChromeGlass/surface``).
+private struct BarSurface: View {
     @Environment(\.chromeGlass) private var chrome
 
     var body: some View {
         Rectangle()
-            .fill(.clear)
-            .glassEffect(chrome?.glass ?? .regular, in: .rect)
-            .background {
-                if let chrome {
-                    chrome.backing
-                }
-            }
+            .fill(chrome?.surface ?? Tokens.Colors.libraryBackground.color)
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(chrome?.edge ?? Tokens.Colors.separator.color)
                     .frame(height: 1 / 3)
             }
-            .shadow(color: .black.opacity(chrome?.shadowOpacity ?? 0), radius: 10, y: 3)
             .ignoresSafeArea(edges: .top)
     }
 }
@@ -178,7 +199,7 @@ struct MoreMenu: View {
 
     private var menu: some View {
         let scale = typeSize.chromeScale
-        let size = Tokens.Size.compactToolButton
+        let size = Tokens.Size.focusToolButton
         return Menu {
             Section(title) {
                 Picker("Paper", systemImage: "doc", selection: $paper) {

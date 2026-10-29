@@ -17,16 +17,16 @@ struct TabStrip: View {
     let onClose: (NotebookID) -> Void
     let onCloseOthers: () -> Void
     let onAdd: () -> Void
+    /// Room the bar gives the strip; it hugs its tabs within it.
+    let availableWidth: CGFloat
 
     /// Natural width of each tab in its current style, measured off screen.
     @State private var widths: [NotebookID: CGFloat] = [:]
     @State private var chipWidth: CGFloat = 0
-    @State private var stripWidth: CGFloat = 0
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private static let spacing = Tokens.Spacing.xs
-    private static let height: CGFloat = 36
-    private static let corner: CGFloat = 10
+    private static let height: CGFloat = 34
 
     var body: some View {
         let shown = visible
@@ -37,13 +37,10 @@ struct TabStrip: View {
             if shown.count < tabs.count {
                 overflow(hidden: tabs.count - shown.count)
             }
-            ToolButton(.add, "Open another notebook", size: Tokens.Size.compactToolButton, action: onAdd)
+            ToolButton(.add, "Open another notebook", size: Tokens.Size.focusToolButton, action: onAdd)
                 .accessibilityIdentifier("addTab")
                 .accessibilityHint("Goes to the library")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
-        .onGeometryChange(for: CGFloat.self, of: \.size.width) { stripWidth = $0 }
         .background { measurements }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tabs")
@@ -52,7 +49,7 @@ struct TabStrip: View {
     /// Indices of the tabs that fit (``TabFit``), the showing one always among them.
     private var visible: [Int] {
         let scale = typeSize.chromeScale
-        let available = stripWidth - Tokens.Size.compactToolButton.width * scale - Self.spacing
+        let available = availableWidth - Tokens.Size.focusToolButton.width * scale - Self.spacing
         let widths = tabs.map { widths[$0.id] ?? 0 }
         return TabFit.visible(
             widths: widths, available: max(available, 0), spacing: Self.spacing, overflow: chipWidth,
@@ -75,7 +72,6 @@ struct TabStrip: View {
         .hidden()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func tab(_ tab: Tab) -> some View {
@@ -117,7 +113,7 @@ struct TabStrip: View {
         }
         .background {
             if isActive {
-                RoundedRectangle(cornerRadius: Self.corner).fill(Tokens.Colors.subtleFill)
+                Capsule().fill(Tokens.Colors.subtleFill)
             }
         }
         .contextMenu {
@@ -154,7 +150,7 @@ struct TabStrip: View {
             .foregroundStyle(Tokens.Colors.textSecondary)
             .padding(.horizontal, Tokens.Spacing.m)
             .frame(height: Self.height * scale)
-            .background(RoundedRectangle(cornerRadius: Self.corner).fill(Tokens.Colors.subtleFill))
+            .background(Capsule().fill(Tokens.Colors.subtleFill))
             .contentShape(.rect)
         }
         .menuIndicator(.hidden)

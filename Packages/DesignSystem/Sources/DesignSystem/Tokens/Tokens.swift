@@ -27,6 +27,9 @@ public enum Tokens {
         public static let chromeTint = DynamicColor(RGBA(0xFCFBF8, alpha: 0.86))
         public static let chromeSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.82))
         public static let chromeEdge = DynamicColor(RGBA(0x000000, alpha: 0.10))
+        /// The fixed editor bar's flat surface (#191), a shade off the desk so the hairline reads.
+        public static let barTint = DynamicColor(RGBA(0xF4F2ED))
+        public static let barSmoke = DynamicColor(RGBA(0x1A1B1E))
         public static let popoverTint = DynamicColor(RGBA(0xFCFBF8, alpha: 0.55))
         public static let popoverSmoke = DynamicColor(RGBA(0x1B1C1F, alpha: 0.45))
 
