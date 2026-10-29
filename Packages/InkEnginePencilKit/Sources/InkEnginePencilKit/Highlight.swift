@@ -11,10 +11,11 @@ import UIKit
 /// PencilKit's marker chisel, which tilts with the Pencil's azimuth. Each stroke is one
 /// translucent fill (``opacity``), so it never darkens where it crosses itself (PencilKit's marker does),
 /// and every highlight sits beneath all other ink, so writing under it stays fully visible, like
-/// GoodNotes. Everything that shows a page paints highlights first: the page view
-/// (`PageLayerView.setHighlights(_:key:color:)`, one shape layer per stroke beneath the ink raster and
-/// the canvas), rasters, thumbnails and the lifted-selection image (`RenderJob`); PDF export does the
-/// same with multiply.
+/// GoodNotes. Highlights multiply with what's under them (``multiplies(on:artwork:)``, #196), so a
+/// PDF's text or a photo stays as dark as it was. Everything that shows a page paints highlights first:
+/// the page view (`PageLayerView.setHighlights(_:key:color:)`, one shape layer per stroke beneath the ink
+/// raster and the canvas), rasters, thumbnails and the lifted-selection image (`RenderJob`); PDF export
+/// does the same with multiply.
 enum Highlight {
     /// Alpha of the band (the mock's `rgba(255,214,51,.55)`), shared with PDF export.
     static let opacity = CGFloat(PenProfile.highlighter.opacity)
@@ -22,6 +23,16 @@ enum Highlight {
     static func isHighlight(_ stroke: Stroke) -> Bool {
         stroke.tool == .highlighter
     }
+
+    /// Highlights multiply with the page under them (#196): on light paper, and on any page with artwork
+    /// (a PDF page is white whatever the theme). Night paper alone keeps a plain translucent band:
+    /// multiplied into near-black it would vanish.
+    static func multiplies(on theme: PaperTheme, artwork: Bool) -> Bool {
+        artwork || !theme.isDark
+    }
+
+    /// Core Animation's multiply compositing filter.
+    static let multiplyFilter = "multiplyBlendMode"
 
     /// The band's color: `base`, opaque. The band's translucency is applied to the whole stroke at once
     /// (a transparency layer, the shape layer's `opacity`), so overlapping parts of one stroke (joins, a
@@ -54,13 +65,17 @@ enum Highlight {
         return Shape(path: path, rim: CGFloat(2 * band.cornerRadius))
     }
 
-    /// Paints `strokes` (highlights, in order) into `context`, page space, each one translucent shape.
-    static func draw(_ strokes: [Stroke], color: (Stroke) -> CGColor, in context: CGContext) {
+    /// Paints `strokes` (highlights, in order) into `context`, page space, each one translucent shape,
+    /// multiplied with what's beneath if `multiply`.
+    static func draw(_ strokes: [Stroke], color: (Stroke) -> CGColor, multiply: Bool = false, in context: CGContext) {
         for stroke in strokes {
             guard let shape = shape(of: stroke) else { continue }
             let tint = color(stroke)
             context.saveGState()
             context.setAlpha(opacity)
+            if multiply {
+                context.setBlendMode(.multiply)
+            }
             context.beginTransparencyLayer(in: stroke.bounds, auxiliaryInfo: nil)
             context.setFillColor(tint)
             context.setStrokeColor(tint)
@@ -109,6 +124,14 @@ enum Highlight {
         layer.path = shape.path.copy(using: &toLayer)
         layer.lineWidth = shape.rim
         tint(layer, color)
+    }
+
+    /// Multiplies `layer` with the page beneath, or not (``multiplies(on:artwork:)``).
+    static func blend(_ layer: CALayer, multiply: Bool) {
+        let filter: String? = multiply ? multiplyFilter : nil
+        if layer.compositingFilter as? String != filter {
+            layer.compositingFilter = filter
+        }
     }
 
     /// Colors `layer`'s band (fill and rim alike).

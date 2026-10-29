@@ -109,6 +109,7 @@ struct RenderJob: Sendable {
             }
         }
         let highlights = highlights
+        let multiply = Highlight.multiplies(on: theme, artwork: artwork != nil)
         let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
             let cg = context.cgContext
             cg.scaleBy(x: sx, y: sy)
@@ -129,7 +130,7 @@ struct RenderJob: Sendable {
             for photo in photos {
                 UIImage(cgImage: photo.image).draw(in: photo.frame)
             }
-            Highlight.draw(highlights, color: highlightColor, in: cg)
+            Highlight.draw(highlights, color: highlightColor, multiply: multiply, in: cg)
             inkImage?.draw(in: CGRect(origin: .zero, size: page.size))
         }
         return image.cgImage

@@ -107,6 +107,35 @@ struct HighlighterEngineTests {
         #expect(h.engine.snapshots[page]?.strokes.count == 1)
     }
 
+    /// Bands multiply with the page (#196) on light paper and over artwork; night paper alone keeps the
+    /// plain band.
+    @Test func bandsMultiplyOnLightPaperAndOverArtwork() throws {
+        let h = Harness()
+        let (plain, pdf) = (h.frames[1].id, h.frames[2].id)
+        h.engine.pageArtwork = { $0 == pdf ? CountingArtwork() : nil }
+        h.scroll(toY: 900)
+        for page in [plain, pdf] {
+            try h.engine.apply(#require(h.engine.snapshots[page]).page.addEdit([Fixtures.highlight]), to: page)
+        }
+        let filter = { (page: PageID) in h.engine.pageViews[page]?.highlightShapeLayers.first?.compositingFilter as? String }
+        #expect(filter(plain) == Highlight.multiplyFilter)
+        #expect(filter(pdf) == Highlight.multiplyFilter)
+        h.engine.setTheme(.night)
+        #expect(filter(plain) == nil)
+        #expect(filter(pdf) == Highlight.multiplyFilter)
+
+        // The live band follows its page.
+        h.engine.setTool(Fixtures.tool)
+        var tracker = InkInputTracker()
+        let touch = TouchRecord(id: TouchID(1), location: CGPoint(x: 100, y: 1800), timestamp: 0)
+        for event in tracker.began(touch, target: { h.engine.inkInputView(h.engine.input, targetAt: $0) }) {
+            h.engine.inkInputView(h.engine.input, didProduce: event)
+        }
+        let live = try #require(h.engine.selection.liveHighlight)
+        #expect(live.page == pdf)
+        #expect(live.layer.compositingFilter as? String == Highlight.multiplyFilter)
+    }
+
     @Test func erasingAHighlightTakesItsLayerAway() throws {
         let h = Harness()
         h.scroll(toY: 900)
