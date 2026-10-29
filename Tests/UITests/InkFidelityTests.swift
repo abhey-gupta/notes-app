@@ -159,11 +159,12 @@ final class InkFidelityTests: XCTestCase {
         open(app, strokes: "4 strokes")
         drawn.expectSameInk(as: shot(app, "2-reopened"), in: Self.inkRegion, "reopened vs drawn", note: note)
 
-        // Scroll page 1 out (page 2 takes the canvas), then back until page 1's ink shows again while
-        // page 2 is still on screen: page 1 is now an inactive raster.
+        // Scroll page 1 out (page 2 takes the canvas), then back until page 1's ink shows again, a little
+        // above where it was drawn (the fixed bar's inset, #191, keeps it inside `inkRegion`): page 1 is
+        // now an inactive raster.
         let window = app.windows.firstMatch.frame
         scroll(app, by: window.height * 1.05)
-        scroll(app, by: -window.height * 0.97)
+        scroll(app, by: -window.height * 1.02)
         settle(1)
         let inactive = shot(app, "3-inactive-after-scroll")
         let shift = drawn.verticalShift(to: inactive, in: Self.inkRegion)

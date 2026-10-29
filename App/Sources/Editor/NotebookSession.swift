@@ -372,6 +372,10 @@ extension NotebookSession: CanvasHostViewDelegate {
         state.redo()
     }
 
+    func canvasHostDidBeginTouch(_: CanvasHostView) {
+        state.collapseTabs()
+    }
+
     func canvasHostDidLiftAllTouches(_: CanvasHostView) {
         edits?.endGesture()
         if isErasing {

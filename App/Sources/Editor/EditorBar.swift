@@ -3,8 +3,9 @@ import InkModel
 import SwiftUI
 import Tools
 
-/// The editor's fixed top bar (#191): ‹ library · tabs · + on the left; undo · redo │ pages with "3 / 11" │ ⋯
-/// on the right. Everything about the notebook lives here; the floating capsule keeps only the writing
+/// The editor's fixed top bar (#191): ‹ library · the tabs chip on the left; undo · redo │ pages with "3 / 11" │ ⋯
+/// on the right. Tapping the chip unfolds the tab strip across the bar (``TabStrip``) and slides the right
+/// group away; a touch on the page folds it back. Everything about the notebook lives here; the floating capsule keeps only the writing
 /// tools. A flat surface edge to edge, under the status bar, with a hairline below, and plain buttons on it
 /// (no glass: user decision, #191). Hidden in focus mode (the page pill stands in for the counter).
 ///
@@ -26,35 +27,48 @@ struct EditorBar: View {
 
     @Environment(\.chromeLayout) private var chrome
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let scale = typeSize.chromeScale
+        let expanded = state.showsTabs
         HStack(spacing: Tokens.Spacing.xs) {
             ToolButton(.back, "Library", size: Tokens.Size.compactToolButton, action: onBack)
                 .accessibilityHint("Back to the library; tabs stay open")
             ChromeSeparator()
             TabStrip(
-                tabs: strip, active: tabs.active,
-                onSelect: { tabs.activate($0) },
+                tabs: strip, active: tabs.active, isExpanded: expanded,
+                onToggle: { state.toggleTabs() },
+                onSelect: { id in
+                    tabs.activate(id)
+                    state.collapseTabs()
+                },
                 onClose: onCloseTab,
                 onCloseOthers: closeOthers,
                 onAdd: onBack
             )
-            if !chrome.isCompact {
-                ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
-                    .disabled(!state.canUndo)
-                ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
-                    .disabled(!state.canRedo)
-                ChromeSeparator()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if !expanded {
+                HStack(spacing: Tokens.Spacing.xs) {
+                    if !chrome.isCompact {
+                        ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
+                            .disabled(!state.canUndo)
+                        ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
+                            .disabled(!state.canRedo)
+                        ChromeSeparator()
+                    }
+                    pages
+                    ChromeSeparator()
+                    MoreMenu(
+                        tools: tools, state: state, tabs: tabs, title: notebook.title, page: page,
+                        paper: $paper, pattern: $pattern, keepsExactColors: $keepsExactColors, isCompact: chrome.isCompact,
+                        onCloseTab: { onCloseTab(notebook.id) }, onCloseOthers: closeOthers
+                    )
+                }
+                .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
             }
-            pages
-            ChromeSeparator()
-            MoreMenu(
-                tools: tools, state: state, tabs: tabs, title: notebook.title, page: page,
-                paper: $paper, pattern: $pattern, keepsExactColors: $keepsExactColors, isCompact: chrome.isCompact,
-                onCloseTab: { onCloseTab(notebook.id) }, onCloseOthers: closeOthers
-            )
         }
+        .animation(reduceMotion ? Tokens.Motion.reducedMorph : Tokens.Motion.morph, value: expanded)
         .padding(.leading, Tokens.Spacing.m + chrome.windowControls.leading)
         .padding(.trailing, Tokens.Spacing.m)
         .frame(height: Tokens.Size.capsuleHeight * scale)

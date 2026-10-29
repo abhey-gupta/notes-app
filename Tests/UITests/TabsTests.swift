@@ -1,7 +1,8 @@
 import XCTest
 
-/// Editor tabs and the fixed bar (#191): opening notebooks from the library adds tabs, switching swaps the
-/// canvas, × closes, the last close returns to the library, overflow folds into "+N", tabs survive a relaunch.
+/// Editor tabs and the fixed bar (#191): opening notebooks from the library adds tabs, the chip unfolds the
+/// strip, switching swaps the canvas, × closes, the last close returns to the library, a page touch folds
+/// the strip.
 final class TabsTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -23,14 +24,24 @@ final class TabsTests: XCTestCase {
         let cover = app.buttons["cover-\(title)"]
         XCTAssertTrue(cover.waitForExistence(timeout: 5))
         cover.tap()
-        XCTAssertTrue(app.buttons["tab-\(title)"].waitForExistence(timeout: 5), "\(title) becomes a tab")
-        XCTAssertTrue(app.buttons["tab-\(title)"].isSelected)
+        XCTAssertTrue(app.buttons["tabs"].waitForExistence(timeout: 5), "the editor shows the tabs chip")
+        XCTAssertEqual(app.buttons["tabs"].label, title, "\(title) is the showing tab")
+    }
+
+    /// Taps the chip and waits for the strip.
+    @MainActor
+    private func unfold(_ app: XCUIApplication) {
+        app.buttons["tabs"].tap()
+        XCTAssertTrue(app.buttons["closeTab"].waitForExistence(timeout: 3))
     }
 
     @MainActor
     func testOpeningSwitchingAndClosingTabs() {
         let app = launch(["-openNotebook", "Thermodynamics"])
-        XCTAssertTrue(app.buttons["tab-Thermodynamics"].waitForExistence(timeout: 10))
+        let chip = app.buttons["tabs"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 10))
+        XCTAssertEqual(chip.label, "Thermodynamics")
+        XCTAssertEqual(chip.value as? String, "1 tab")
         XCTAssertEqual(app.buttons["Pages"].value as? String, "1 of 11")
         XCTAssertEqual(app.staticTexts["pageIndicator"].label, "1 of 11", "the counter lives in the bar")
 
@@ -38,43 +49,60 @@ final class TabsTests: XCTestCase {
         XCTAssertTrue(app.buttons["cover-Thermodynamics"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Open · 11 pages"].exists, "open notebooks say so in the library")
         openFromLibrary(app, "Product Specs")
-        XCTAssertTrue(app.buttons["tab-Thermodynamics"].exists, "the first tab is still there")
-        XCTAssertFalse(app.buttons["tab-Thermodynamics"].isSelected)
+        XCTAssertEqual(chip.value as? String, "2 tabs")
 
+        unfold(app)
+        XCTAssertFalse(app.buttons["Pages"].exists, "the strip takes the bar")
+        XCTAssertTrue(app.buttons["tab-Product Specs"].isSelected)
+        XCTAssertFalse(app.buttons["tab-Thermodynamics"].isSelected)
         app.buttons["tab-Thermodynamics"].tap()
-        XCTAssertTrue(app.buttons["tab-Thermodynamics"].isSelected)
+        XCTAssertTrue(app.buttons["Pages"].waitForExistence(timeout: 3), "picking a tab folds the strip")
+        XCTAssertEqual(chip.label, "Thermodynamics")
         XCTAssertEqual(app.buttons["More"].value as? String, "Thermodynamics")
         XCTAssertEqual(app.buttons["Pages"].value as? String, "1 of 11")
 
+        unfold(app)
         app.buttons["closeTab"].tap()
         XCTAssertTrue(app.buttons["tab-Thermodynamics"].waitForNonExistence(timeout: 3))
         XCTAssertTrue(app.buttons["tab-Product Specs"].isSelected, "closing the showing tab shows its neighbour")
-        XCTAssertEqual(app.buttons["More"].value as? String, "Product Specs")
-
         app.buttons["closeTab"].tap()
         XCTAssertTrue(app.buttons["cover-Thermodynamics"].waitForExistence(timeout: 5), "no tabs left: back to the library")
         XCTAssertFalse(app.staticTexts["Open · 11 pages"].exists)
     }
 
     @MainActor
-    func testOverflowChipListsHiddenTabs() {
+    func testPageTouchFoldsTheStrip() {
+        let app = launch(["-openNotebook", "Thermodynamics"])
+        XCTAssertTrue(app.buttons["tabs"].waitForExistence(timeout: 10))
+        unfold(app)
+        XCTAssertTrue(app.buttons["addTab"].exists)
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)).tap()
+        XCTAssertTrue(app.buttons["Pages"].waitForExistence(timeout: 3), "a touch on the page folds the strip")
+        XCTAssertFalse(app.buttons["addTab"].exists)
+        unfold(app)
+        app.buttons["tab-Thermodynamics"].tap()
+        XCTAssertTrue(app.buttons["Pages"].waitForExistence(timeout: 3), "tapping the showing tab folds it too")
+    }
+
+    @MainActor
+    func testStripScrollsWithManyTabs() {
         let app = launch()
         for title in ["Thermodynamics", "Product Specs", "Studio Journal", "Launch Plan", "Sketchbook"] {
             openFromLibrary(app, title)
             app.buttons["Library"].tap()
         }
         openFromLibrary(app, "Thermodynamics")
-        let more = app.buttons["moreTabs"]
-        if more.exists {
-            XCTAssertTrue(app.buttons["tab-Thermodynamics"].isSelected, "the showing tab is never folded away")
-            more.tap()
-            XCTAssertTrue(app.buttons["Sketchbook"].waitForExistence(timeout: 3), "the chip lists every tab")
-            app.buttons["Sketchbook"].tap()
-            XCTAssertTrue(app.buttons["tab-Sketchbook"].waitForExistence(timeout: 3))
-            XCTAssertTrue(app.buttons["tab-Sketchbook"].isSelected)
-        } else {
-            XCTAssertTrue(app.buttons["tab-Sketchbook"].exists, "a wide bar shows every tab")
+        XCTAssertEqual(app.buttons["tabs"].value as? String, "5 tabs")
+        unfold(app)
+        XCTAssertTrue(app.buttons["tab-Thermodynamics"].isSelected)
+        let last = app.buttons["tab-Sketchbook"]
+        XCTAssertTrue(last.exists, "every tab is in the strip")
+        if !last.isHittable {
+            app.descendants(matching: .any)["tabStrip"].swipeLeft()
         }
+        last.tap()
+        XCTAssertTrue(app.buttons["Pages"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.buttons["tabs"].label, "Sketchbook")
     }
 
     @MainActor

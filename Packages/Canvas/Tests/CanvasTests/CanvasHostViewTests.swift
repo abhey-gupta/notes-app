@@ -16,6 +16,7 @@
         }
 
         func canvasHostDidRequestNewPage(_: CanvasHostView) {}
+        func canvasHostDidBeginTouch(_: CanvasHostView) {}
         func canvasHostDidLiftAllTouches(_: CanvasHostView) {}
     }
 

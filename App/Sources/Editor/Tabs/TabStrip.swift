@@ -2,9 +2,10 @@ import DesignSystem
 import InkModel
 import SwiftUI
 
-/// The open-notebook tabs in the editor bar (#191): plain titles that never truncate, the showing one on a
-/// subtle fill with its ×, and a "+N" chip listing the tabs the row has no room for. + leaves for the
-/// library, where tapping a cover opens it as a tab.
+/// The open-notebook tabs in the editor bar (#191). Folded, they're one chip: the showing notebook's title
+/// and a "3 ⌄" pill. Tap it and the strip unfolds in place: the chip becomes the showing tab, the others
+/// slide out of it one after another, and the bar's other controls slide away. Plain titles that never
+/// truncate; past the bar's width the strip scrolls. Any touch on the page folds it back (``EditorState``).
 struct TabStrip: View {
     struct Tab: Identifiable, Hashable {
         let id: NotebookID
@@ -13,69 +14,114 @@ struct TabStrip: View {
 
     let tabs: [Tab]
     let active: NotebookID?
+    let isExpanded: Bool
+    let onToggle: () -> Void
     let onSelect: (NotebookID) -> Void
     let onClose: (NotebookID) -> Void
     let onCloseOthers: () -> Void
     let onAdd: () -> Void
 
-    /// Natural width of each tab in its current style, measured off screen.
-    @State private var widths: [NotebookID: CGFloat] = [:]
-    @State private var chipWidth: CGFloat = 0
-    @State private var stripWidth: CGFloat = 0
+    @Namespace private var strip
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let spacing = Tokens.Spacing.xs
     private static let height: CGFloat = 36
-    private static let corner: CGFloat = 10
 
     var body: some View {
-        let shown = visible
-        HStack(spacing: Self.spacing) {
-            ForEach(shown, id: \.self) { index in
-                tab(tabs[index])
-            }
-            if shown.count < tabs.count {
-                overflow(hidden: tabs.count - shown.count)
-            }
-            ToolButton(.add, "Open another notebook", size: Tokens.Size.compactToolButton, action: onAdd)
-                .accessibilityIdentifier("addTab")
-                .accessibilityHint("Goes to the library")
+        if isExpanded {
+            expanded
+        } else {
+            chip
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
-        .onGeometryChange(for: CGFloat.self, of: \.size.width) { stripWidth = $0 }
-        .background { measurements }
-        .accessibilityElement(children: .contain)
+    }
+
+    private var activeTab: Tab? {
+        tabs.first { $0.id == active }
+    }
+
+    /// Folded: title + "N ⌄".
+    private var chip: some View {
+        let scale = typeSize.chromeScale
+        return Button(action: onToggle) {
+            HStack(spacing: Tokens.Spacing.s) {
+                Text(activeTab?.title ?? "")
+                    .scaledFont(size: 14, weight: .semibold)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .foregroundStyle(Tokens.Colors.textPrimary)
+                HStack(spacing: 3) {
+                    Text("\(tabs.count)")
+                        .scaledFont(size: 11.5, weight: .semibold)
+                        .monospacedDigit()
+                    Image(systemName: Symbol.disclosure.name)
+                        .scaledFont(size: 9, weight: .bold)
+                        .foregroundStyle(Tokens.Colors.textSecondary)
+                }
+                .foregroundStyle(Tokens.Colors.textPrimary)
+                .padding(.leading, 8)
+                .padding(.trailing, 7)
+                .frame(height: 22 * scale)
+                .background(Capsule().fill(Tokens.Colors.subtleFill))
+            }
+            .padding(.leading, Tokens.Spacing.l)
+            .padding(.trailing, Tokens.Spacing.s)
+            .frame(height: Self.height * scale)
+            .background(Capsule().fill(Tokens.Colors.subtleFill))
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .matchedGeometryEffect(id: "active", in: strip)
+        .accessibilityLabel(activeTab?.title ?? "Tabs")
+        .accessibilityValue(tabs.count == 1 ? "1 tab" : "\(tabs.count) tabs")
+        .accessibilityHint("Shows the open notebooks")
         .accessibilityIdentifier("tabs")
     }
 
-    /// Indices of the tabs that fit (``TabFit``), the showing one always among them.
-    private var visible: [Int] {
-        let scale = typeSize.chromeScale
-        let available = stripWidth - Tokens.Size.compactToolButton.width * scale - Self.spacing
-        let widths = tabs.map { widths[$0.id] ?? 0 }
-        return TabFit.visible(
-            widths: widths, available: max(available, 0), spacing: Self.spacing, overflow: chipWidth,
-            active: active.flatMap { id in tabs.firstIndex { $0.id == id } }
+    /// Unfolded: every tab, the showing one where the chip was, then +.
+    private var expanded: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Self.spacing) {
+                ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
+                    self.tab(tab)
+                        .transition(slide(index))
+                }
+                ToolButton(.add, "Open another notebook", size: Tokens.Size.compactToolButton, action: onAdd)
+                    .accessibilityIdentifier("addTab")
+                    .accessibilityHint("Goes to the library")
+                    .transition(slide(tabs.count))
+            }
+            .padding(.horizontal, Tokens.Spacing.xs)
+        }
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("tabStrip")
+    }
+
+    /// Tabs slide out of the chip one after another (and back into it, in reverse).
+    private func slide(_ index: Int) -> AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let delay = Double(index) * 0.03
+        return .asymmetric(
+            insertion: .move(edge: .leading).combined(with: .opacity).animation(Tokens.Motion.morph.delay(delay)),
+            removal: .move(edge: .leading).combined(with: .opacity).animation(Tokens.Motion.reducedMorph)
         )
     }
 
-    /// Every tab and the widest chip, laid out invisibly so their natural widths are known before the row
-    /// decides what fits.
-    private var measurements: some View {
-        HStack(spacing: Self.spacing) {
-            ForEach(tabs) { tab in
-                self.tab(tab)
-                    .onGeometryChange(for: CGFloat.self, of: \.size.width) { widths[tab.id] = $0 }
-            }
-            overflow(hidden: tabs.count)
-                .onGeometryChange(for: CGFloat.self, of: \.size.width) { chipWidth = $0 }
+    private func closeButton(_ tab: Tab) -> some View {
+        Button {
+            onClose(tab.id)
+        } label: {
+            Image(systemName: "xmark")
+                .scaledFont(size: 10, weight: .bold)
+                .foregroundStyle(Tokens.Colors.textTertiary)
+                .frame(width: 26 * typeSize.chromeScale, height: Self.height * typeSize.chromeScale)
+                .contentShape(.rect)
         }
-        .fixedSize()
-        .hidden()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Close tab")
+        .accessibilityIdentifier("closeTab")
     }
 
     private func tab(_ tab: Tab) -> some View {
@@ -83,7 +129,7 @@ struct TabStrip: View {
         let isActive = tab.id == active
         return HStack(spacing: 0) {
             Button {
-                onSelect(tab.id)
+                isActive ? onToggle() : onSelect(tab.id)
             } label: {
                 Text(tab.title)
                     .scaledFont(size: 14, weight: isActive ? .semibold : .medium)
@@ -98,28 +144,18 @@ struct TabStrip: View {
             .buttonStyle(.plain)
             .accessibilityLabel(tab.title)
             .accessibilityAddTraits(isActive ? .isSelected : [])
-            .accessibilityHint(isActive ? "" : "Shows this notebook")
+            .accessibilityHint(isActive ? "Folds the tabs" : "Shows this notebook")
             .accessibilityIdentifier("tab-\(tab.title)")
             if isActive {
-                Button {
-                    onClose(tab.id)
-                } label: {
-                    Image(systemName: "xmark")
-                        .scaledFont(size: 10, weight: .bold)
-                        .foregroundStyle(Tokens.Colors.textTertiary)
-                        .frame(width: 26 * scale, height: Self.height * scale)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close tab")
-                .accessibilityIdentifier("closeTab")
+                closeButton(tab)
             }
         }
         .background {
             if isActive {
-                RoundedRectangle(cornerRadius: Self.corner).fill(Tokens.Colors.subtleFill)
+                Capsule().fill(Tokens.Colors.subtleFill)
             }
         }
+        .matchedGeometryEffect(id: isActive ? "active" : "tab-\(tab.id)", in: strip)
         .contextMenu {
             Button("Close Tab", systemImage: "xmark") { onClose(tab.id) }
             if tabs.count > 1 {
@@ -127,47 +163,6 @@ struct TabStrip: View {
                     onSelect(tab.id)
                     onCloseOthers()
                 }
-            }
-        }
-    }
-
-    /// "+N ⌄": every open tab, the showing one ticked, and Close Other Tabs.
-    private func overflow(hidden: Int) -> some View {
-        let scale = typeSize.chromeScale
-        return Menu {
-            Picker("Open notebooks", selection: selection) {
-                ForEach(tabs) { tab in
-                    Text(tab.title).tag(Optional(tab.id))
-                }
-            }
-            .pickerStyle(.inline)
-            Divider()
-            Button("Close Other Tabs") { onCloseOthers() }
-        } label: {
-            HStack(spacing: Tokens.Spacing.xs) {
-                Text("+\(hidden)")
-                    .scaledFont(size: 14, weight: .semibold)
-                    .monospacedDigit()
-                Image(systemName: Symbol.disclosure.name)
-                    .scaledFont(size: 10, weight: .semibold)
-            }
-            .foregroundStyle(Tokens.Colors.textSecondary)
-            .padding(.horizontal, Tokens.Spacing.m)
-            .frame(height: Self.height * scale)
-            .background(RoundedRectangle(cornerRadius: Self.corner).fill(Tokens.Colors.subtleFill))
-            .contentShape(.rect)
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .accessibilityLabel("More tabs")
-        .accessibilityValue("\(hidden) hidden")
-        .accessibilityIdentifier("moreTabs")
-    }
-
-    private var selection: Binding<NotebookID?> {
-        Binding { active } set: { id in
-            if let id {
-                onSelect(id)
             }
         }
     }

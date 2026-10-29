@@ -162,8 +162,10 @@ struct EditorScreen: View {
         if !session.isClosed {
             session.flush()
         }
+        let unfolded = session.state.showsTabs
         notebook = next
         session = sessions.session(for: next)
+        session.state.setTabs(unfolded: unfolded)
     }
 
     private func closeTab(_ id: NotebookID) {

@@ -115,11 +115,30 @@ final class EditorState {
         try await onExportPDF(selection, asShown, progress)
     }
 
+    // MARK: Tabs (#191)
+
+    /// The bar's tab strip is unfolded (the chip was tapped); it folds back on any touch on the page.
+    private(set) var showsTabs = false
+
+    func toggleTabs() {
+        showsTabs.toggle()
+    }
+
+    func collapseTabs() {
+        showsTabs = false
+    }
+
+    /// The strip stays unfolded across a tab switch (the next session's state takes it over).
+    func setTabs(unfolded: Bool) {
+        showsTabs = unfolded
+    }
+
     // MARK: Focus mode (§7)
 
     /// Pinch-in on the toolbar or More → Focus mode. Stays until `exitFocus`: drawing, scrolling and taps don't end it.
     func enterFocus() {
         isFocused = true
+        showsTabs = false
     }
 
     /// The pill's chevron, pinch-out on the pill, or a Pencil tool-options request.

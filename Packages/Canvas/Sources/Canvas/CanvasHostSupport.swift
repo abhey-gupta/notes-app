@@ -10,6 +10,8 @@
         func canvasHost(_ host: CanvasHostView, didChange window: PageWindow)
         /// The add-page button under the last page was tapped.
         func canvasHostDidRequestNewPage(_ host: CanvasHostView)
+        /// A finger or the Pencil touched the canvas (#191: chrome that opens over it folds away).
+        func canvasHostDidBeginTouch(_ host: CanvasHostView)
         /// The last touch on the canvas lifted (end of a Pencil gesture: eraser undo grouping).
         func canvasHostDidLiftAllTouches(_ host: CanvasHostView)
         /// Two fingers tapped the canvas (#121, while ``CanvasHostView/allowsTapUndo``).
