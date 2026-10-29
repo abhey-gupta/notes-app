@@ -32,15 +32,20 @@ jobs:
           SIM=$(scripts/ci-sim.sh CI-iPad)
           xcodegen generate --quiet
           mkdir -p build/samples
-          ( while true; do
-              for pid in $(pgrep -x xctest); do
-                age=$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')
-                if [ -n "$age" ] && [ "$age" -ge 60 ] && [ ! -f "build/samples/$pid.sample.txt" ]; then
-                  sample "$pid" 3 -mayDie -file "build/samples/$pid.sample.txt" || true
-                  sudo spindump "$pid" 3 -file "build/samples/$pid.spindump.txt" || true
-                fi
+          ( seen=""; while true; do
+              now=$(pgrep -x xctest | tr '\n' ' ')
+              for pid in $now; do
+                case " $seen " in *" $pid "*)
+                  if [ ! -f "build/samples/$pid.sample.txt" ]; then
+                    echo "sampling xctest $pid (alive > 60 s)"
+                    sample "$pid" 3 -mayDie -file "build/samples/$pid.sample.txt" || echo "sample failed: $?"
+                    sudo spindump "$pid" 3 -file "build/samples/$pid.spindump.txt" || echo "spindump failed: $?"
+                    ps -M "$pid" > "build/samples/$pid.threads.txt" 2>&1 || true
+                  fi;;
+                esac
               done
-              sleep 10
+              seen="$now"
+              sleep 60
             done ) &
           WD=$!
           status=0
