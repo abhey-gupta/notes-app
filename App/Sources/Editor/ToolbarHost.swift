@@ -2,8 +2,10 @@ import DesignSystem
 import SwiftUI
 import Tools
 
-/// Editor chrome (mock §02): nav capsule, the dynamic tools toolbar, pages capsule, page pill, all in one
-/// `GlassChrome` so every change of shape is a Liquid Glass morph (§7, #26).
+/// The floating editor chrome: the dynamic tools toolbar and, in focus mode, the page pill, in one
+/// `GlassChrome` so every change of shape is a Liquid Glass morph (§7, #26). The notebook's controls (back,
+/// tabs, undo/redo, pages, ⋯) are the fixed ``EditorBar`` above (#191); `topInset` is its height, so the
+/// toolbar docks below it, and 0 while it's hidden (focus mode).
 ///
 /// The toolbar docks top (default), bottom, left or right. Drag it with a finger and it follows with an
 /// interactive spring, rubber-banding at the screen edges, while a slot shows where it will land; release and
@@ -17,16 +19,15 @@ import Tools
 /// display only; the pill has no popover.
 ///
 /// Compact chrome (#118: iPhone, iPad windows under 600 pt): the toolbar is a fixed bottom bar (no dragging,
-/// no focus mode); share and photos move into the pages capsule's ⋯ menu. In an iPadOS window the top row
-/// (and a focus-mode pill at the top or left) moves clear of the window controls.
+/// no focus mode); share and photos move into the bar's ⋯ menu. In an iPadOS window a focus-mode pill at
+/// the left moves clear of the window controls.
 struct ToolbarHost: View {
     let tools: ToolState
     let state: EditorState
-    let title: String
-    @Binding var paper: PaperTheme
-    @Binding var pattern: PaperPattern
+    let paper: PaperTheme
     let page: (current: Int, total: Int)
-    let onBack: () -> Void
+    /// Height of the fixed bar above the chrome (0 when hidden).
+    let topInset: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -41,7 +42,7 @@ struct ToolbarHost: View {
     @State private var toolFrames: [Tool: CGRect] = [:]
 
     enum ChromeID: Hashable {
-        case nav, tools, pages
+        case tools
     }
 
     private struct Drag: Equatable {
@@ -54,8 +55,6 @@ struct ToolbarHost: View {
         var container: CGSize = .zero
         /// Toolbar frame at rest (not updated mid-drag).
         var tools: CGRect = .zero
-        var nav: CGFloat = 0
-        var pages: CGFloat = 0
         var pill: CGSize = .zero
         /// Expanded toolbar length along each axis, cached as each is seen (hint size, top-row fitting).
         var horizontalLength: CGFloat?
@@ -91,26 +90,6 @@ struct ToolbarHost: View {
     var body: some View {
         GlassChrome {
             ZStack {
-                if !state.isFocused {
-                    HStack(alignment: .top) {
-                        BackCapsule(title: title, onBack: onBack)
-                            .chromeID(.nav, in: glass, transition: glassTransition)
-                            .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.nav = $0 }
-                            .padding(.leading, chrome.windowControls.leading)
-                            .accessibilitySortPriority(ChromeOrder.nav)
-                        Spacer(minLength: Tokens.Spacing.m)
-                        PagesCapsule(
-                            tools: tools, state: state, title: title, page: page,
-                            paper: $paper, pattern: $pattern, keepsExactColors: exactColorsBinding, isCompact: chrome.isCompact
-                        )
-                        .chromeID(.pages, in: glass, transition: glassTransition)
-                        .onGeometryChange(for: CGFloat.self, of: \.size.width) { metrics.pages = $0 }
-                        .accessibilitySortPriority(ChromeOrder.pages)
-                    }
-                    // Slim capsules sit on the toolbar's centre line when it's docked at the top.
-                    .padding(.top, Tokens.Spacing.s + (Tokens.Size.capsuleHeight - Tokens.Size.focusPillHeight) / 2 * typeSize.chromeScale)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                }
                 if let drag {
                     let length = restingLength(drag.target.axis)
                     DockHint(
@@ -120,10 +99,13 @@ struct ToolbarHost: View {
                 }
                 toolbar
                     .accessibilitySortPriority(ChromeOrder.tools)
-                PageIndicator(page: page, isFocused: isCompact, isCompactChrome: chrome.isCompact) { metrics.pill = $0 }
-                    .accessibilitySortPriority(ChromeOrder.pagePill)
+                if isCompact {
+                    PageIndicator(page: page) { metrics.pill = $0 }
+                        .accessibilitySortPriority(ChromeOrder.pagePill)
+                        .transition(.opacity)
+                }
             }
-            // VoiceOver order, whatever the dock: nav, tools, pages, page pill (#45).
+            // VoiceOver order, whatever the dock: tools, page pill (#45).
             .accessibilityElement(children: .contain)
             .coordinateSpace(.named(Self.space))
             .onGeometryChange(for: CGSize.self, of: \.size) { metrics.container = $0 }
@@ -339,10 +321,6 @@ extension ToolbarHost {
         }
     }
 
-    private var exactColorsBinding: Binding<Bool> {
-        Binding { state.keepsExactColors } set: { state.onKeepsExactColors($0) }
-    }
-
     /// The compact pill: current tool and color (display only, named for VoiceOver), expand.
     private func pillContent(axis: Axis) -> some View {
         FocusPillContent(
@@ -385,9 +363,8 @@ extension ToolbarHost {
     private var layout: DockLayout {
         DockLayout(
             containerWidth: metrics.container.width,
-            nav: state.isFocused ? 0 : metrics.nav,
-            pages: state.isFocused ? 0 : metrics.pages,
-            pagePill: chrome.isCompact ? .zero : metrics.pill,
+            topBar: state.isFocused ? 0 : topInset,
+            pagePill: state.isFocused ? metrics.pill : .zero,
             isFocused: state.isFocused,
             windowControls: chrome.windowControls,
             scale: typeSize.chromeScale

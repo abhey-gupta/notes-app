@@ -30,6 +30,12 @@ public enum ChromeGlass: Hashable, Sendable {
         (self == .clear ? Tokens.Colors.chromeSmoke : Tokens.Colors.chromeTint).color
     }
 
+    /// Flat, opaque surface of the editor's fixed bar (#191): the glass capsules sit on it, the bar itself
+    /// isn't glass.
+    public var surface: Color {
+        (self == .clear ? Tokens.Colors.barSmoke : Tokens.Colors.barTint).color
+    }
+
     /// Hairline that separates tinted chrome from a white page; the clear glass already contrasts with Night.
     public var edge: Color? {
         self == .tinted ? Tokens.Colors.chromeEdge.color : nil

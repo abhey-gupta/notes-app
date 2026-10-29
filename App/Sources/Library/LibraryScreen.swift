@@ -11,6 +11,8 @@ import SwiftUI
 struct LibraryScreen: View {
     let library: any LibraryModel
     let zoom: Namespace.ID
+    /// Open editor tabs (#191): their notebooks say "Open".
+    let tabs: TabsModel
     @Binding var showsNewNotebook: Bool
     /// A PDF waiting in the import sheet: picked here, or opened in Notespace from Files / the share sheet.
     @Binding var pdfImport: PDFImportRequest?
@@ -98,7 +100,7 @@ struct LibraryScreen: View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: recentSpacing) {
                 ForEach(library.recents) { notebook in
-                    RecentCard(notebook: notebook, zoom: zoom) {
+                    RecentCard(notebook: notebook, zoom: zoom, isOpen: tabs.openIDs.contains(notebook.id)) {
                         open(EditorRoute(id: notebook.id, source: .recent))
                     }
                     .contextMenu { NotebookMenu(notebook: notebook, library: library, prompt: $prompt) }
@@ -211,7 +213,8 @@ struct LibraryScreen: View {
             LazyVGrid(columns: gridColumns, alignment: .leading, spacing: isCompact ? Tokens.Spacing.xxl : 30) {
                 ForEach(notebooks) { notebook in
                     CoverTile(
-                        notebook: notebook, folder: library.folder(id: notebook.folderID)?.name, zoom: zoom, width: coverWidth
+                        notebook: notebook, folder: library.folder(id: notebook.folderID)?.name, zoom: zoom, width: coverWidth,
+                        isOpen: tabs.openIDs.contains(notebook.id)
                     ) {
                         open(EditorRoute(id: notebook.id, source: .cover))
                     }
@@ -295,5 +298,7 @@ extension LibraryScreen {
     @Previewable @Namespace var zoom
     @Previewable @State var showsNew = false
     @Previewable @State var pdfImport: PDFImportRequest?
-    LibraryScreen(library: SampleLibrary(), zoom: zoom, showsNewNotebook: $showsNew, pdfImport: $pdfImport, showsGallery: nil) { _ in }
+    LibraryScreen(
+        library: SampleLibrary(), zoom: zoom, tabs: TabsModel(), showsNewNotebook: $showsNew, pdfImport: $pdfImport, showsGallery: nil
+    ) { _ in }
 }

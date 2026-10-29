@@ -33,7 +33,8 @@ final class LaunchTests: XCTestCase {
         }
         XCTAssertFalse(app.buttons["Share"].exists, "share is in ⋯")
         XCTAssertEqual(app.buttons["More"].value as? String, "Thermodynamics")
-        XCTAssertTrue(app.staticTexts["pageIndicator"].exists)
+        XCTAssertEqual(app.buttons["Pages"].value as? String, "1 of 11", "the page counter sits in the bar (#191)")
+        XCTAssertEqual(app.buttons["tabs"].label, "Thermodynamics", "the tabs chip names the showing notebook")
 
         back.tap()
         XCTAssertTrue(app.buttons["newNotebook"].waitForExistence(timeout: 5))

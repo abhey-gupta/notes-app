@@ -20,8 +20,8 @@ import Tools
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
 /// - `-importSamplePDF YES`: start with the import sheet up on a generated 24-page PDF (#119).
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
-/// - `-resetToolState YES`: forget persisted tool settings and toolbar placement (UI tests); also silences
-///   one-time hints (the "hold a page edge to widen" caption, #129) so screenshots stay deterministic.
+/// - `-resetToolState YES`: forget persisted tool settings, toolbar placement and open tabs (UI tests); also
+///   silences one-time hints (the "hold a page edge to widen" caption, #129) so screenshots stay deterministic.
 /// - `-penKind fountain|ballpoint|brush`, `-penSize <mm>`: pen family and size (UI tests).
 /// - `-eraserMode stroke|partial`: eraser mode (no eraser options popover yet).
 /// - `-allowFingerDrawing YES`: fingers ink (one finger draws, two scroll) — the simulator has no Pencil.
@@ -115,6 +115,16 @@ enum LaunchOptions {
         #else
             return []
         #endif
+    }
+
+    /// Persisted open tabs (#191); `-resetToolState` forgets them.
+    static func makeTabs() -> TabsModel {
+        #if DEBUG
+            if flag("resetToolState") {
+                TabsModel.reset()
+            }
+        #endif
+        return TabsModel()
     }
 
     /// Persisted `ToolState` with app defaults; DEBUG launch arguments override dock and tools.

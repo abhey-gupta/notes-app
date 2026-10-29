@@ -180,69 +180,49 @@ extension CGSize {
     }
 }
 
-/// VoiceOver order of the editor chrome (higher first), whatever the dock (#45).
+/// VoiceOver order of the floating chrome (higher first), whatever the dock (#45).
 enum ChromeOrder {
-    static let nav: Double = 4
-    static let tools: Double = 3
-    static let pages: Double = 2
+    static let tools: Double = 2
     static let pagePill: Double = 1
 }
 
 /// Where the toolbar rests at each dock (§7), from the chrome's measured geometry.
 struct DockLayout {
     var containerWidth: CGFloat
-    /// Nav and pages capsule widths; 0 when hidden (focus mode).
-    var nav: CGFloat
-    var pages: CGFloat
+    /// Height of the fixed ``EditorBar`` above the chrome (#191); 0 while it's hidden (focus mode).
+    var topBar: CGFloat
+    /// Page pill size; zero while it's hidden (outside focus mode).
     var pagePill: CGSize
     /// Focus mode: the toolbar is the compact pill.
     var isFocused: Bool
-    /// Window controls in the top leading corner (#118): the top row starts after them, a left-docked pill
-    /// below them.
+    /// Window controls in the top leading corner (#118): a left-docked focus pill sits below them.
     var windowControls = WindowControls()
     /// Dynamic Type chrome scale (``DynamicTypeSize/chromeScale``): capsules are thicker at large sizes.
     var scale: CGFloat = 1
 
     struct Placement {
         var insets = EdgeInsets()
-        /// Horizontal nudge keeping a top/bottom toolbar clear of the neighbouring capsules.
+        /// Horizontal nudge keeping a bottom toolbar clear of the page pill.
         var shift: CGFloat = 0
     }
 
-    /// Gap between the top row's capsules: wider than the glass blend distance, so a top-docked toolbar never
-    /// melts into the nav or pages capsule (#176).
-    static let rowGap = Tokens.Spacing.glassBlend + Tokens.Spacing.xs
-
-    /// Top row width taken at the leading end: the nav capsule after the window controls.
-    private var leadingReserve: CGFloat {
-        nav > 0 ? windowControls.leading + nav : windowControls.leading
-    }
+    /// Gap between the bar and a top-docked toolbar.
+    static let barGap = Tokens.Spacing.m
 
     /// Padding and nudge that put a `length`-long toolbar at `dock`:
-    /// - top: centred under the status bar, clear of the nav (left) and pages (right) capsules; on a row too
-    ///   narrow for all three it drops below them.
+    /// - top: centred under the bar (under the status bar in focus mode).
     /// - bottom: centred above the home indicator, clear of the page pill.
-    /// - left/right: vertically centred between the top capsules and the page pill.
+    /// - left/right: vertically centred between the bar and the page pill.
     /// The compact pill is inset so its centre line matches the expanded capsule's.
     func placement(for dock: ToolbarDock, length: CGFloat) -> Placement {
         let spacing = Tokens.Spacing.self
         let capsule = Tokens.Size.capsuleHeight * scale
         let pillInset = isFocused ? (capsule - Tokens.Size.focusPillHeight * scale) / 2 : 0
-        // Past the glass blend distance, so a dropped toolbar doesn't melt into the row above.
-        let belowTopRow = spacing.s + capsule + Self.rowGap
+        let belowBar = topBar > 0 ? topBar + Self.barGap : spacing.s
         let abovePagePill = spacing.chromeInset + pagePill.height + spacing.m
         switch dock {
         case .top:
-            if let shift = DockGeometry.rowShift(
-                width: length,
-                in: containerWidth,
-                leading: leadingReserve,
-                trailing: pages,
-                gap: Self.rowGap
-            ) {
-                return Placement(insets: EdgeInsets(top: spacing.s + pillInset, leading: 0, bottom: 0, trailing: 0), shift: shift)
-            }
-            return Placement(insets: EdgeInsets(top: belowTopRow + pillInset, leading: 0, bottom: 0, trailing: 0))
+            return Placement(insets: EdgeInsets(top: belowBar + pillInset, leading: 0, bottom: 0, trailing: 0))
         case .bottom:
             let row = DockGeometry.rowShift(width: length, in: containerWidth, leading: 0, trailing: pagePill.width, gap: spacing.m)
             if let shift = row {
@@ -252,7 +232,7 @@ struct DockLayout {
         case .left, .right:
             let focusedTop = spacing.s + (dock == .left ? windowControls.top : 0)
             return Placement(insets: EdgeInsets(
-                top: isFocused ? focusedTop : belowTopRow,
+                top: isFocused ? focusedTop : belowBar,
                 leading: dock == .left ? pillInset : 0,
                 bottom: abovePagePill,
                 trailing: dock == .right ? pillInset : 0

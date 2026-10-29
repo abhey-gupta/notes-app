@@ -2,150 +2,9 @@ import DesignSystem
 import SwiftUI
 import Tools
 
-/// Small glass ‹ back to the library (top leading). The title and paper options live in ⋯ (``PagesCapsule``).
-struct BackCapsule: View {
-    let title: String
-    let onBack: () -> Void
-
-    var body: some View {
-        SlimCapsule {
-            ToolButton(.back, "Library", size: Tokens.Size.focusToolButton, action: onBack)
-                .accessibilityHint("Closes \(title)")
-        }
-    }
-}
-
-/// The top row's slim capsule: focus-pill thickness, 3 pt ends, so a lone button is a circle.
-private struct SlimCapsule<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        GlassCapsule(height: Tokens.Size.focusPillHeight, leading: 3, trailing: 3, spacing: 0) { content }
-    }
-}
-
-/// Pages · ⋯ (top trailing). ⋯ holds the notebook's options under its title (paper, template, Keep exact
-/// colors on Night paper), then Share and Focus mode. DEBUG adds a dock picker.
-///
-/// Compact chrome (#118): Add Photo and Laser Pointer join ⋯ (no room on the bar); focus mode (regular
-/// chrome only) leaves it.
-struct PagesCapsule: View {
-    let tools: ToolState
-    let state: EditorState
-    let title: String
-    /// Current page (1-based) and page count, for export.
-    let page: (current: Int, total: Int)
-    @Binding var paper: PaperTheme
-    @Binding var pattern: PaperPattern
-    /// "Keep exact colors", offered on Night paper.
-    @Binding var keepsExactColors: Bool
-    var isCompact = false
-
-    @State private var showsShare = false
-    @State private var showsPhotos = false
-    @State private var presenter = ActivityPresenter()
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        SlimCapsule {
-            ToolButton(.pages, "Pages", size: Tokens.Size.focusToolButton) { state.pages.present() }
-                .accessibilityHint("Shows all pages")
-            more
-                .background(ActivityAnchor(presenter: presenter))
-                .popover(isPresented: $showsShare) { sharePopover }
-                .background {
-                    Color.clear.popover(isPresented: $showsPhotos) {
-                        PhotoFlyout(paper: paper) { data in
-                            showsPhotos = false
-                            state.insertPhoto(data)
-                        }
-                    }
-                }
-        }
-    }
-
-    private var sharePopover: some View {
-        SharePopover(state: state, page: page, isNight: paper.isDark) { url in
-            showsShare = false
-            // Present once SwiftUI has started dismissing the popover.
-            Task {
-                try? await Task.sleep(for: .milliseconds(50))
-                presenter.share(url)
-            }
-        }
-        .chromePopover(for: paper)
-        .presentationCompactAdaptation(.popover)
-    }
-
-    private var more: some View {
-        let scale = typeSize.chromeScale
-        let size = Tokens.Size.focusToolButton
-        return Menu {
-            Section(title) {
-                Picker("Paper", systemImage: "doc", selection: $paper) {
-                    ForEach(PaperTheme.allCases) { theme in
-                        Text(theme.displayName).tag(theme)
-                    }
-                }
-                .pickerStyle(.menu)
-                Picker("Template", systemImage: "squareshape.split.3x3", selection: $pattern) {
-                    ForEach(PaperPattern.allCases) { pattern in
-                        Text(pattern.displayName).tag(pattern)
-                    }
-                }
-                .pickerStyle(.menu)
-                if paper == .night {
-                    Toggle("Keep exact colors", systemImage: "eyedropper", isOn: $keepsExactColors)
-                }
-            }
-            Section {
-                Button("Share", systemImage: Symbol.share.name) { showsShare = true }
-                if isCompact {
-                    Button("Add Photo", systemImage: Symbol.photo.name) { showsPhotos = true }
-                    Toggle("Laser Pointer", systemImage: Symbol.laser.name, isOn: laserBinding)
-                } else {
-                    Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
-                }
-            }
-            #if DEBUG
-                Picker("Toolbar dock (debug)", selection: dockBinding) {
-                    ForEach(ToolbarDock.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-            #endif
-        } label: {
-            Image(systemName: Symbol.more.name)
-                .font(.system(size: Tokens.Size.toolIcon * scale))
-                .foregroundStyle(Tokens.Colors.icon)
-                .frame(width: size.width * scale, height: size.height * scale)
-                .contentShape(.capsule)
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .accessibilityLabel("More")
-        .accessibilityValue(title)
-        .accessibilityHint("\(paper.displayName) paper, \(pattern.displayName). Share and notebook options")
-    }
-
-    /// Off goes back to the tool before the laser.
-    private var laserBinding: Binding<Bool> {
-        Binding { tools.tool == .laser } set: { on in
-            if on {
-                _ = tools.select(.laser)
-            } else if tools.tool == .laser {
-                tools.switchToPrevious()
-            }
-        }
-    }
-
-    #if DEBUG
-        private var dockBinding: Binding<ToolbarDock> {
-            Binding { tools.dock } set: { tools.dock = $0 }
-        }
-    #endif
-}
-
-/// Tools, the photo button, quick colors, undo/redo, laid out along `axis` so the same content docks on
-/// any edge. ARCHITECTURE §7 calls this `ToolbarContent`; renamed so it doesn't shadow SwiftUI's protocol
+/// Tools, the photo button and quick colors, laid out along `axis` so the same content docks on any edge.
+/// Undo/redo live in the ``EditorBar`` (#191); compact chrome keeps undo here. ARCHITECTURE §7 calls this `ToolbarContent`; renamed so it
+/// doesn't shadow SwiftUI's protocol
 /// in App.
 ///
 /// Long-press a quick color to store the pen's current color in that slot (#27). The photo button (#157)
@@ -211,12 +70,10 @@ struct EditorToolbarContent: View {
             swatches
         }
         colorsButton
-        ChromeSeparator(axis: axis)
-        ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
-            .disabled(!state.canUndo)
-        if !isCompact {
-            ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
-                .disabled(!state.canRedo)
+        if isCompact {
+            ChromeSeparator(axis: axis)
+            ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
+                .disabled(!state.canUndo)
         }
     }
 
@@ -273,7 +130,7 @@ struct EditorToolbarContent: View {
         return count * swatch + (count - 1) * Tokens.Spacing.hairline
     }
 
-    /// A phone-width bar has no room for the laser pointer: it's in ⋯ (``PagesCapsule``).
+    /// A phone-width bar has no room for the laser pointer: it's in ⋯ (``MoreMenu``).
     static let compactTools = Tool.allCases.filter { $0 != .laser }
 
     private func assign(_ index: Int) {
@@ -282,31 +139,18 @@ struct EditorToolbarContent: View {
     }
 }
 
-/// "3 / 12" at the bottom trailing corner; dimmed in focus mode. Compact chrome (#118): above the bottom bar,
-/// which takes the whole row on a phone.
+/// "3 of 12" at the bottom trailing corner, focus mode only (#191): the bar's counter hides with the bar.
 struct PageIndicator: View {
     let page: (current: Int, total: Int)
-    let isFocused: Bool
-    let isCompactChrome: Bool
     let onSize: (CGSize) -> Void
-
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         GlassPill.pageIndicator(current: page.current, total: page.total)
             .onGeometryChange(for: CGSize.self, of: \.size) { onSize($0) }
-            .opacity(isFocused ? 0.7 : 1)
+            .opacity(0.7)
             .accessibilityIdentifier("pageIndicator")
             .accessibilityHint("Current page")
-            .padding(.bottom, bottom)
+            .padding(.bottom, Tokens.Spacing.chromeInset)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-    }
-
-    /// Past the glass blend distance, so the pill doesn't melt into the bar.
-    private static let barGap = Tokens.Spacing.glassBlend + Tokens.Spacing.xs
-
-    private var bottom: CGFloat {
-        let inset = Tokens.Spacing.chromeInset
-        return isCompactChrome ? inset + Tokens.Size.capsuleHeight * typeSize.chromeScale + Self.barGap : inset
     }
 }

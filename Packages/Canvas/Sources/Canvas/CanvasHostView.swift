@@ -169,6 +169,7 @@
             touchObserver.onBegan = { [weak self] in
                 guard let self else { return }
                 dismissGestures.claim(above: self)
+                delegate?.canvasHostDidBeginTouch(self)
             }
             touchObserver.onAllLifted = { [weak self] in
                 guard let self else { return }
