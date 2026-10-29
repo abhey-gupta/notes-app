@@ -96,6 +96,9 @@ extension PencilKitInkEngine {
         let session = shapeSnap.session
         shapeSnap.reset()
         guard let session else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
         session.layer?.removeFromSuperlayer()
         showFlatPen()
     }
@@ -123,6 +126,11 @@ extension PencilKitInkEngine {
         guard let tracking = shapeSnap.tracking, shapeSnap.session == nil, let kind = tool.penKind, freehandIsLive(on: tracking.page),
               let shape = ShapeRecognizer.recognize(tracking.points), let anchor = tracking.points.last
         else { return }
+        // The freehand band goes and the shape's comes in the same frame: no fade (layers removed or
+        // added outside a view animate it by default).
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
         cutFreehand(on: tracking.page)
         let touch = shapeSnap.lastTouch
         let template = usesHighlighter

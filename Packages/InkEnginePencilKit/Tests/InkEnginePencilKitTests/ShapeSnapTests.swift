@@ -138,6 +138,7 @@ struct ShapeSnapTests {
         #expect(h.engine.selection.liveHighlight == nil, "the freehand band is cut")
         let layer = try #require(h.engine.shapeSnap.session?.layer)
         #expect(layer.superlayer != nil)
+        #expect(layer.animationKeys() == nil, "the shape's band appears at once, no fade in")
 
         h.engine.shapeTouchEnded()
         let stroke = try #require(h.recorder.commits.first?.0)
