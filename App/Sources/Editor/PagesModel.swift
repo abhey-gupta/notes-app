@@ -47,6 +47,9 @@ final class PagesModel {
     @ObservationIgnored var onDelete: ([PageID]) -> Void = { _ in }
     /// Whether any of the pages has strokes (delete confirms only then).
     @ObservationIgnored var hasInk: ([PageID]) async -> Bool = { _ in false }
+    /// A cell came on screen / left it: its page gets a thumbnail if it has none (#207).
+    @ObservationIgnored var onCellAppear: (PageID) -> Void = { _ in }
+    @ObservationIgnored var onCellDisappear: (PageID) -> Void = { _ in }
 
     @ObservationIgnored private var opening: (interval: SignpostInterval, start: ContinuousClock.Instant)?
     @ObservationIgnored private var openedAt = Date()

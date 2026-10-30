@@ -8,6 +8,7 @@ import InkModel
 /// ```
 /// commit ─▶ thumbnails.pageChanged (1 s debounce) ─▶ engine.render off main ─▶ thumbs/<page>.heic (+ cover.heic)
 /// page leaves window ─▶ flush(page:)      close / background ─▶ flush()      page loads ─▶ ensure (missing only)
+/// overview cell on screen ─▶ fill (missing only: page loaded, rendered, released; one at a time)
 /// paper or theme change ─▶ regenerate every page, one in memory at a time
 /// cover written ─▶ library.coverDidChange ─▶ "Continue" card reloads the file
 /// ```
@@ -44,6 +45,28 @@ extension NotebookSession {
     func flushThumbnail(_ id: PageID) {
         guard let thumbnails else { return }
         Task { await thumbnails.flush(page: id) }
+    }
+
+    /// An overview cell came on screen: a page never loaded on the canvas has no thumbnail yet (#207).
+    func wantThumbnail(_ id: PageID) {
+        guard thumbnails != nil, !isClosed, !thumbnailWants.contains(id) else { return }
+        thumbnailWants.append(id)
+        guard thumbnailFill == nil else { return }
+        thumbnailFill = Task(priority: .utility) { [weak self] in await self?.fillThumbnails() }
+    }
+
+    /// The cell scrolled away before its turn.
+    func unwantThumbnail(_ id: PageID) {
+        thumbnailWants.removeAll { $0 == id }
+    }
+
+    private func fillThumbnails() async {
+        while let thumbnails, !Task.isCancelled, !thumbnailWants.isEmpty {
+            let id = thumbnailWants.removeFirst()
+            let isCover = residency?.pageIDs.first == id
+            await thumbnails.fill(id, isCover: isCover) { id in try await self.loadThumbnailSnapshot(id) }
+        }
+        thumbnailFill = nil
     }
 
     /// Every thumbnail shows the paper: redo them all in the background.

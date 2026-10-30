@@ -14,6 +14,7 @@
     /// Edits arrive as snapshots (``pageChanged(_:isCover:)``); a page is rendered ``Options/debounce``
     /// after its last edit, at once on ``flush(page:)`` (page leave) and ``flush()`` (close, background).
     /// ``ensure(_:isCover:)`` renders only what is missing (notebooks from before thumbnails existed);
+    /// ``fill(_:isCover:load:)`` does the same for a page that isn't loaded (pages overview);
     /// ``regenerate(_:load:)`` redoes a whole notebook (paper or theme change).
     ///
     /// Rendering goes through the injected ``Renderer`` (the engine's `render(page:size:scale:)`, which
@@ -128,13 +129,27 @@
         /// Renders what is missing for the page: its thumbnail, and the cover if `isCover`. Cheap when
         /// both exist (two `stat`s).
         public func ensure(_ snapshot: PageSnapshot, isCover: Bool) {
-            guard pending[snapshot.id] == nil else { return }
-            let fm = FileManager.default
-            let missing = !fm.fileExists(atPath: thumbnailURL(for: snapshot.id).path(percentEncoded: false))
-                || (isCover && !fm.fileExists(atPath: coverURL.path(percentEncoded: false)))
-            guard missing else { return }
+            guard pending[snapshot.id] == nil, isMissing(snapshot.id, isCover: isCover) else { return }
             pending[snapshot.id] = Job(snapshot: snapshot, isCover: isCover)
             enqueue(snapshot.id)
+        }
+
+        /// Like ``ensure(_:isCover:)`` for a page that may not be loaded: only when something is missing is
+        /// it loaded through `load` and rendered, before returning. A page with an edit waiting is left to it.
+        public func fill(_ id: PageID, isCover: Bool, load: @Sendable (PageID) async throws -> PageSnapshot?) async {
+            guard pending[id] == nil, isMissing(id, isCover: isCover) else { return }
+            do {
+                guard let snapshot = try await load(id) else { return }
+                await render(Job(snapshot: snapshot, isCover: isCover))
+            } catch {
+                Self.log.error("fill: load of \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+
+        private func isMissing(_ id: PageID, isCover: Bool) -> Bool {
+            let fm = FileManager.default
+            return !fm.fileExists(atPath: thumbnailURL(for: id).path(percentEncoded: false))
+                || (isCover && !fm.fileExists(atPath: coverURL.path(percentEncoded: false)))
         }
 
         /// Renders `id` now if an edit is waiting (page scrolled out of the window).
