@@ -210,12 +210,16 @@ final class SelectionLayers {
     var flatPenStroke: Stroke?
     /// The live stroke, while the pen is down.
     var flatPenLive: LiveStroke?
-    /// Committed strokes `flatPen` keeps showing until `flatPenCanvas` has drawn them.
+    /// Keeps `flatPen` off gutters when a stroke runs onto another page (#163).
+    let flatPenMask = CAShapeLayer()
+    /// Committed strokes `flatPen` keeps showing until the canvases of `flatPenAwaiting` have drawn them.
     var flatPenSettling: [Stroke] = []
     /// Page of the settling strokes.
     var flatPenSettlingPage: PageID?
-    /// Canvas whose next render lets the settling strokes go (it has them).
-    weak var flatPenCanvas: PageCanvas?
+    /// Pages whose canvas's next render lets the settling strokes go (they have them).
+    var flatPenAwaiting: Set<PageID> = []
+    /// Bumps whenever the settling strokes go; a stale render cap checks it.
+    var flatPenGeneration = 0
     /// The preview `lifted` shows (kept after it ends until the canvas has redrawn the strokes).
     var preview: SelectionPreview?
     /// Strokes left out of the canvas while the preview draws them.

@@ -10,13 +10,16 @@ import UIKit
 @MainActor
 final class Recorder: InkEngineDelegate {
     var commits: [(Stroke, PageID)] = []
+    /// `didCommit` calls (a stroke across pages is one call, #163).
+    var commitCalls = 0
     var eraser: [([Sample], PageID)] = []
     var lassos: [([CGPoint], PageID)] = []
     var begins = 0
     var sharp: [PageID] = []
 
-    func engine(_: any InkEngine, didCommit stroke: Stroke, to page: PageID) {
-        commits.append((stroke, page))
+    func engine(_: any InkEngine, didCommit pieces: [(page: PageID, stroke: Stroke)]) {
+        commits += pieces.map { ($0.stroke, $0.page) }
+        commitCalls += 1
     }
 
     func engine(_: any InkEngine, didReceiveEraser samples: [Sample], to page: PageID) {

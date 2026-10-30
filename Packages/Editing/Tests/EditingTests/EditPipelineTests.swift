@@ -109,6 +109,27 @@ struct EditPipelineTests {
         #expect(h.undoManager?.undoActionName == "Stroke")
     }
 
+    /// A stroke that ran onto the next page (#163) lands as a piece on each page, one undo step.
+    @Test func strokeAcrossPagesIsOneUndoStep() async throws {
+        let h = try Harness()
+        let (top, bottom) = (line(y: 800), line(y: 10))
+        h.pipeline.commitStroke([(h.first, top), (h.second, bottom)])
+        await h.pipeline.drain()
+        #expect(try await h.strokes(h.first) == [top.id])
+        #expect(try await h.strokes(h.second) == [bottom.id])
+        #expect(h.mirror.page(h.second)?.strokes.map(\.id) == [bottom.id])
+        #expect(h.pipeline.history.undoActionName == "Stroke")
+        h.pipeline.undo()
+        await h.pipeline.drain()
+        #expect(try await h.strokes(h.first).isEmpty)
+        #expect(try await h.strokes(h.second).isEmpty)
+        #expect(!h.pipeline.history.canUndo)
+        h.pipeline.redo()
+        await h.pipeline.drain()
+        #expect(try await h.strokes(h.first) == [top.id])
+        #expect(try await h.strokes(h.second) == [bottom.id])
+    }
+
     /// The bug this module exists for: undo tapped while a stroke is still being saved takes back that
     /// stroke, not the one before it, and keeps it redoable.
     @Test(arguments: [true, false])

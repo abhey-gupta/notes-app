@@ -74,15 +74,6 @@ public final class EditPipeline {
 
     // MARK: Ink
 
-    /// Adds a finished stroke to `page` (one undo step).
-    public func commitStroke(_ stroke: Stroke, to page: PageID) {
-        enqueue("stroke") { [self] in
-            let edit = try await mirror.ensureLoaded(page).addEdit([stroke])
-            try await commit(edit, to: page)
-            history.record(edit, on: page, actionName: "Stroke")
-        }
-    }
-
     /// A pen or eraser went down: ends the previous gesture; an eraser gesture opens one "Erase" step.
     public func beginGesture(erasing: Bool) {
         enqueue("gesture") { [self] in
@@ -358,5 +349,27 @@ public final class EditPipeline {
     private func finishGesture() {
         eraser.finish(in: history)
         history.endAllGroups()
+    }
+}
+
+// MARK: - Strokes
+
+public extension EditPipeline {
+    /// Adds a finished stroke to `page` (one undo step).
+    func commitStroke(_ stroke: Stroke, to page: PageID) {
+        commitStroke([(page, stroke)])
+    }
+
+    /// Adds a finished stroke given as its pieces, one per page it ran across (#163), as one undo step.
+    func commitStroke(_ pieces: [(page: PageID, stroke: Stroke)]) {
+        enqueue("stroke") { [self] in
+            history.beginGroup(actionName: "Stroke")
+            defer { history.endGroup() }
+            for (page, stroke) in pieces {
+                let edit = try await mirror.ensureLoaded(page).addEdit([stroke])
+                try await commit(edit, to: page)
+                history.record(edit, on: page, actionName: "Stroke")
+            }
+        }
     }
 }

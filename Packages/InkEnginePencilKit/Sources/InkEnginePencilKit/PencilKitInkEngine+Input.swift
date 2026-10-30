@@ -20,7 +20,7 @@ extension PencilKitInkEngine: InkInputViewDelegate {
             if stroke.device == .pencil {
                 pencilSeen()
             }
-            eraserProgress = (stroke.touch, 0)
+            eraserProgress = EraserProgress(touch: stroke.touch, emitted: 0, page: stroke.page)
             delegate?.engineDidBeginStroke(self)
             emitEraser(stroke)
         case let .updated(stroke):
@@ -47,10 +47,46 @@ extension PencilKitInkEngine: InkInputViewDelegate {
         }
     }
 
+    /// Reports the eraser's new samples to the page each lies on: an eraser dragged onto the next page
+    /// erases there too (#163). The segment across the seam goes to both pages.
     private func emitEraser(_ stroke: LiveStroke) {
         guard tool.tool == .eraser, let progress = eraserProgress, progress.touch == stroke.touch,
               stroke.samples.count > progress.emitted else { return }
-        eraserProgress = (stroke.touch, stroke.samples.count)
-        delegate?.engine(self, didReceiveEraser: Array(stroke.samples[progress.emitted...]), to: stroke.page)
+        guard let start = viewport.page(stroke.page) else {
+            eraserProgress?.emitted = stroke.samples.count
+            delegate?.engine(self, didReceiveEraser: Array(stroke.samples[progress.emitted...]), to: progress.page)
+            return
+        }
+        // Samples are in the start page's space; each run is moved into its own page's.
+        func moved(_ s: Sample, to page: VisiblePage) -> Sample {
+            var s = s
+            s.x += Float(start.frame.minX - page.frame.minX)
+            s.y += Float(start.frame.minY - page.frame.minY)
+            return s
+        }
+        var page = viewport.page(progress.page) ?? start
+        var runs: [(page: VisiblePage, samples: [Sample])] = [(page, [])]
+        var previous = progress.emitted > 0 ? stroke.samples[progress.emitted - 1] : nil
+        for sample in stroke.samples[progress.emitted...] {
+            let point = CGPoint(x: start.frame.minX + CGFloat(sample.x), y: start.frame.minY + CGFloat(sample.y))
+            if !page.frame.contains(point), let next = viewport.pages.first(where: { $0.id != page.id && $0.frame.contains(point) }) {
+                runs[runs.count - 1].samples.append(moved(sample, to: page))
+                page = next
+                runs.append((page, previous.map { [moved($0, to: page)] } ?? []))
+            }
+            runs[runs.count - 1].samples.append(moved(sample, to: page))
+            previous = sample
+        }
+        eraserProgress = EraserProgress(touch: stroke.touch, emitted: stroke.samples.count, page: page.id)
+        for run in runs where !run.samples.isEmpty {
+            delegate?.engine(self, didReceiveEraser: run.samples, to: run.page.id)
+        }
     }
+}
+
+/// The eraser touch, how many of its samples were reported and the page they last went to.
+struct EraserProgress {
+    let touch: TouchID
+    var emitted: Int
+    var page: PageID
 }

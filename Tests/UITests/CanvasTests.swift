@@ -10,19 +10,19 @@ final class CanvasTests: XCTestCase {
     }
 
     @MainActor
-    private func canvas(_ app: XCUIApplication) -> XCUIElement {
+    func canvas(_ app: XCUIApplication) -> XCUIElement {
         app.scrollViews["canvas"]
     }
 
     /// Waits until the canvas reports `value` for the current page ("3 strokes").
     @MainActor
-    private func waitForStrokes(_ value: String, in app: XCUIApplication, timeout: TimeInterval = 10) -> Bool {
+    func waitForStrokes(_ value: String, in app: XCUIApplication, timeout: TimeInterval = 10) -> Bool {
         let predicate = NSPredicate(format: "value == %@", value)
         return XCTWaiter.wait(for: [expectation(for: predicate, evaluatedWith: canvas(app))], timeout: timeout) == .completed
     }
 
     @MainActor
-    private func waitForIndicator(_ app: XCUIApplication, timeout: TimeInterval = 10, where match: @escaping (String) -> Bool) -> String? {
+    func waitForIndicator(_ app: XCUIApplication, timeout: TimeInterval = 10, where match: @escaping (String) -> Bool) -> String? {
         let pill = app.staticTexts["pageIndicator"]
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -37,7 +37,7 @@ final class CanvasTests: XCTestCase {
     /// Drags one finger from `from` to `to` (normalized window points), then waits out focus mode and
     /// brings the chrome back if inking collapsed it.
     @MainActor
-    private func ink(in app: XCUIApplication, from: CGVector, to: CGVector) {
+    func ink(in app: XCUIApplication, from: CGVector, to: CGVector) {
         let window = app.windows.firstMatch
         let start = window.coordinate(withNormalizedOffset: from)
         let end = window.coordinate(withNormalizedOffset: to)

@@ -80,6 +80,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     let laser = LaserPointer()
     /// Hold to snap: the drawing touch and the shape following it (`+ShapeSnap`, #165).
     let shapeSnap = ShapeSnap()
+    /// Ink running onto other pages while the Pencil is down (`+CrossPage`, #163).
+    let crossPage = CrossPage()
 
     private(set) var viewport = Viewport.empty
     private(set) var snapshots: [PageID: PageSnapshot] = [:]
@@ -93,7 +95,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     var pageViews: [PageID: PageLayerView] = [:]
     var isSettingDrawing = false
-    var eraserProgress: (touch: TouchID, emitted: Int)?
+    var eraserProgress: EraserProgress?
     /// Full canvas rebuilds so far (tests check the commit echo path doesn't rebuild).
     private(set) var rebuildCount = 0
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "ink.pencilkit")
@@ -114,6 +116,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         input.delegate = self
         host.addSubview(input)
         setUpShapeSnap()
+        setUpCrossPage()
         applyTool()
         installHousekeeping()
     }
@@ -295,26 +298,6 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         layoutPages()
     }
 
-    /// Reports strokes PencilKit added to `canvas` since the last sync.
-    private func absorbCanvasStrokes(_ canvas: PageCanvas) {
-        guard let page = canvas.page else { return }
-        let strokes = canvas.view.drawing.strokes
-        // A stroke a shape snap cut short (`+ShapeSnap`) is dropped, not reported.
-        guard strokes.count > canvas.ids.count, !dropCutStroke(canvas) else {
-            if strokes.count < canvas.ids.count {
-                rebuildCanvas(canvas) // something outside the seam removed strokes; restore the snapshot
-            }
-            return
-        }
-        let kind = tool.penKind ?? .ballpoint
-        for pk in strokes[canvas.ids.count...] {
-            let stroke = PencilKitConversion.stroke(from: pk, tool: kind, color: tool.color, width: tool.width)
-            canvas.ids.append(stroke.id)
-            pending[page, default: []].append(PendingStroke(stroke: stroke, pk: pk))
-            delegate?.engine(self, didCommit: stroke, to: page)
-        }
-    }
-
     /// Replaces `canvas`'s drawing with its page's ink (never highlights) plus pending strokes.
     func rebuildCanvas(_ canvas: PageCanvas) {
         guard !canvas.isUsingTool else {
@@ -391,5 +374,6 @@ extension PencilKitInkEngine: PKCanvasViewDelegate {
         canvasDidRender(canvas)
         canvasDidRenderSelection()
         flatPenCanvasDidRender(canvas)
+        crossPageCanvasDidRender(canvas)
     }
 }

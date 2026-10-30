@@ -125,6 +125,8 @@ final class PageLayerView: UIView {
         linesLayer.lineWidth = TemplateGeometry.lineWidth
         dotsLayer.strokeColor = nil
         thumbnailLayer.isHidden = true
+        // A band running onto the next page shows there through that page's own band (#163), never this one.
+        highlightsLayer.masksToBounds = true
         imageLayer.addSublayer(thumbnailLayer)
         imageLayer.addSublayer(inkLayer)
         layer.addSublayer(linesLayer)
@@ -334,6 +336,14 @@ extension PageLayerView {
         layer.contentsScale = linesLayer.contentsScale
         liveHighlight = layer
         highlightsLayer.addSublayer(layer)
+    }
+
+    /// Takes the band being drawn away (cancelled, or it reached no further than another page).
+    func removeLiveHighlight(_ layer: CAShapeLayer) {
+        if liveHighlight === layer {
+            liveHighlight = nil
+        }
+        layer.removeFromSuperlayer()
     }
 
     /// The live band is now `stroke`'s layer (no handoff on lift).

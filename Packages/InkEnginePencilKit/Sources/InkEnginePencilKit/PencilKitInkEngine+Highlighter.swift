@@ -41,11 +41,15 @@ extension PencilKitInkEngine {
         guard let current = selection.liveHighlight else { return }
         let stroke = Highlight.stroke(current.template, samples: live.displaySamples)
         Highlight.configure(current.layer, stroke: stroke, color: highlightColor(stroke))
+        showHighlightSpill(stroke, from: current.page)
     }
 
     func cancelLiveHighlight() {
-        selection.liveHighlight?.layer.removeFromSuperlayer()
+        if let live = selection.liveHighlight {
+            removeLiveBand(live.layer, on: live.page)
+        }
         selection.liveHighlight = nil
+        clearHighlightSpill()
     }
 
     /// Reports the finished stroke; its page view keeps the live layer as the stroke's own.
@@ -53,27 +57,39 @@ extension PencilKitInkEngine {
         guard let current = selection.liveHighlight else { return }
         selection.liveHighlight = nil
         guard !live.samples.isEmpty else {
-            current.layer.removeFromSuperlayer()
+            removeLiveBand(current.layer, on: current.page)
+            clearHighlightSpill()
             return
         }
         commitHighlight(Highlight.stroke(current.template, samples: live.samples), layer: current.layer, to: live.page)
     }
 
-    /// Reports `stroke` (a finished highlight or a snapped shape, `+ShapeSnap`) and makes `layer`, its live
-    /// band, the stroke's own.
+    /// Reports `stroke` (a finished highlight or a snapped shape, `+ShapeSnap`) as the piece each page it
+    /// reached keeps (#163); `layer`, its live band, and its bands on other pages become the pieces' own.
     func commitHighlight(_ stroke: Stroke, layer: CAShapeLayer, to page: PageID) {
+        let pieces = pieces(of: stroke, from: page)
+        var bands = crossPage.bands
+        crossPage.bands = [:]
+        bands[page] = layer
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        Highlight.configure(layer, stroke: stroke, color: highlightColor(stroke))
-        CATransaction.commit()
-        if let view = pageViews[page] {
-            view.adoptLiveHighlight(layer, as: stroke)
-        } else {
-            layer.removeFromSuperlayer()
+        for (piecePage, piece) in pieces {
+            if let band = bands.removeValue(forKey: piecePage) {
+                Highlight.configure(band, stroke: piece, color: highlightColor(piece))
+                if let view = pageViews[piecePage] {
+                    view.adoptLiveHighlight(band, as: piece)
+                } else {
+                    band.removeFromSuperlayer()
+                }
+            }
+            pending[piecePage, default: []].append(PendingStroke(stroke: piece, pk: nil))
         }
-        pending[page, default: []].append(PendingStroke(stroke: stroke, pk: nil))
+        for (bandPage, band) in bands {
+            removeLiveBand(band, on: bandPage)
+        }
+        CATransaction.commit()
         layoutPages()
-        delegate?.engine(self, didCommit: stroke, to: page)
+        delegate?.engine(self, didCommit: pieces)
     }
 
     /// Brings a page view's highlight layers up to date: the snapshot's highlights plus pending ones, in

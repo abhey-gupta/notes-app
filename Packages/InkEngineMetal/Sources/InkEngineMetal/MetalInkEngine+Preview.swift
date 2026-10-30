@@ -58,7 +58,8 @@ private final class PreviewHostView: UIView, InkEngineDelegate {
         engine.setViewport(Viewport(contentOffset: offset, zoomScale: zoom, size: bounds.size, pages: [page]))
     }
 
-    func engine(_: any InkEngine, didCommit stroke: Stroke, to page: PageID) {
+    func engine(_: any InkEngine, didCommit pieces: [(page: PageID, stroke: Stroke)]) {
+        guard let (page, stroke) = pieces.first else { return }
         let edit = snapshot.page.addEdit([stroke])
         guard let next = try? snapshot.applying(edit) else { return }
         snapshot = next

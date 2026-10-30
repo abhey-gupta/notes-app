@@ -18,9 +18,11 @@ final class Recorder: InkEngineDelegate {
     /// Echo commits back like the document does.
     var echo: ((Stroke, PageID) -> Void)?
 
-    func engine(_: any InkEngine, didCommit stroke: Stroke, to page: PageID) {
-        commits.append((stroke, page))
-        echo?(stroke, page)
+    func engine(_: any InkEngine, didCommit pieces: [(page: PageID, stroke: Stroke)]) {
+        for (page, stroke) in pieces {
+            commits.append((stroke, page))
+            echo?(stroke, page)
+        }
     }
 
     func engine(_: any InkEngine, didReceiveEraser samples: [Sample], to page: PageID) {

@@ -12,7 +12,7 @@ import UIKit
 /// While the Pencil stays down the shape follows it (``InkGeometry/SnapShape/adjusted(anchor:to:)``); lift
 /// commits it, at constant width, like a stroke of a pen with pressure off (`+FlatPen`) or a highlight.
 ///
-/// The drawing touch is watched by ``ShapeHoldGesture`` on the engine root, beside whichever view draws it.
+/// The drawing touch is watched by a ``TouchWatchGesture`` on the engine root, beside whichever view draws it.
 extension PencilKitInkEngine {
     /// How long the Pencil must stay still for a stroke to snap.
     static let shapeHoldDuration: TimeInterval = 0.5
@@ -99,7 +99,10 @@ extension PencilKitInkEngine {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        session.layer?.removeFromSuperlayer()
+        if let layer = session.layer {
+            removeLiveBand(layer, on: session.page)
+        }
+        clearHighlightSpill()
         showFlatPen()
     }
 
@@ -160,7 +163,9 @@ extension PencilKitInkEngine {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         if let layer = session.layer {
-            Highlight.configure(layer, stroke: session.stroke, color: highlightColor(session.stroke))
+            let stroke = session.stroke
+            Highlight.configure(layer, stroke: stroke, color: highlightColor(stroke))
+            showHighlightSpill(stroke, from: session.page)
         } else {
             showFlatPen()
         }
@@ -180,7 +185,7 @@ extension PencilKitInkEngine {
     }
 
     /// The touch kind draws ink with the current settings (as ``InkEngine/InputPolicy`` and the canvases' drawing policy).
-    private func drawsInk(_ kind: TouchRecord.Kind) -> Bool {
+    func drawsInk(_ kind: TouchRecord.Kind) -> Bool {
         kind == .pencil || (kind == .direct && tool.allowsFingerDrawing && !hasSeenPencil)
     }
 
@@ -204,6 +209,7 @@ extension PencilKitInkEngine {
             selection.flatPenStroke = nil
             cancelLiveHighlight()
         } else if let canvas = canvas(for: page) {
+            hideCrossPageInk()
             canvas.discardsStroke = true
             // Cancels PencilKit's stroke; the touch stays with this engine's gesture.
             canvas.view.drawingGestureRecognizer.isEnabled = false
@@ -217,7 +223,7 @@ extension PencilKitInkEngine {
 /// Hold-to-snap state: the touch being watched and, once snapped, the shape following it.
 @MainActor
 final class ShapeSnap {
-    let gesture = ShapeHoldGesture()
+    let gesture = TouchWatchGesture()
     var tracking: ShapeTracking?
     var session: ShapeSession?
     /// The newest touch record (tilt for the shape's samples).
@@ -263,63 +269,5 @@ struct ShapeSession {
         return Highlight.isHighlight(template)
             ? Highlight.stroke(template, samples: samples)
             : PencilKitInkEngine.flatStroke(template, samples: samples)
-    }
-}
-
-/// Watches the drawing touch for hold to snap without taking part in recognition: it never recognizes,
-/// delays or cancels anything, so PencilKit and the input view get every touch as before. Follows the
-/// first touch ``onBegan`` takes (one that draws: not a resting palm) until it lifts.
-@MainActor
-final class ShapeHoldGesture: UIGestureRecognizer, UIGestureRecognizerDelegate {
-    /// A touch went down while none is followed; `true` follows it.
-    var onBegan: ((TouchRecord) -> Bool)?
-    var onMoved: (([TouchRecord]) -> Void)?
-    /// `true` when the touch was cancelled.
-    var onEnded: ((Bool) -> Void)?
-    private var touch: UITouch?
-
-    init() {
-        super.init(target: nil, action: nil)
-        cancelsTouchesInView = false
-        delaysTouchesBegan = false
-        delaysTouchesEnded = false
-        requiresExclusiveTouchType = false
-        delegate = self
-    }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with _: UIEvent) {
-        guard touch == nil, let view else { return }
-        touch = touches.first { onBegan?(TouchRecord($0, in: view)) == true }
-    }
-
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard let touch, touches.contains(touch), let view else { return }
-        let id = TouchID(touch)
-        let coalesced = event.coalescedTouches(for: touch) ?? [touch]
-        onMoved?(coalesced.map { TouchRecord($0, id: id, in: view) })
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with _: UIEvent) {
-        guard let touch, touches.contains(touch) else { return }
-        self.touch = nil
-        onEnded?(false)
-    }
-
-    override func touchesCancelled(_ touches: Set<UITouch>, with _: UIEvent) {
-        guard let touch, touches.contains(touch) else { return }
-        self.touch = nil
-        onEnded?(true)
-    }
-
-    override func reset() {
-        super.reset()
-        if touch != nil {
-            touch = nil
-            onEnded?(true)
-        }
-    }
-
-    func gestureRecognizer(_: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer) -> Bool {
-        true
     }
 }

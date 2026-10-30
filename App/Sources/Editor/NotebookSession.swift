@@ -324,8 +324,8 @@ final class NotebookSession {
 // MARK: - Engine
 
 extension NotebookSession: InkEngineDelegate {
-    func engine(_: any InkEngine, didCommit stroke: Stroke, to page: PageID) {
-        edits?.commitStroke(stroke, to: page)
+    func engine(_: any InkEngine, didCommit pieces: [(page: PageID, stroke: Stroke)]) {
+        edits?.commitStroke(pieces)
     }
 
     /// Each batch is applied at once (stroke mode removes the strokes it touched, partial mode splits them,

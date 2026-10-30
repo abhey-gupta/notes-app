@@ -57,8 +57,9 @@ public protocol InkEngine: AnyObject {
 /// Receives engine output. All callbacks arrive on the main actor.
 @MainActor
 public protocol InkEngineDelegate: AnyObject {
-    /// A pen stroke finished on `page`. Not yet part of the document; echo it back with ``InkEngine/apply(_:to:)``.
-    func engine(_ engine: any InkEngine, didCommit stroke: Stroke, to page: PageID)
+    /// A pen stroke finished: one piece per page it ran across (#163), in drawing order, usually just the
+    /// page it began on. Not yet part of the document; echo each back with ``InkEngine/apply(_:to:)``.
+    func engine(_ engine: any InkEngine, didCommit pieces: [(page: PageID, stroke: Stroke)])
     /// Eraser input in page space, delivered incrementally (one batch per touch event). A new gesture
     /// starts at the preceding ``engineDidBeginStroke(_:)``. `Tools` resolves what gets erased.
     func engine(_ engine: any InkEngine, didReceiveEraser samples: [Sample], to page: PageID)
