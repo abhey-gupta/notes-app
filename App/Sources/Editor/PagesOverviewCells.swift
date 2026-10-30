@@ -20,8 +20,11 @@ struct PageThumb: View {
     /// Ring and number: they fade in as the page lands and out as it takes off (`chromeAnimation`).
     var showsChrome = true
     var chromeAnimation: Animation?
+    /// Arrival halo after "Go to page" (#214): 1 while lifted, fading to 0.
+    var halo: Double = 0
 
     private static let size = Tokens.Size.pageThumb
+    private static let haloWidth: CGFloat = 10
     /// Template spacing scaled from page points to thumb points.
     private static let spacing = Tokens.Size.templateSpacing * Tokens.Size.pageThumb.width / Tokens.Size.pageA4.width
 
@@ -52,12 +55,24 @@ struct PageThumb: View {
                         .padding(8)
                 }
             }
+            .overlay {
+                RoundedRectangle(cornerRadius: Tokens.Radius.pageThumb + Tokens.Size.pageThumbRing)
+                    .strokeBorder(Tokens.Colors.selection, lineWidth: Tokens.Size.pageThumbRing)
+                    .padding(-Tokens.Size.pageThumbRing)
+                    .opacity(halo)
+            }
             .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
             .shadow(Tokens.Shadows.thumb)
+            .background {
+                RoundedRectangle(cornerRadius: Tokens.Radius.pageThumb + Self.haloWidth)
+                    .fill(Tokens.Colors.selection.color.opacity(0.2))
+                    .padding(-Self.haloWidth)
+                    .opacity(halo)
+            }
             .opacity(showsContent ? 1 : 0)
             Text("\(number)")
-                .scaledFont(size: 12.5, weight: isCurrent ? .semibold : .medium)
-                .foregroundStyle(isCurrent ? Tokens.Colors.selection.color : Tokens.Colors.textSecondary.color)
+                .scaledFont(size: 12.5, weight: isCurrent || halo > 0 ? .semibold : .medium)
+                .foregroundStyle(isCurrent || halo > 0 ? Tokens.Colors.selection.color : Tokens.Colors.textSecondary.color)
                 .opacity(showsChrome ? 1 : 0)
                 .animation(chromeAnimation, value: showsChrome)
         }

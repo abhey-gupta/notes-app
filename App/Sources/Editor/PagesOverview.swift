@@ -11,6 +11,7 @@ import UIKit
 /// - Long-press and drag a page onto another: move it there (one undo step).
 /// - Bottom capsule: new page with that template after the current one.
 /// - Select: multi-select, Delete asks first only if a selected page has ink.
+/// - Go to page (#214): type a number; the grid scrolls there and the page lifts with a fading halo.
 ///
 /// Undo and redo sit in the header; ⌘Z and the three-finger gestures reach the same history.
 ///
@@ -32,6 +33,8 @@ struct PagesOverview: View {
     @State private var selected: Set<PageID> = []
     @State private var confirmsDelete = false
     @State private var drag: Drag?
+    @State private var isJumping = false
+    @State private var arrival = PageArrival()
     @State private var flight: PagesFlight
 
     init(model: PagesModel, state: EditorState, viewport: CanvasViewportState, title: String, paper: DesignSystem.PaperTheme) {
@@ -112,6 +115,12 @@ struct PagesOverview: View {
                     .accessibilityIdentifier("pagesCount")
             }
             Spacer(minLength: Tokens.Spacing.m)
+            if !isSelecting {
+                PageJumpControl(count: model.entries.count, isOpen: $isJumping) { index in
+                    arrival.jump(to: model.entries[index].id, number: index + 1, reduceMotion: reduceMotion)
+                }
+                .transition(.opacity)
+            }
             GlassCapsule(height: Tokens.Size.focusPillHeight, leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.xs) {
                 ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
                     .disabled(!state.canUndo)
@@ -122,7 +131,10 @@ struct PagesOverview: View {
                 isSelecting: isSelecting,
                 selectedCount: selected.count,
                 canDelete: !selected.isEmpty && selected.count < model.entries.count,
-                onSelect: { isSelecting = true },
+                onSelect: {
+                    isJumping = false
+                    isSelecting = true
+                },
                 onDelete: requestDelete,
                 onCancel: endSelecting,
                 onDone: { flight.close(to: nil, current: currentIndex, reduceMotion: reduceMotion) }
@@ -132,7 +144,7 @@ struct PagesOverview: View {
         .padding(.leading, chrome.margin + chrome.windowControls.leading)
         .padding(.trailing, chrome.margin)
         .padding(.top, Tokens.Spacing.xxl)
-        .padding(.bottom, Tokens.Spacing.xl)
+        .padding(.bottom, Tokens.Spacing.s)
     }
 
     // MARK: Grid
@@ -146,7 +158,8 @@ struct PagesOverview: View {
                     }
                 }
                 .padding(.horizontal, chrome.margin)
-                .padding(.top, Tokens.Spacing.s)
+                // Room for a first-row page's arrival halo (#214) inside the scroll view's clip.
+                .padding(.top, Tokens.Spacing.xl)
                 .padding(.bottom, Tokens.Size.templateCapsuleHeight + 2 * Tokens.Spacing.xxl)
             }
             .coordinateSpace(.named(Self.gridSpace))
@@ -154,8 +167,10 @@ struct PagesOverview: View {
             .scrollDisabled(drag != nil)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { flight.geometry.scroll = $0 }
             .onAppear {
+                arrival.proxy = proxy
                 FrameAfter.next { flight.arrive(proxy, current: currentIndex, reduceMotion: reduceMotion) }
             }
+            .onDisappear(perform: arrival.cancel)
         }
     }
 
@@ -163,6 +178,8 @@ struct PagesOverview: View {
         let dragging = drag?.index == index
         let isAnchor = index == flight.anchorIndex(current: currentIndex)
         let settled = isAnchor || flight.isOpen
+        let arriving = arrival.page == entry.id
+        let lifted = arriving && arrival.isLifted
         return PageThumb(
             entry: entry,
             number: index + 1,
@@ -174,7 +191,8 @@ struct PagesOverview: View {
             version: model.thumbnailVersion(entry.id),
             showsContent: !(isAnchor && flight.hidesAnchorContent),
             showsChrome: !isAnchor || flight.isOpen,
-            chromeAnimation: isAnchor ? segment(0.7, 1) : nil
+            chromeAnimation: isAnchor ? segment(0.7, 1) : nil,
+            halo: arriving ? (lifted ? 1 : 0.6) : 0
         )
         .overlay(alignment: dropEdge(for: index)) {
             if drag?.target == index, !dragging {
@@ -184,10 +202,10 @@ struct PagesOverview: View {
                     .offset(x: dropEdge(for: index) == .leading ? -Tokens.Size.pageThumbGap / 2 : Tokens.Size.pageThumbGap / 2)
             }
         }
-        .scaleEffect(dragging ? 1.04 : settled ? 1 : 0.96)
+        .scaleEffect(dragging ? 1.04 : lifted ? 1.06 : settled ? 1 : 0.96)
         .opacity(settled ? 1 : 0)
         .offset(dragging ? drag?.translation ?? .zero : .zero)
-        .zIndex(dragging ? 1 : 0)
+        .zIndex(dragging || arriving ? 1 : 0)
         .animation(.snappy(duration: 0.18), value: dragging)
         .animation(isAnchor ? nil : rippleSegment(index, anchor: flight.anchorIndex(current: currentIndex)), value: flight.isOpen)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { flight.geometry.cells[index] = $0 }
@@ -217,17 +235,6 @@ struct PagesOverview: View {
 
     var currentIndex: Int {
         min(viewport.currentPage, max(model.entries.count - 1, 0))
-    }
-
-    // MARK: Flight timing
-
-    private func segment(_ from: Double, _ to: Double) -> Animation {
-        FlightTiming.segment(from, to, opening: flight.isOpen, reduceMotion: reduceMotion)
-    }
-
-    private func rippleSegment(_ index: Int, anchor: Int) -> Animation {
-        let delay = flight.rippleDelay(index: index, anchor: anchor)
-        return segment(0.25 + delay, 0.85 + delay)
     }
 
     // MARK: Actions
@@ -295,6 +302,24 @@ struct PagesOverview: View {
     }
 }
 
+extension PagesOverview {
+    /// Coordinate space of the grid's content; `PageLift` reports locations in it.
+    nonisolated static let gridSpace = "pagesGrid"
+}
+
+private extension PagesOverview {
+    // MARK: Flight timing
+
+    private func segment(_ from: Double, _ to: Double) -> Animation {
+        FlightTiming.segment(from, to, opening: flight.isOpen, reduceMotion: reduceMotion)
+    }
+
+    private func rippleSegment(_ index: Int, anchor: Int) -> Animation {
+        let delay = flight.rippleDelay(index: index, anchor: anchor)
+        return segment(0.25 + delay, 0.85 + delay)
+    }
+}
+
 private extension PagesOverview {
     struct Drag: Equatable {
         var index: Int
@@ -302,65 +327,10 @@ private extension PagesOverview {
         var target: Int?
     }
 
-    nonisolated static let gridSpace = "pagesGrid"
     static let columns = [
         GridItem(
             .adaptive(minimum: Tokens.Size.pageThumb.width, maximum: Tokens.Size.pageThumb.width),
             spacing: Tokens.Size.pageThumbGap, alignment: .top
         ),
     ]
-}
-
-/// Long-press-then-drag on a page cell, in the grid's coordinate space (#197).
-///
-/// UIKit-backed: a SwiftUI `LongPressGesture` sequenced before a zero-distance `DragGesture` claims the
-/// touch from the start, so a swipe that began on a page never scrolled the grid. A long press fails
-/// once the finger travels 10 pt before 0.3 s, which leaves the swipe to the scroll view.
-struct PageLift: UIGestureRecognizerRepresentable {
-    enum Phase {
-        case lifted
-        /// Translation since the lift, finger location.
-        case moved(CGSize, CGPoint)
-        case dropped(CGPoint)
-        case cancelled
-    }
-
-    var isEnabled = true
-    var onPhase: (Phase) -> Void
-
-    func makeCoordinator(converter _: CoordinateSpaceConverter) -> Coordinator {
-        Coordinator()
-    }
-
-    func makeUIGestureRecognizer(context _: Context) -> UILongPressGestureRecognizer {
-        let press = UILongPressGestureRecognizer()
-        press.minimumPressDuration = 0.3
-        return press
-    }
-
-    func updateUIGestureRecognizer(_ press: UILongPressGestureRecognizer, context _: Context) {
-        press.isEnabled = isEnabled
-    }
-
-    func handleUIGestureRecognizerAction(_ press: UILongPressGestureRecognizer, context: Context) {
-        let location = context.converter.location(in: .named(PagesOverview.gridSpace))
-        switch press.state {
-        case .began:
-            context.coordinator.start = location
-            onPhase(.lifted)
-        case .changed:
-            let start = context.coordinator.start
-            onPhase(.moved(CGSize(width: location.x - start.x, height: location.y - start.y), location))
-        case .ended:
-            onPhase(.dropped(location))
-        case .cancelled, .failed:
-            onPhase(.cancelled)
-        default:
-            break
-        }
-    }
-
-    final class Coordinator {
-        var start = CGPoint.zero
-    }
 }

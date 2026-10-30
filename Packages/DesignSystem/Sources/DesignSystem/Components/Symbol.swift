@@ -11,6 +11,7 @@ public enum Symbol: String, CaseIterable, Sendable {
     case undo = "arrow.uturn.backward"
     case redo = "arrow.uturn.forward"
     case pages = "square.grid.2x2"
+    case goToPage = "number"
     case share = "square.and.arrow.up"
     case more = "ellipsis"
     case search = "magnifyingglass"
