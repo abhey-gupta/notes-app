@@ -1,4 +1,5 @@
 import Foundation
+import InkModel
 import Library
 import Tools
 
@@ -119,13 +120,23 @@ enum LaunchOptions {
     }
 
     /// Persisted open tabs (#191); `-resetToolState` forgets them.
+    /// `-splitNotebook <title>` (DEBUG): the editor opens split, this notebook beside `-openNotebook`'s (#175).
+    static func splitRoute(in library: any LibraryModel) -> NotebookID? {
+        #if DEBUG
+            guard let title = UserDefaults.standard.string(forKey: "splitNotebook") else { return nil }
+            return library.notebooks.first { $0.title.localizedCaseInsensitiveCompare(title) == .orderedSame }?.id
+        #else
+            nil
+        #endif
+    }
+
     static func makeTabs() -> TabsModel {
         #if DEBUG
             if flag("resetToolState") {
                 TabsModel.reset()
             }
         #endif
-        return TabsModel()
+        return TabsModel(restores: !AppWindows.hasWindow)
     }
 
     /// Persisted `ToolState` with app defaults; DEBUG launch arguments override dock and tools.

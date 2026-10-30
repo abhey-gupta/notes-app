@@ -140,6 +140,32 @@ struct PageResidencyTests {
         #expect(h.sink.pushes.count == pushes)
     }
 
+    /// An edit accepted while its page loads isn't lost: the load may predate it, so the page is read again
+    /// (a second view's residency in split view, #175, gets edits for pages it's still loading).
+    @Test func editDuringLoadSurvives() async throws {
+        let h = try ResidencyHarness()
+        h.show(0 ..< 1)
+        let page = try await h.store.page(h.ids[0])
+        let edit = try page.addEdit([dot(y: 50)])
+        _ = try await h.store.apply(edit, to: h.ids[0])
+        h.residency.didApply(edit, to: h.ids[0])
+        try await h.settle()
+        try await h.until { h.residency.page(h.ids[0])?.strokes.count == 2 }
+    }
+
+    /// A second view of the notebook (#175) leaves the store's memory alone when pages scroll away.
+    @Test func followerKeepsStorePages() async throws {
+        let h = try ResidencyHarness()
+        h.residency.evictsFromStore = false
+        h.show(0 ..< 1)
+        try await h.settle()
+        h.show(9 ..< 10)
+        try await h.settle()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(h.residency.page(h.ids[0]) == nil, "out of the mirror")
+        #expect(await h.store.isLoaded(h.ids[0]), "still in the store")
+    }
+
     /// After a refused edit the page leaves the engine (dropping ink it drew) and comes back as saved.
     @Test func reloadRebuildsThePageFromTheStore() async throws {
         let h = try ResidencyHarness()
