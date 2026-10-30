@@ -152,6 +152,32 @@ struct CrossPageTests {
         #expect(page3.highlightShapeLayers == [band])
     }
 
+    @Test func eraserDraggedOntoTheNextPageErasesThere() {
+        h.engine.setTool(ToolConfiguration(tool: .eraser, width: 16))
+        var tracker = InkInputTracker()
+        let at = { (y: CGFloat, t: Double) in TouchRecord(id: TouchID(1), location: CGPoint(x: 100, y: y), timestamp: t) }
+        let send = { (events: [InkInputTracker.Event]) in
+            for event in events {
+                h.engine.inkInputView(h.engine.input, didProduce: event)
+            }
+        }
+        let (page2, page3) = (h.frames[1], h.frames[2])
+        send(tracker.began(at(1666, 0)) { h.engine.inkInputView(h.engine.input, targetAt: $0) })
+        send(tracker.moved(at(1700, 0.01), coalesced: [at(1700, 0.01)]))
+        #expect(h.recorder.eraser.allSatisfy { $0.1 == page2.id })
+        send(tracker.moved(at(1766, 0.02), coalesced: [at(1740, 0.015), at(1766, 0.02)]))
+        send(tracker.moved(at(1790, 0.03), coalesced: [at(1790, 0.03)]))
+
+        let onPage3 = h.recorder.eraser.filter { $0.1 == page3.id }.flatMap(\.0).map(\.y)
+        let onPage2 = h.recorder.eraser.filter { $0.1 == page2.id }.flatMap(\.0).map(\.y)
+        // Page 3 gets the crossing segment (from the last sample above it) and everything after, in its space.
+        let expected: [Float] = [-32, 8, 34, 58] // 1700, 1740, 1766, 1790 less page 3's 1732
+        #expect(onPage3 == expected)
+        // Page 2 gets everything up to the first sample past the seam, in its space.
+        #expect(onPage2.last == Float(1740 - 866))
+        #expect(h.recorder.eraser.last?.1 == page3.id, "later batches stay on page 3")
+    }
+
     @Test func cancelledHighlightLeavesNoBands() throws {
         h.engine.setTool(HighlighterFixtures.tool)
         var tracker = InkInputTracker()

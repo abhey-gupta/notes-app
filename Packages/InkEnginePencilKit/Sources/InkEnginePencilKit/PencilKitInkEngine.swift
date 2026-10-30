@@ -95,7 +95,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
 
     var pageViews: [PageID: PageLayerView] = [:]
     var isSettingDrawing = false
-    var eraserProgress: (touch: TouchID, emitted: Int)?
+    var eraserProgress: EraserProgress?
     /// Full canvas rebuilds so far (tests check the commit echo path doesn't rebuild).
     private(set) var rebuildCount = 0
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "ink.pencilkit")
