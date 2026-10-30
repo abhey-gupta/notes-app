@@ -107,6 +107,40 @@ struct HighlighterEngineTests {
         #expect(h.engine.snapshots[page]?.strokes.count == 1)
     }
 
+    /// The round nib (#215): the tool's nib is the committed stroke's ink, and its band has round ends.
+    @Test func roundNibStrokeCarriesItsInk() throws {
+        let h = Harness()
+        h.scroll(toY: 900)
+        var tool = Fixtures.tool
+        tool.highlighterNib = .round
+        h.engine.setTool(tool)
+        let page = h.frames[2].id
+        var tracker = InkInputTracker()
+        let at = { (x: CGFloat, t: Double) in
+            TouchRecord(id: TouchID(1), location: CGPoint(x: x, y: 1800), timestamp: t, force: 1, altitude: 0.8)
+        }
+        let send = { (events: [InkInputTracker.Event]) in
+            for event in events {
+                h.engine.inkInputView(h.engine.input, didProduce: event)
+            }
+        }
+        send(tracker.began(at(100, 0)) { h.engine.inkInputView(h.engine.input, targetAt: $0) })
+        send(tracker.moved(at(200, 0.01), coalesced: [at(150, 0.005), at(200, 0.01)]))
+        let live = try #require(h.engine.selection.liveHighlight)
+        #expect(live.template.rendering?.highlighterNib == .round)
+        send(tracker.ended(at(300, 0.02)))
+        let (stroke, committedTo) = try #require(h.recorder.commits.first)
+        #expect(committedTo == page)
+        #expect(stroke.rendering?.ink == StrokeRendering.Ink.roundHighlighter)
+        #expect(Highlight.width(of: stroke) == 16)
+        let band = try #require(live.layer.path?.boundingBox)
+        #expect(abs(band.width + live.layer.lineWidth - 216) < 0.5, "round ends reach half the height past the ends")
+
+        let chisel = Highlight.stroke(color: .primary, width: 16, samples: stroke.samples)
+        #expect(chisel.rendering?.ink == StrokeRendering.Ink.highlighter)
+        #expect(Highlight.stroke(stroke, samples: chisel.samples).rendering?.highlighterNib == .round, "the template keeps its nib")
+    }
+
     /// Bands multiply with the page (#196) on light paper and over artwork; night paper alone keeps the
     /// plain band.
     @Test func bandsMultiplyOnLightPaperAndOverArtwork() throws {

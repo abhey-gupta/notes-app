@@ -50,19 +50,17 @@ struct SegmentedChoice<Value: Hashable>: View {
     }
 }
 
-/// Evenly spaced width / size options; the selection highlight slides between them.
+/// Evenly spaced glyph options (eraser sizes, highlighter nibs); the selection highlight slides between them.
 struct OptionRow<Glyph: View>: View {
-    /// Option values, spoken after `label` ("Width 2.5").
-    let values: [Float]
+    /// VoiceOver label per option ("Size 8", "Round nib"…).
+    let labels: [String]
     @Binding var selection: Int
-    /// VoiceOver label prefix ("Width" → "Width 1.5"…).
-    let label: String
     @ViewBuilder let glyph: (Int, Bool) -> Glyph
     @Namespace private var namespace
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(values.indices, id: \.self) { index in
+            ForEach(labels.indices, id: \.self) { index in
                 let selected = index == selection
                 if index > 0 {
                     Spacer(minLength: 0)
@@ -83,7 +81,7 @@ struct OptionRow<Glyph: View>: View {
                         .contentShape(.circle)
                 }
                 .buttonStyle(PressScaleStyle())
-                .accessibilityLabel("\(label) \(values[index].formatted())")
+                .accessibilityLabel(labels[index])
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
@@ -233,6 +231,15 @@ extension PenKind {
         case .ballpoint: "Ballpoint"
         case .brush: "Brush"
         case .highlighter: "Highlighter"
+        }
+    }
+}
+
+extension HighlighterNib {
+    var displayName: String {
+        switch self {
+        case .chisel: "Chisel"
+        case .round: "Round"
         }
     }
 }

@@ -21,12 +21,15 @@ public enum InkPreview {
         public var color: RGBA8
         /// Pressure varies the width along the stroke; off draws every point at neutral force.
         public var pressure: Bool
+        /// Highlighter nib (#215); pens ignore it.
+        public var nib: HighlighterNib
 
-        public init(kind: PenKind, width: Float, color: RGBA8, pressure: Bool = true) {
+        public init(kind: PenKind, width: Float, color: RGBA8, pressure: Bool = true, nib: HighlighterNib = .chisel) {
             self.kind = kind
             self.width = width
             self.color = color
             self.pressure = pressure
+            self.nib = nib
         }
     }
 
@@ -127,7 +130,7 @@ public enum InkPreview {
         let samples = stroke.path.map { point in
             Sample(x: Float(point.location.x), y: Float(point.location.y), t: Float(point.timeOffset))
         }
-        return Highlight.stroke(color: .custom(spec.color), width: spec.width, samples: samples)
+        return Highlight.stroke(color: .custom(spec.color), width: spec.width, nib: spec.nib, samples: samples)
     }
 
     // MARK: Profile

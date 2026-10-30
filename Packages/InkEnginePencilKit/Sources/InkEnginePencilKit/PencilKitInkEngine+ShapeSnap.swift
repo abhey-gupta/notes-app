@@ -137,7 +137,7 @@ extension PencilKitInkEngine {
         cutFreehand(on: tracking.page)
         let touch = shapeSnap.lastTouch
         let template = usesHighlighter
-            ? Highlight.stroke(color: tool.color, width: tool.width, samples: [])
+            ? Highlight.stroke(color: tool.color, width: tool.width, nib: tool.highlighterNib, samples: [])
             : Self.flatStroke(kind, color: tool.color, width: tool.width, samples: [])
         var layer: CAShapeLayer?
         if usesHighlighter {

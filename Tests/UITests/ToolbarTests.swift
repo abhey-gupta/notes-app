@@ -224,6 +224,10 @@ final class ToolbarTests: XCTestCase {
         app.buttons["Highlighter"].tap()
         XCTAssertTrue(popover(app).waitForExistence(timeout: 3))
         XCTAssertTrue(app.descendants(matching: .any)["highlighterSize"].exists)
+        XCTAssertTrue(app.buttons["Chisel nib"].isSelected, "rectangular nib by default")
+        app.buttons["Round nib"].tap()
+        XCTAssertTrue(app.buttons["Round nib"].isSelected)
+        XCTAssertFalse(app.buttons["Chisel nib"].isSelected)
         XCTAssertEqual(
             app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Saved size ")).count,
             3,

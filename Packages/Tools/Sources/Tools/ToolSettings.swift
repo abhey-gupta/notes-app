@@ -126,7 +126,7 @@ public struct PenSettings: Hashable, Sendable, Codable {
     }
 }
 
-/// Highlighter settings: size and color.
+/// Highlighter settings: size, color and nib.
 public struct HighlighterSettings: Hashable, Sendable, Codable {
     /// Band widths (mm) offered.
     public static let sizeRange: ClosedRange<Float> = 2 ... 12
@@ -142,6 +142,8 @@ public struct HighlighterSettings: Hashable, Sendable, Codable {
 
     /// Highlight color.
     public var color: InkColor
+    /// Nib shape (#215).
+    public var nib: HighlighterNib
 
     /// Band width in points.
     public var width: Float {
@@ -149,9 +151,12 @@ public struct HighlighterSettings: Hashable, Sendable, Codable {
     }
 
     /// Creates highlighter settings.
-    public init(size: InkSize = HighlighterSettings.defaultSize, color: InkColor = HighlighterSettings.yellow) {
+    public init(
+        size: InkSize = HighlighterSettings.defaultSize, color: InkColor = HighlighterSettings.yellow, nib: HighlighterNib = .chisel
+    ) {
         self.size = size.normalized(to: Self.sizeRange, fallback: Self.defaultSize)
         self.color = color
+        self.nib = nib
     }
 }
 
@@ -264,7 +269,7 @@ public struct ToolSettings: Hashable, Sendable, Codable {
         self.tool = tool
         // Re-run the normalizing inits: synthesized decoding skips them.
         self.pen = PenSettings(kind: pen.kind, sizes: pen.sizes, color: pen.color, pressure: pen.pressure)
-        self.highlighter = HighlighterSettings(size: highlighter.size, color: highlighter.color)
+        self.highlighter = HighlighterSettings(size: highlighter.size, color: highlighter.color, nib: highlighter.nib)
         self.eraser = EraserSettings(mode: eraser.mode, widthIndex: eraser.widthIndex, autoDeselect: eraser.autoDeselect)
         self.laser = laser
         self.quickColors = Self.normalized(quickColors, defaults: Self.defaultQuickColors)

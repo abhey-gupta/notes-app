@@ -5,7 +5,7 @@ import SwiftUI
 import Tools
 
 /// Tool options (mock §03), opened by tapping the active tool. Pen: family, live stroke preview, size in mm
-/// (#168), palette + custom color, pressure. Highlighter: preview, size, colors. Eraser: mode, 3 sizes,
+/// (#168), palette + custom color, pressure. Highlighter: preview, size, nib (#215), colors. Eraser: mode, 3 sizes,
 /// switch back after erasing. Laser: trail or dot (#159).
 /// Every control writes straight to `ToolState`, which the editor pushes to the engine, so the next stroke
 /// already uses it.
@@ -58,15 +58,44 @@ struct ToolPopover: View {
 
     @ViewBuilder private var highlighter: some View {
         let color = tools.highlighter.color
-        preview(InkPreview.Spec(kind: .highlighter, width: tools.highlighter.width, color: ink(color)))
+        let nib = tools.highlighter.nib
+        preview(InkPreview.Spec(kind: .highlighter, width: tools.highlighter.width, color: ink(color), nib: nib))
             .padding(.top, -6)
         SizeControl(size: $tools.highlighter.size, range: HighlighterSettings.sizeRange, id: "highlighterSize") { position in
-            RoundedRectangle(cornerRadius: 1, style: .continuous)
+            RoundedRectangle(cornerRadius: nib == .round ? 4.5 + 3 * position : 1, style: .continuous)
                 .fill(color.color(on: paper).opacity(0.7))
                 .frame(width: 26, height: 3 + 6 * position)
         }
+        SectionLabel("Nib")
+        OptionRow(labels: HighlighterNib.allCases.map { "\($0.displayName) nib" }, selection: nibIndex) { index, selected in
+            nibGlyph(HighlighterNib.allCases[index], selected: selected)
+        }
+        .accessibilityIdentifier("highlighterNib")
         SectionLabel("Color")
         PaletteGrid(colors: PaletteEntry.highlighter, selection: $tools.highlighter.color, paper: paper)
+    }
+
+    private var nibIndex: Binding<Int> {
+        Binding {
+            HighlighterNib.allCases.firstIndex(of: tools.highlighter.nib) ?? 0
+        } set: { index in
+            tools.highlighter.nib = HighlighterNib.allCases[index]
+        }
+    }
+
+    /// The nib's outline: a tall thin rounded rectangle, or a circle.
+    @ViewBuilder private func nibGlyph(_ nib: HighlighterNib, selected: Bool) -> some View {
+        let color = selected ? Tokens.Colors.iconActive : Tokens.Colors.icon
+        switch nib {
+        case .chisel:
+            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                .strokeBorder(color, lineWidth: 1.5)
+                .frame(width: 7, height: 20)
+        case .round:
+            Circle()
+                .strokeBorder(color, lineWidth: 1.5)
+                .frame(width: 18, height: 18)
+        }
     }
 
     // MARK: Eraser
@@ -83,7 +112,7 @@ struct ToolPopover: View {
             .padding(.top, Tokens.Spacing.m)
             .padding(.horizontal, Tokens.Spacing.xs)
         SectionLabel("Size")
-        OptionRow(values: EraserSettings.widths, selection: $tools.eraser.widthIndex, label: "Size") { index, selected in
+        OptionRow(labels: EraserSettings.widths.map { "Size \($0.formatted())" }, selection: $tools.eraser.widthIndex) { index, selected in
             Circle()
                 .strokeBorder(selected ? Tokens.Colors.iconActive : Tokens.Colors.icon, lineWidth: 1.5)
                 .frame(width: Tokens.Size.eraserWidthRings[index], height: Tokens.Size.eraserWidthRings[index])
