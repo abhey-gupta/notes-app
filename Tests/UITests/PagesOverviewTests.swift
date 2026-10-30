@@ -93,6 +93,33 @@ final class PagesOverviewTests: XCTestCase {
         XCTAssertEqual(pill.label, "4 of 12")
     }
 
+    /// A swipe that starts on a page scrolls the grid instead of opening or lifting the page (#197).
+    @MainActor
+    func testSwipeOnPageScrollsGrid() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-resetLibrary", "YES", "-seedNotebooks", "1", "-resetToolState", "YES"]
+        app.launch()
+        let cover = app.buttons["cover-Thermodynamics"]
+        XCTAssertTrue(cover.waitForExistence(timeout: 15))
+        cover.tap()
+        XCTAssertTrue(app.staticTexts["pageIndicator"].waitForExistence(timeout: 10))
+
+        let overview = openOverview(app)
+        XCTAssertTrue(waitForCount(11, in: app))
+        for _ in 0 ..< 13 {
+            app.buttons["newPage-blank"].tap()
+        }
+        XCTAssertTrue(waitForCount(24, in: app), "enough pages to scroll")
+
+        let page = app.descendants(matching: .any)["page-6"]
+        XCTAssertTrue(page.waitForExistence(timeout: 3))
+        let before = page.frame.minY
+        page.swipeUp(velocity: .slow)
+        XCTAssertTrue(overview.exists, "swipe didn't open the page")
+        XCTAssertLessThan(page.frame.minY, before - 100, "grid scrolled")
+        XCTAssertTrue(waitForCount(24, in: app), "nothing moved")
+    }
+
     /// 300-page FixtureGen notebook (generated once per simulator; slow in Debug the first time): the
     /// overlay's first frame is measured in-app (`pages.overview` signpost) and shown as the overview's value.
     @MainActor

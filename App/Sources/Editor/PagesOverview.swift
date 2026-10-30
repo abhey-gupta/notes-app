@@ -2,6 +2,7 @@ import Canvas
 import DesignSystem
 import InkModel
 import SwiftUI
+import UIKit
 
 /// Pages overview (mock §04, #32): a blurred overlay over the editor with every page as a thumbnail
 /// (`thumbs/<id>.heic`, read lazily per visible cell, never rendered here), the current page ringed.
@@ -139,7 +140,7 @@ struct PagesOverview: View {
     private var grid: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVGrid(columns: Self.columns, alignment: .leading, spacing: Tokens.Spacing.xxl) {
+                LazyVGrid(columns: Self.columns, alignment: .center, spacing: Tokens.Spacing.xxl) {
                     ForEach(Array(model.entries.enumerated()), id: \.element.id) { index, entry in
                         cell(entry, at: index)
                     }
@@ -150,6 +151,7 @@ struct PagesOverview: View {
             }
             .coordinateSpace(.named(Self.gridSpace))
             .scrollIndicators(.hidden)
+            .scrollDisabled(drag != nil)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { flight.geometry.scroll = $0 }
             .onAppear {
                 FrameAfter.next { flight.arrive(proxy, current: currentIndex, reduceMotion: reduceMotion) }
@@ -192,7 +194,7 @@ struct PagesOverview: View {
         .onDisappear { flight.geometry.cells[index] = nil }
         .onTapGesture { tapped(entry, at: index) }
         .accessibilityAction { tapped(entry, at: index) }
-        .gesture(isSelecting ? nil : reorderGesture(from: index))
+        .gesture(PageLift(isEnabled: !isSelecting) { phase in reorder(index, phase) })
         .accessibilityActions {
             if index > 0 {
                 Button("Move earlier") { model.onMove(index, index - 1) }
@@ -237,25 +239,19 @@ struct PagesOverview: View {
     }
 
     /// Long-press lifts the page; drag it over another page and release to move it there.
-    private func reorderGesture(from index: Int) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.3)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.gridSpace)))
-            .onChanged { value in
-                switch value {
-                case .first(true):
-                    drag = Drag(index: index)
-                case let .second(true, gesture?):
-                    drag = Drag(index: index, translation: gesture.translation, target: target(at: gesture.location, from: index))
-                default:
-                    break
-                }
-            }
-            .onEnded { value in
-                defer { drag = nil }
-                guard case let .second(true, gesture?) = value,
-                      let target = target(at: gesture.location, from: index), target != index else { return }
-                model.onMove(index, target)
-            }
+    private func reorder(_ index: Int, _ phase: PageLift.Phase) {
+        switch phase {
+        case .lifted:
+            drag = Drag(index: index)
+        case let .moved(translation, location):
+            drag = Drag(index: index, translation: translation, target: target(at: location, from: index))
+        case let .dropped(location):
+            defer { drag = nil }
+            guard let target = target(at: location, from: index), target != index else { return }
+            model.onMove(index, target)
+        case .cancelled:
+            drag = nil
+        }
     }
 
     /// The visible cell under `point`, if any other than the dragged one.
@@ -309,4 +305,58 @@ private extension PagesOverview {
             spacing: Tokens.Size.pageThumbGap, alignment: .top
         ),
     ]
+}
+
+/// Long-press-then-drag on a page cell, in the grid's coordinate space (#197).
+///
+/// UIKit-backed: a SwiftUI `LongPressGesture` sequenced before a zero-distance `DragGesture` claims the
+/// touch from the start, so a swipe that began on a page never scrolled the grid. A long press fails
+/// once the finger travels 10 pt before 0.3 s, which leaves the swipe to the scroll view.
+struct PageLift: UIGestureRecognizerRepresentable {
+    enum Phase {
+        case lifted
+        /// Translation since the lift, finger location.
+        case moved(CGSize, CGPoint)
+        case dropped(CGPoint)
+        case cancelled
+    }
+
+    var isEnabled = true
+    var onPhase: (Phase) -> Void
+
+    func makeCoordinator(converter _: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context _: Context) -> UILongPressGestureRecognizer {
+        let press = UILongPressGestureRecognizer()
+        press.minimumPressDuration = 0.3
+        return press
+    }
+
+    func updateUIGestureRecognizer(_ press: UILongPressGestureRecognizer, context _: Context) {
+        press.isEnabled = isEnabled
+    }
+
+    func handleUIGestureRecognizerAction(_ press: UILongPressGestureRecognizer, context: Context) {
+        let location = context.converter.location(in: .named(PagesOverview.gridSpace))
+        switch press.state {
+        case .began:
+            context.coordinator.start = location
+            onPhase(.lifted)
+        case .changed:
+            let start = context.coordinator.start
+            onPhase(.moved(CGSize(width: location.x - start.x, height: location.y - start.y), location))
+        case .ended:
+            onPhase(.dropped(location))
+        case .cancelled, .failed:
+            onPhase(.cancelled)
+        default:
+            break
+        }
+    }
+
+    final class Coordinator {
+        var start = CGPoint.zero
+    }
 }
