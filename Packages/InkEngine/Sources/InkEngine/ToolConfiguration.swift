@@ -29,6 +29,8 @@ public struct ToolConfiguration: Hashable, Sendable {
     /// "Hold to snap shapes" setting (#165, on by default): a pen stroke held still at its end becomes a
     /// perfect line, ellipse or polygon.
     public var snapsShapes: Bool
+    /// Highlighter nib shape (#215); pens ignore it.
+    public var highlighterNib: HighlighterNib
 
     /// Creates a configuration.
     public init(
@@ -37,7 +39,8 @@ public struct ToolConfiguration: Hashable, Sendable {
         width: Float = 2,
         allowsFingerDrawing: Bool = false,
         pressure: Bool = true,
-        snapsShapes: Bool = true
+        snapsShapes: Bool = true,
+        highlighterNib: HighlighterNib = .chisel
     ) {
         self.tool = tool
         self.color = color
@@ -45,6 +48,7 @@ public struct ToolConfiguration: Hashable, Sendable {
         self.allowsFingerDrawing = allowsFingerDrawing
         self.pressure = pressure
         self.snapsShapes = snapsShapes
+        self.highlighterNib = highlighterNib
     }
 
     /// Primary ballpoint, 2 pt.

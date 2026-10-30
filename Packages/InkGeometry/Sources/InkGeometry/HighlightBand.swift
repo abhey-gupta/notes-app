@@ -14,6 +14,9 @@ import InkModel
 /// polygons are the sweep of the nib shrunk by the radius, and the band is them grown by it again, i.e.
 /// filled and stroked ``cornerRadius`` × 2 wide with round joins, as one opaque shape (then made
 /// translucent as a whole), so the overlap of fill and stroke never shows.
+///
+/// A round nib (#215) is the same sweep with a nib of side ``roundCore`` whose corners are rounded by
+/// nearly half the height: a circle ``height`` across, so the band's ends and turns are round.
 public struct HighlightBand: Sendable {
     /// Nib thickness per band height.
     public static let nibAspect: Float = 0.25
@@ -21,7 +24,12 @@ public struct HighlightBand: Sendable {
     public static let cornerRoundness: Float = 0.9
     /// The nib is never thinner than this (pt).
     public static let minimumThickness: Float = 1
+    /// Side (pt) of the square a round nib sweeps before its corners grow it into a circle: not 0, so a
+    /// dot or a straight run still has an area to fill.
+    public static let roundCore: Float = 0.1
 
+    /// Nib shape.
+    public let nib: HighlighterNib
     /// Nib height (pt): the band's height drawn sideways.
     public let height: Float
     /// Nib thickness (pt).
@@ -31,18 +39,27 @@ public struct HighlightBand: Sendable {
     /// Closed polygons, page space; empty without samples.
     public private(set) var polygons: [[Point2]] = []
 
-    /// The band of `stroke`, ``height(of:)`` tall.
+    /// The band of `stroke`, ``height(of:)`` tall, with its ink's nib.
     public init(stroke: Stroke) {
-        self.init(samples: stroke.samples, height: Self.height(of: stroke))
+        self.init(samples: stroke.samples, height: Self.height(of: stroke), nib: stroke.rendering?.highlighterNib ?? .chisel)
     }
 
-    /// The band of a nib `height` tall swept along `samples`.
-    public init(samples: [Sample], height: Float) {
+    /// The band of a `nib` `height` tall swept along `samples`.
+    public init(samples: [Sample], height: Float, nib: HighlighterNib = .chisel) {
         let h = height.isFinite ? max(height, Centerline.minimumWidth) : 1
+        self.nib = nib
         self.height = h
-        let t = max(h * Self.nibAspect, Self.minimumThickness)
+        let t: Float
+        let r: Float
+        switch nib {
+        case .chisel:
+            t = max(h * Self.nibAspect, Self.minimumThickness)
+            r = t / 2 * Self.cornerRoundness
+        case .round:
+            t = h
+            r = max(h - Self.roundCore, 0) / 2
+        }
         thickness = t
-        let r = t / 2 * Self.cornerRoundness
         cornerRadius = r
         let (a, b) = (t / 2 - r, h / 2 - r)
         let points = Self.path(samples, height: h)

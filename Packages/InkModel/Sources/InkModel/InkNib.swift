@@ -8,6 +8,7 @@
 /// - marker: a chisel along the azimuth, `1.45 × height − 0.5` long and `0.54 × width − 0.1` across.
 /// - highlighter (ours, #120): round in effect, `width`: the band is `width` wide whatever the heading
 ///   (the nib is a thin rectangle square to the stroke, so its ends are flat and its width constant).
+///   The round highlighter (#215) likewise, with a circular nib.
 /// - watercolor: round, `1.63 × width` at full `secondaryScale`, shrinking with it (the wash).
 /// - pencil, crayon: round, `1.75 × width − 0.3` and `1.37 × width − 0.2` of ink (textured).
 /// - any other ink: round, the larger side of `size`.
@@ -50,7 +51,7 @@ public struct InkNib: Hashable, Sendable {
             self.init(along: max(2 * w - 4, 0), across: max((w - 2) / 2, 0))
         case StrokeRendering.Ink.marker:
             self.init(along: max(1.45 * h - 0.5, 0), across: max(0.54 * w - 0.1, 0))
-        case StrokeRendering.Ink.highlighter:
+        case StrokeRendering.Ink.highlighter, StrokeRendering.Ink.roundHighlighter:
             let d = max(w, 0)
             self.init(along: d, across: d)
         case StrokeRendering.Ink.watercolor:
@@ -81,7 +82,7 @@ public struct InkNib: Hashable, Sendable {
             return w / 2 + 2
         case StrokeRendering.Ink.marker:
             return (w + 0.5) / 1.45
-        case StrokeRendering.Ink.highlighter:
+        case StrokeRendering.Ink.highlighter, StrokeRendering.Ink.roundHighlighter:
             return w
         case StrokeRendering.Ink.watercolor:
             return w / watercolorScale

@@ -36,6 +36,7 @@ struct ToolStateTests {
         state.pen.pressure = false
         state.highlighter.size.millimetres = 3
         state.highlighter.color = .semantic(.accent)
+        state.highlighter.nib = .round
         state.eraser.mode = .partial
         state.eraser.widthIndex = 2
         state.eraser.autoDeselect = false
@@ -50,6 +51,7 @@ struct ToolStateTests {
         #expect(relaunched.pen.kind == .brush && relaunched.pen.size == InkSize(12, saved: [6, 10, 18]))
         #expect(relaunched.pen.sizes[.ballpoint] == PenSettings.defaultSize(for: .ballpoint), "other families keep theirs")
         #expect(relaunched.highlighter.size.millimetres == 3)
+        #expect(relaunched.highlighter.nib == .round)
         #expect(relaunched.eraser == EraserSettings(mode: .partial, widthIndex: 2, autoDeselect: false))
         #expect(relaunched.laser.mode == .dot)
     }
@@ -199,6 +201,7 @@ struct ToolStateTests {
         pen.size.millimetres = 1
         #expect(pen.size.millimetres == 6, "brush range starts at 6 mm")
         var highlighter = HighlighterSettings()
+        #expect(highlighter.nib == .chisel, "rectangular nib by default")
         highlighter.size.millimetres = .nan
         #expect(highlighter.size.millimetres == HighlighterSettings.sizeRange.lowerBound)
         var eraser = EraserSettings(widthIndex: 9)

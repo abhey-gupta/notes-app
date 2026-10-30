@@ -25,7 +25,8 @@ extension PencilKitInkEngine {
             let layer = Highlight.makeLayer()
             pageViews[live.page]?.addLiveHighlight(layer)
             selection.liveHighlight = LiveHighlight(
-                page: live.page, template: Highlight.stroke(color: tool.color, width: tool.width, samples: []), layer: layer
+                page: live.page, template: Highlight.stroke(color: tool.color, width: tool.width, nib: tool.highlighterNib, samples: []),
+                layer: layer
             )
             showLiveHighlight(live)
         case let .updated(live):

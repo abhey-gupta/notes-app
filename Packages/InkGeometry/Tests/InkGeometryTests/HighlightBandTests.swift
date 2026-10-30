@@ -5,9 +5,13 @@ import Testing
 
 /// The highlighter band (#120): an upright, tall, thin nib swept along the stroke.
 struct HighlightBandTests {
-    private static func stroke(_ points: [(Float, Float)], height: Float = 20) -> Stroke {
+    private static func stroke(_ points: [(Float, Float)], height: Float = 20, nib: HighlighterNib? = nil) -> Stroke {
         let samples = points.enumerated().map { i, p in Sample(x: p.0, y: p.1, t: Float(i) / 240) }
-        return Stroke(tool: .highlighter, color: .primary, width: height, samples: samples)
+        let plain = Stroke(tool: .highlighter, color: .primary, width: height, samples: samples)
+        guard let nib else { return plain }
+        var rendering = plain.derivedRendering
+        rendering.ink = StrokeRendering.Ink.highlighter(nib)
+        return Stroke(tool: .highlighter, color: .primary, width: height, samples: samples, rendering: rendering)
     }
 
     /// The band's region: its polygons filled, or their outline stroked `2 × cornerRadius` wide.
@@ -46,8 +50,8 @@ struct HighlightBandTests {
 
     /// Wiggly strokes: every point is in the band exactly when the nib, centered on some centerline
     /// point, covers it (ignoring a thin margin at the edge).
-    @Test(arguments: 0 ..< 6)
-    func bandIsTheNibSweptAlongTheCenterline(seed: Int) {
+    @Test(arguments: HighlighterNib.allCases, 0 ..< 6)
+    func bandIsTheNibSweptAlongTheCenterline(nib: HighlighterNib, seed: Int) {
         var points: [(Float, Float)] = []
         for i in 0 ..< 80 {
             let t = Float(i) / 79
@@ -55,8 +59,9 @@ struct HighlightBandTests {
             let y = 100 + 40 * sin(Float(seed + 2) * 5 * t) + 15 * cos(Float(seed) * 11 * t)
             points.append((x, y))
         }
-        let stroke = Self.stroke(points)
+        let stroke = Self.stroke(points, nib: nib)
         let band = HighlightBand(stroke: stroke)
+        #expect(band.nib == nib)
         let centerline = HighlightBand.path(stroke.samples, height: 20)
         let path = Self.path(band)
         let (a, b, r) = (band.thickness / 2, band.height / 2, band.cornerRadius)
@@ -121,6 +126,28 @@ struct HighlightBandTests {
         let box = Self.path(band).boundingBox
         #expect(abs(box.minX - 47) < 0.02 && abs(box.minY - 38) < 0.02 && abs(box.width - 6) < 0.02 && abs(box.height - 24) < 0.02)
         #expect(HighlightBand(stroke: Self.stroke([])).polygons.isEmpty)
+    }
+
+    /// Round nib (#215): a circle as tall as the band, so ends are half discs and the band is as wide
+    /// drawn up as sideways.
+    @Test func roundNibHasRoundEndsAndEqualWidthEveryWay() {
+        let sideways = Self.path(HighlightBand(stroke: Self.stroke([(100, 100), (300, 100)], nib: .round)))
+        #expect(CGRect(x: 89.99, y: 89.99, width: 220.02, height: 20.02).contains(sideways.boundingBox))
+        #expect(sideways.boundingBox.width > 219.9 && sideways.boundingBox.height > 19.9)
+        #expect(sideways.contains(CGPoint(x: 300, y: 90.5)) && sideways.contains(CGPoint(x: 309.5, y: 100)))
+        #expect(!sideways.contains(CGPoint(x: 308, y: 92)), "end is a half disc, not square")
+        let upwards = Self.path(HighlightBand(stroke: Self.stroke([(100, 300), (100, 100)], nib: .round)))
+        #expect(abs(upwards.boundingBox.width - 20) < 0.02 && abs(upwards.boundingBox.height - 220) < 0.02)
+        let dot = Self.path(HighlightBand(stroke: Self.stroke([(50, 50)], height: 24, nib: .round)))
+        #expect(abs(dot.boundingBox.width - 24) < 0.02 && abs(dot.boundingBox.height - 24) < 0.02)
+        #expect(dot.contains(CGPoint(x: 61.5, y: 50)) && !dot.contains(CGPoint(x: 59, y: 59)), "a disc")
+    }
+
+    @Test func nibComesFromTheInk() {
+        #expect(HighlightBand(stroke: Self.stroke([(0, 0), (10, 0)])).nib == .chisel, "no rendering: chisel")
+        #expect(HighlightBand(stroke: Self.stroke([(0, 0), (10, 0)], nib: .chisel)).nib == .chisel)
+        #expect(HighlightBand(stroke: Self.stroke([(0, 0), (10, 0)], nib: .round)).nib == .round)
+        #expect(HighlightBand.height(of: Self.stroke([(0, 0), (10, 0)], height: 16, nib: .round)) == 16)
     }
 
     @Test func heightIsTheDrawnWidth() {

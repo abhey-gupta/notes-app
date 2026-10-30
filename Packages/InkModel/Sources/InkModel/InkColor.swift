@@ -10,6 +10,14 @@ public enum PenKind: UInt8, CaseIterable, Hashable, Sendable, Codable {
     case highlighter = 3
 }
 
+/// Highlighter nib shape (#215). Stored per stroke as its ink (``StrokeRendering/Ink/highlighter(_:)``).
+public enum HighlighterNib: String, CaseIterable, Hashable, Sendable, Codable {
+    /// Tall thin upright rectangle: flat ends, the default.
+    case chisel
+    /// Circle: round ends, the same width every direction.
+    case round
+}
+
 /// Theme-adaptive palette slot, resolved per paper theme at render time (ARCHITECTURE.md §10).
 /// Raw values are stable (stroke codec).
 public enum SemanticInk: UInt8, CaseIterable, Hashable, Sendable, Codable {

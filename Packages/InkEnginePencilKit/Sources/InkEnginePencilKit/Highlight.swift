@@ -89,15 +89,22 @@ enum Highlight {
     }
 
     /// A highlighter stroke of `samples` whose stored rendering is the band the engine draws
-    /// (``InkModel/StrokeRendering/Ink/highlighter``, `width` wide throughout).
-    static func stroke(id: StrokeID = StrokeID(), color: InkColor, width: Float, samples: [Sample]) -> Stroke {
+    /// (``InkModel/StrokeRendering/Ink/highlighter(_:)`` for `nib`, `width` wide throughout).
+    static func stroke(
+        id: StrokeID = StrokeID(), color: InkColor, width: Float, nib: HighlighterNib = .chisel, samples: [Sample]
+    ) -> Stroke {
         let plain = Stroke(id: id, tool: .highlighter, color: color, width: width, samples: samples)
-        return Stroke(id: id, tool: .highlighter, color: color, width: width, samples: samples, rendering: plain.derivedRendering)
+        var rendering = plain.derivedRendering
+        rendering.ink = StrokeRendering.Ink.highlighter(nib)
+        return Stroke(id: id, tool: .highlighter, color: color, width: width, samples: samples, rendering: rendering)
     }
 
-    /// `template` over `samples`: same ID (so the same seed), color and width.
+    /// `template` over `samples`: same ID (so the same seed), color, width and nib.
     static func stroke(_ template: Stroke, samples: [Sample]) -> Stroke {
-        stroke(id: template.id, color: template.color, width: template.width, samples: samples)
+        stroke(
+            id: template.id, color: template.color, width: template.width, nib: template.rendering?.highlighterNib ?? .chisel,
+            samples: samples
+        )
     }
 
     // MARK: Layers

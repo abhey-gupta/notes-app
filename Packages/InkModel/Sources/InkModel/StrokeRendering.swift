@@ -36,6 +36,11 @@ public struct StrokeRendering: Hashable, Sendable, Codable {
         points.reduce(0) { max($0, $1.width, $1.height) }
     }
 
+    /// The highlighter nib ``ink`` draws with: round for ``Ink/roundHighlighter``, else chisel.
+    public var highlighterNib: HighlighterNib {
+        ink == Ink.roundHighlighter ? .round : .chisel
+    }
+
     /// Ink identifiers: PencilKit's (`PKInk.InkType` raw values), spelled out so headless packages
     /// (fixtures, migration) can name them without importing PencilKit, and our own highlighter.
     public enum Ink {
@@ -49,6 +54,16 @@ public struct StrokeRendering: Hashable, Sendable, Codable {
         /// The highlighter band (#120): a constant-width, flat-ended band the engine draws itself,
         /// beneath all other ink, each stroke one translucent fill. Pre-#120 highlights are `marker`.
         public static let highlighter = "com.abhey.ink.highlighter"
+        /// The highlighter band with a round nib (#215): round ends and turns, otherwise as ``highlighter``.
+        public static let roundHighlighter = "com.abhey.ink.highlighter.round"
+
+        /// The highlighter ink for `nib`.
+        public static func highlighter(_ nib: HighlighterNib) -> String {
+            switch nib {
+            case .chisel: highlighter
+            case .round: roundHighlighter
+            }
+        }
 
         /// The ink a pen draws with (ARCHITECTURE.md §3).
         public static func `for`(_ kind: PenKind) -> String {
