@@ -140,7 +140,9 @@ struct OverviewHeaderButtons: View {
                     .accessibilityIdentifier("pagesSelect")
                 Button("Done", action: onDone)
                     .buttonStyle(.glassProminent)
-                    .tint(Tokens.Colors.inkPrimary.color)
+                    .tint(Tokens.Colors.textPrimary.color)
+                    // Light capsule in dark mode: the label flips with it.
+                    .foregroundStyle(Tokens.Colors.libraryBackground)
                     .accessibilityIdentifier("pagesDone")
             }
         }
