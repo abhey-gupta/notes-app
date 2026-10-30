@@ -67,7 +67,7 @@ struct ToolPopover: View {
                 .frame(width: 26, height: 3 + 6 * position)
         }
         SectionLabel("Nib")
-        OptionRow(labels: HighlighterNib.allCases.map { "\($0.displayName) nib" }, selection: nibIndex) { index, selected in
+        OptionRow(labels: HighlighterNib.allCases.map { "\($0.displayName) nib" }, selection: nibIndex, spacing: 24) { index, selected in
             nibGlyph(HighlighterNib.allCases[index], selected: selected)
         }
         .accessibilityIdentifier("highlighterNib")

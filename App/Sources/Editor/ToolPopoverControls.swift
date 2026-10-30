@@ -50,11 +50,14 @@ struct SegmentedChoice<Value: Hashable>: View {
     }
 }
 
-/// Evenly spaced glyph options (eraser sizes, highlighter nibs); the selection highlight slides between them.
+/// Glyph options (eraser sizes, highlighter nibs), spread across the row or centered `spacing` apart; the
+/// selection highlight slides between them.
 struct OptionRow<Glyph: View>: View {
     /// VoiceOver label per option ("Size 8", "Round nib"…).
     let labels: [String]
     @Binding var selection: Int
+    /// Gap between options, centered; `nil` spreads them edge to edge.
+    var spacing: CGFloat?
     @ViewBuilder let glyph: (Int, Bool) -> Glyph
     @Namespace private var namespace
 
@@ -63,7 +66,11 @@ struct OptionRow<Glyph: View>: View {
             ForEach(labels.indices, id: \.self) { index in
                 let selected = index == selection
                 if index > 0 {
-                    Spacer(minLength: 0)
+                    if let spacing {
+                        Color.clear.frame(width: spacing)
+                    } else {
+                        Spacer(minLength: 0)
+                    }
                 }
                 Button {
                     withAnimation(Tokens.Motion.selection) { selection = index }
@@ -86,6 +93,7 @@ struct OptionRow<Glyph: View>: View {
             }
         }
         .padding(.horizontal, Tokens.Spacing.m)
+        .frame(maxWidth: .infinity)
         .sensoryFeedback(.selection, trigger: selection)
     }
 }
