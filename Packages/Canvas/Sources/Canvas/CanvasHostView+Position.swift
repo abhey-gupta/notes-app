@@ -28,13 +28,15 @@
     }
 
     public extension CanvasHostView {
-        /// The current position; `nil` before the first layout.
+        /// The current position; `nil` before the first layout. During a live resize, the one it started
+        /// from (the held scroll view's offset and insets are the transform's, not the reader's).
         var readingPosition: ReadingPosition? {
             let z = scrollView.zoomScale
             guard lastBoundsSize != .zero, z > 0 else { return nil }
-            let offset = scrollView.contentOffset
+            let offset = liveResize?.offset ?? scrollView.contentOffset
+            let top = liveResize?.insets.top ?? scrollView.contentInset.top
             let width: ReadingPosition.Width = abs(z - fitZoom) < 0.001 ? .fitted : abs(z - fillZoom) < 0.001 ? .filled : .zoomed
-            return ReadingPosition(origin: CGPoint(x: offset.x / z, y: (offset.y + scrollView.contentInset.top) / z), zoom: z, width: width)
+            return ReadingPosition(origin: CGPoint(x: offset.x / z, y: (offset.y + top) / z), zoom: z, width: width)
         }
 
         /// Moves to `position` (clamped to the content); before the first layout, on it. Set ``layout`` first.

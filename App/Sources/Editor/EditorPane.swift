@@ -57,6 +57,11 @@ struct EditorPane: View {
         _notebook = State(initialValue: notebook)
     }
 
+    /// The Pencil's double-tap / squeeze go to this pane: the only one, or the focused one in a split.
+    private var takesPencil: Bool {
+        (!tabs.isSplit || tabs.focus == pane) && tabs.showing(pane) == session.notebookID
+    }
+
     private var topMargin: CGFloat {
         (isFocused ? 0 : barHeight) + capsuleRoom
     }
@@ -107,6 +112,7 @@ struct EditorPane: View {
         }
         .task(id: ObjectIdentifier(session)) {
             state.onTouch = { [tabs, pane] in tabs.focus(pane) }
+            state.takesPencil = takesPencil
             configure(session)
             await session.open()
             if LaunchOptions.showsHints {
@@ -124,6 +130,7 @@ struct EditorPane: View {
             #endif
         }
         .onChange(of: pane) { _, pane in state.onTouch = { [tabs] in tabs.focus(pane) } }
+        .onChange(of: takesPencil) { _, takes in state.takesPencil = takes }
         // Paper changed in the other pane on the same notebook: the library entry carries it here.
         .onChange(of: library.notebook(id: session.notebookID)?.theme) { _, theme in
             if let theme, theme != notebook.theme {

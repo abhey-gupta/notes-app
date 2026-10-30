@@ -48,10 +48,10 @@ struct TabStrip: View {
         let scale = typeSize.chromeScale
         return Button(action: onToggle) {
             HStack(spacing: Tokens.Spacing.s) {
+                // Truncates in a narrow split pane (#175): a wider bar would spill over the other pane.
                 Text(activeTab?.title ?? "")
                     .scaledFont(size: 14, weight: .semibold)
                     .lineLimit(1)
-                    .fixedSize()
                     .foregroundStyle(Tokens.Colors.textPrimary)
                 HStack(spacing: 3) {
                     Text("\(tabs.count)")
@@ -155,7 +155,7 @@ struct TabStrip: View {
             }
             .buttonStyle(.plain)
             // Dragged onto the page, it opens in split view (#175).
-            .draggable(NotebookReference(id: tab.id)) {
+            .draggable(NotebookReference.picking(tab.id)) {
                 Text(tab.title)
                     .scaledFont(size: 14, weight: .semibold)
                     .padding(.horizontal, Tokens.Spacing.l)

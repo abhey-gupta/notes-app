@@ -81,10 +81,10 @@
 
         /// Centers narrow content horizontally (none at fit width: edge to edge, #130); top/bottom clear
         /// the chrome (bottom only with the add-page button: without it the last page's footer is all, #172). Not while a side grab holds
-        /// its own insets (`applyGrabGeometry`) or the document is
-        /// widening behind a frozen frame (``endWidening()`` settles them).
+        /// its own insets (`applyGrabGeometry`), the document is
+        /// widening behind a frozen frame (``endWidening()`` settles them), or a live resize holds its own.
         func updateInsets() {
-            guard !isUpdatingInsets, sideGrab == nil, !isSettling else { return }
+            guard !isUpdatingInsets, sideGrab == nil, !isSettling, liveResize == nil else { return }
             isUpdatingInsets = true
             defer { isUpdatingInsets = false }
             let width = layout.contentSize.width * scrollView.zoomScale
