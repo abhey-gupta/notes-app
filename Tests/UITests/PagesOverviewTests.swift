@@ -120,6 +120,58 @@ final class PagesOverviewTests: XCTestCase {
         XCTAssertTrue(waitForCount(24, in: app), "nothing moved")
     }
 
+    /// Go to page (#214): the header field scrolls the grid to the typed page; out of range clamps to the
+    /// last page; a digit on a hardware keyboard opens the field with that digit.
+    @MainActor
+    func testGoToPage() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-resetLibrary", "YES", "-seedNotebooks", "1", "-resetToolState", "YES"]
+        app.launch()
+        let cover = app.buttons["cover-Thermodynamics"]
+        XCTAssertTrue(cover.waitForExistence(timeout: 15))
+        cover.tap()
+        XCTAssertTrue(app.staticTexts["pageIndicator"].waitForExistence(timeout: 10))
+
+        let overview = openOverview(app)
+        XCTAssertTrue(waitForCount(11, in: app))
+        for _ in 0 ..< 29 {
+            app.buttons["newPage-blank"].tap()
+        }
+        XCTAssertTrue(waitForCount(40, in: app), "enough pages to scroll")
+        let grid = overview.scrollViews.firstMatch
+
+        app.buttons["pagesGoTo"].tap()
+        let field = app.textFields["pagesGoToField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        field.typeText("3\n")
+        XCTAssertTrue(field.waitForNonExistence(timeout: 3), "field folds back after the jump")
+        let third = app.descendants(matching: .any)["page-3"]
+        XCTAssertTrue(third.waitForExistence(timeout: 3))
+        XCTAssertTrue(grid.frame.contains(third.frame), "page 3 scrolled into view")
+
+        // Past the end: lands on the last page.
+        app.buttons["pagesGoTo"].tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        field.typeText("99")
+        app.buttons["pagesGoToGo"].tap()
+        let last = app.descendants(matching: .any)["page-40"]
+        XCTAssertTrue(last.waitForExistence(timeout: 3))
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        XCTAssertTrue(grid.frame.contains(last.frame), "clamped to page 40")
+        XCTAssertFalse(app.descendants(matching: .any)["page-3"].isHittable, "scrolled away from page 3")
+
+        // Hardware keyboard: a digit opens the field with it typed.
+        app.typeKey("1", modifierFlags: [])
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        XCTAssertEqual(field.value as? String, "1")
+        field.typeText("2\n")
+        let twelfth = app.descendants(matching: .any)["page-12"]
+        XCTAssertTrue(twelfth.waitForExistence(timeout: 3))
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        XCTAssertTrue(grid.frame.contains(twelfth.frame), "page 12 scrolled into view")
+        XCTAssertTrue(overview.exists, "jumping keeps the overview open")
+    }
+
     /// 300-page FixtureGen notebook (generated once per simulator; slow in Debug the first time): the
     /// overlay's first frame is measured in-app (`pages.overview` signpost) and shown as the overview's value.
     @MainActor
