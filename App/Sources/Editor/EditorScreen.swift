@@ -110,7 +110,10 @@ struct EditorScreen: View {
                 split.open(id, beside: .primary, on: side, showing: showing)
             })
             if let dropSide {
-                TabDropZone(geometry: geometry, side: dropSide)
+                TabDropZone(
+                    geometry: geometry, side: dropSide,
+                    title: NotebookReference.dragged.flatMap { library.notebook(id: $0)?.title }
+                )
             }
             if let focused {
                 tools(for: focused, isFocusMode: isFocusMode, hidden: chromeHidden)

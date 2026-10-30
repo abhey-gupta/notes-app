@@ -3,19 +3,19 @@
 
     /// Live resize (split view, #175): the host's frame goes through many sizes in a row (panes sliding in
     /// or out, the divider under a finger). Re-fitting the page on each of those frames would re-tile ink
-    /// 120 times a second, so the canvas holds still instead, under a snapshot of what it showed that
-    /// follows the frame the way the page will land when it refits: the fitted width (or the same zoom),
-    /// the same content under the top margin, centered. At the end the canvas refits once and the
-    /// snapshot fades into it.
+    /// 120 times a second, so the canvas keeps its zoom instead and a transform does the sizing: the scroll
+    /// view's bounds grow or shrink to what the frame shows at the start zoom, and it's scaled onto the
+    /// frame the way the page will land when it refits: the fitted width, or a zoomed page scaled with the
+    /// view's width (it keeps its share of the view), the same content under the top margin. Page that
+    /// comes into view is drawn live (the engine tiles only what's new, at the zoom it has); input is off
+    /// meanwhile. At the end the canvas refits once, under a snapshot that fades into it.
     public extension CanvasHostView {
         internal struct LiveResize {
-            /// What the host showed; `nil` when there was nothing on screen to capture.
-            let snapshot: UIView?
-            /// At the start: view size, zoom, content offset, top inset, and whether the page was fitted.
+            /// At the start: view size, zoom, content offset, insets, and whether the page was fitted.
             let size: CGSize
             let zoom: CGFloat
             let offset: CGPoint
-            let topInset: CGFloat
+            let insets: UIEdgeInsets
             let wasFitted: Bool
         }
 
@@ -24,48 +24,66 @@
             liveResize != nil
         }
 
-        /// The frame is about to go through several sizes: hold the canvas (input included) under a
-        /// snapshot until ``endLiveResize()``. Repeated calls are absorbed.
+        /// Insets wide enough for any offset the scaled scroll view needs, so UIKit never clamps it.
+        private static let liveResizeInset: CGFloat = 100_000
+
+        /// The frame is about to go through several sizes: the canvas keeps its zoom (input off) and a
+        /// transform sizes it until ``endLiveResize()``. Repeated calls are absorbed.
         func beginLiveResize() {
             guard liveResize == nil, lastBoundsSize != .zero else { return }
             cancelSideGrabForResize()
             settlingSnapshot?.removeFromSuperview()
             settlingSnapshot = nil
             let z = scrollView.zoomScale
-            var snapshot: UIView?
-            if window != nil, let view = resizableSnapshotView(from: bounds, afterScreenUpdates: false, withCapInsets: .zero) {
-                view.isUserInteractionEnabled = false
-                view.layer.anchorPoint = .zero
-                view.frame = bounds
-                addSubview(view)
-                snapshot = view
-            }
             liveResize = LiveResize(
-                snapshot: snapshot, size: bounds.size, zoom: z, offset: scrollView.contentOffset,
-                topInset: scrollView.contentInset.top, wasFitted: abs(z - fitZoom) < 0.001
+                size: bounds.size, zoom: z, offset: scrollView.contentOffset, insets: scrollView.contentInset,
+                wasFitted: abs(z - fitZoom) < 0.001
             )
             clipsToBounds = true
             scrollView.autoresizingMask = []
-            if snapshot != nil {
-                scrollView.alpha = 0
-            }
+            scrollView.isUserInteractionEnabled = false
+            scrollView.layer.anchorPoint = .zero
+            let inset = Self.liveResizeInset
+            scrollView.contentInset = UIEdgeInsets(top: inset, left: inset, bottom: inset, right: inset)
+            layoutLiveResize()
         }
 
-        /// The frame has settled: the canvas refits to it, then the snapshot fades into the live canvas once
-        /// the engine has drawn the new zoom.
+        /// The frame has settled: the canvas refits to it under a snapshot of what it showed, which fades into
+        /// the live canvas once the engine has drawn the new zoom.
         func endLiveResize() {
             guard let live = liveResize else { return }
+            let snapshot = window != nil ? resizableSnapshotView(from: bounds, afterScreenUpdates: false, withCapInsets: .zero) : nil
             liveResize = nil
-            clipsToBounds = false
+            scrollView.transform = .identity
+            scrollView.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
             scrollView.frame = bounds
             scrollView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            scrollView.alpha = 1
+            scrollView.isUserInteractionEnabled = true
+            // Back where it started (the refit anchors on the content at the top of the viewport).
+            scrollView.contentInset = live.insets
+            scrollView.contentOffset = live.offset
             let size = bounds.size
             if size.width > 0, size.height > 0 {
-                resize(from: lastBoundsSize, to: size, refit: live.wasFitted)
+                if live.wasFitted {
+                    resize(from: lastBoundsSize, to: size, refit: true)
+                } else {
+                    fitZoom = Self.fitZoom(pageWidth: layout.pageSize.width, viewWidth: size.width, desk: fitDesk)
+                    let target = liveResizeTarget(live, to: size)
+                    setZoom(target.zoom)
+                    updateInsets()
+                    scrollView.contentOffset = target.offset
+                    viewportDidChange()
+                }
                 lastBoundsSize = size
             }
-            guard let snapshot = live.snapshot else { return }
+            guard let snapshot else {
+                clipsToBounds = false
+                return
+            }
+            snapshot.isUserInteractionEnabled = false
+            snapshot.frame = bounds
+            addSubview(snapshot)
+            // Clipped until the snapshot is gone (an exact fit, but the host's frame may still be settling).
             settlingSnapshot = snapshot
             Task { @MainActor [weak self, weak snapshot] in
                 // Two frames for the engine to draw the refit page.
@@ -75,34 +93,53 @@
                     snapshot.alpha = 0
                 } completion: { _ in
                     snapshot.removeFromSuperview()
-                    if self?.settlingSnapshot === snapshot {
-                        self?.settlingSnapshot = nil
+                    guard let self, self.settlingSnapshot === snapshot else { return }
+                    self.settlingSnapshot = nil
+                    if self.liveResize == nil {
+                        self.clipsToBounds = false
                     }
                 }
             }
         }
 
-        /// Places the snapshot for the current bounds (from `layoutSubviews` while held).
+        /// Sizes and places the scroll view for the current bounds (from `layoutSubviews` while held): at
+        /// the start zoom, its bounds cover what the frame shows once refit, scaled onto the frame. Moving
+        /// its bounds is a scroll (the engine gets the wider viewport and tiles what's new).
         internal func layoutLiveResize() {
-            guard let live = liveResize, let snapshot = live.snapshot else { return }
-            let (scale, origin) = liveResizeMapping(live, to: bounds.size)
+            guard let live = liveResize else { return }
+            let size = bounds.size
+            guard size.width > 0, size.height > 0 else { return }
+            let target = liveResizeTarget(live, to: size)
+            let scale = target.zoom / live.zoom
+            let held = CGRect(
+                x: target.offset.x / scale, y: target.offset.y / scale, width: size.width / scale, height: size.height / scale
+            )
             UIView.performWithoutAnimation {
-                snapshot.transform = CGAffineTransform(scaleX: scale, y: scale)
-                snapshot.layer.position = origin
+                if scrollView.bounds != held {
+                    scrollView.bounds = held
+                }
+                scrollView.transform = CGAffineTransform(scaleX: scale, y: scale)
+                scrollView.layer.position = .zero
             }
         }
 
-        /// Where the content shown at the start lands once the canvas refits to `size` (as ``resize(from:to:refit:)``
-        /// does): its scale, and where the snapshot's top-left goes. The content point under the top inset
-        /// stays under it; the content is centered across.
-        private func liveResizeMapping(_ live: LiveResize, to size: CGSize) -> (scale: CGFloat, origin: CGPoint) {
+        /// The zoom and content offset at `size`: a fitted page fits it and centers; a zoomed one scales with
+        /// the width and keeps the content point at the top-left of the viewport there (within the content).
+        /// The content point under the top inset stays under it.
+        private func liveResizeTarget(_ live: LiveResize, to size: CGSize) -> (zoom: CGFloat, offset: CGPoint) {
+            let content = layout.contentSize
             let zoom = live.wasFitted
                 ? Self.fitZoom(pageWidth: layout.pageSize.width, viewWidth: size.width, desk: fitDesk)
-                : live.zoom
+                : min(max(live.zoom * size.width / live.size.width, Self.minimumZoom), Self.maximumZoom)
             let scale = zoom / live.zoom
-            let offsetX = (layout.contentSize.width * zoom - size.width) / 2
+            let width = content.width * zoom
+            let left = PageLayout.sideInset(contentWidth: width, viewWidth: size.width, margin: margins.left)
+            let right = PageLayout.sideInset(contentWidth: width, viewWidth: size.width, margin: margins.right)
+            let x = live.wasFitted
+                ? (width - size.width) / 2
+                : min(max(scale * live.offset.x, -left), width + right - size.width)
             let topInset = safeAreaInsets.top + margins.top
-            return (scale, CGPoint(x: scale * live.offset.x - offsetX, y: topInset - scale * live.topInset))
+            return (zoom, CGPoint(x: x, y: scale * (live.offset.y + live.insets.top) - topInset))
         }
     }
 #endif

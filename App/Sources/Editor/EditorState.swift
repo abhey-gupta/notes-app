@@ -28,6 +28,9 @@ final class EditorState {
     let pages = PagesModel()
     /// A touch on this notebook's canvas (split view: its pane takes focus, #175).
     @ObservationIgnored var onTouch: () -> Void = {}
+    /// Pencil double-tap / squeeze act here (split view: only the focused pane's canvas, else one tap
+    /// reaches both and toggles twice).
+    @ObservationIgnored var takesPencil = true
     @ObservationIgnored var onUndo: () -> Void = {}
     @ObservationIgnored var onRedo: () -> Void = {}
     /// Lasso selection box in screen (canvas view) space for the context bar; `nil` when there is no

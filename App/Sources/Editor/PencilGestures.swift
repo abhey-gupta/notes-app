@@ -32,6 +32,7 @@ final class PencilGestures: NSObject, UIPencilInteractionDelegate {
     }
 
     private func perform(_ action: UIPencilPreferredAction) {
+        guard state.takesPencil else { return }
         switch action {
         case .switchEraser:
             tools.toggleEraser()

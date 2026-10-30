@@ -153,7 +153,7 @@ struct LibrarySidebar: View {
                 }
             }
             .buttonStyle(.plain)
-            .draggable(NotebookReference(id: notebook.id)) {
+            .draggable(NotebookReference.picking(notebook.id)) {
                 NotebookCover(title: notebook.title, color: notebook.cover.style, width: 90)
             }
             .contextMenu { NotebookMenu(notebook: notebook, library: library, prompt: $prompt) }
@@ -343,6 +343,15 @@ enum DropTarget: Hashable {
 /// A notebook being dragged inside the app (cover or sidebar row → sidebar folder).
 struct NotebookReference: Codable, Transferable {
     let id: NotebookID
+
+    /// The notebook last picked up, for a drop target to show before the drop loads it (#175).
+    @MainActor static var dragged: NotebookID?
+
+    /// The payload of a drag starting now (`draggable` asks for it as the drag begins).
+    @MainActor static func picking(_ id: NotebookID) -> NotebookReference {
+        dragged = id
+        return NotebookReference(id: id)
+    }
 
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .notebookReference)

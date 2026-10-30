@@ -4,8 +4,8 @@ import Library
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// A tab dragged out of the bar onto the page (#175): the half it would land on lights up; dropped, it
-/// opens in split view on that side.
+/// A tab dragged out of the bar onto the page (#175): a glass sheet covers the half it would land on;
+/// dropped, it opens in split view on that side.
 struct TabDrop: DropDelegate {
     let geometry: SplitGeometry
     let isEnabled: Bool
@@ -17,7 +17,8 @@ struct TabDrop: DropDelegate {
     }
 
     func dropEntered(info: DropInfo) {
-        side = landing(info)
+        let next = landing(info)
+        withAnimation(.snappy(duration: 0.2)) { side = next }
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
@@ -34,7 +35,7 @@ struct TabDrop: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         let target = landing(info)
-        side = nil
+        withAnimation(.easeOut(duration: 0.2)) { side = nil }
         guard let provider = info.itemProviders(for: [.notebookReference]).first else { return false }
         _ = provider.loadDataRepresentation(for: .notebookReference) { data, _ in
             guard let data, let reference = try? JSONDecoder().decode(NotebookReference.self, from: data) else { return }
@@ -49,20 +50,34 @@ struct TabDrop: DropDelegate {
     }
 }
 
-/// Where a dropped tab will land: the toolbar's dock slot look, over that half.
+/// Where a dropped tab will land: a glass sheet over that half, with the notebook's name.
 struct TabDropZone: View {
     let geometry: SplitGeometry
     let side: OpenTabs.Pane
+    /// The notebook being dragged, when known.
+    let title: String?
 
     var body: some View {
         let frames = geometry.frames(SplitGeometry.half)
         let frame = (side == .primary ? frames.primary : frames.secondary).insetBy(dx: 12, dy: 12)
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(Tokens.Colors.dockHint)
-            .strokeBorder(Tokens.Colors.dockHintBorder, lineWidth: 1.5)
-            .frame(width: frame.width, height: frame.height)
-            .position(x: frame.midX, y: frame.midY)
-            .allowsHitTesting(false)
-            .transition(.opacity)
+        VStack(spacing: Tokens.Spacing.s) {
+            if let title {
+                Text(title)
+                    .scaledFont(size: 17, weight: .semibold)
+                    .foregroundStyle(Tokens.Colors.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            Text("Drop to open here")
+                .scaledFont(size: 13)
+                .foregroundStyle(Tokens.Colors.textTertiary)
+        }
+        .padding(Tokens.Spacing.xxl)
+        .frame(width: frame.width, height: frame.height)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .position(x: frame.midX, y: frame.midY)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .transition(.opacity)
     }
 }

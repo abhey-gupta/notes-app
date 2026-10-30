@@ -241,7 +241,7 @@ struct LibraryScreen: View {
                     ) {
                         open(EditorRoute(id: notebook.id, source: .cover))
                     }
-                    .draggable(NotebookReference(id: notebook.id)) {
+                    .draggable(NotebookReference.picking(notebook.id)) {
                         NotebookCover(title: notebook.title, color: notebook.cover.style, width: 110)
                     }
                     .contextMenu { NotebookMenu(notebook: notebook, library: library, prompt: $prompt) }
