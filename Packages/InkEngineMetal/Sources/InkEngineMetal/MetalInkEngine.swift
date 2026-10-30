@@ -317,7 +317,7 @@ public final class MetalInkEngine: InkEngine {
             vertexCount: geometry.vertices.count,
             ends: geometry.ends
         ))
-        delegate?.engine(self, didCommit: committed, to: stroke.page)
+        delegate?.engine(self, didCommit: [(stroke.page, committed)])
     }
 }
 
