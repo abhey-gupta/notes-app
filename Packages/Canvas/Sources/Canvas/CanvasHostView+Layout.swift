@@ -21,9 +21,9 @@
 
         /// First layout and rotation/resizes: fit the page width (unless the user zoomed), keep the content
         /// point at the top of the viewport in place.
-        func resize(from old: CGSize, to new: CGSize) {
-            let oldFit = fitZoom
-            fitZoom = Self.fitZoom(pageWidth: layout.pageSize.width, viewWidth: new.width)
+        func resize(from old: CGSize, to new: CGSize, refit: Bool = false) {
+            let oldFit = refit ? scrollView.zoomScale : fitZoom
+            fitZoom = Self.fitZoom(pageWidth: layout.pageSize.width, viewWidth: new.width, desk: fitDesk)
             let z = scrollView.zoomScale
             let anchorY = (scrollView.contentOffset.y + scrollView.contentInset.top) / z
             let isFirst = old == .zero
@@ -37,12 +37,21 @@
             viewportDidChange()
         }
 
-        /// Fitted zoom: the page as wide as the mock's (760 of 1194 landscape): the view less 96 pt of
-        /// desk each side, at most 880 pt, at least 320 pt.
-        static func fitZoom(pageWidth: CGFloat, viewWidth: CGFloat) -> CGFloat {
+        /// Fitted zoom: the page as wide as the mock's (760 of 1194 landscape): the view less `desk` (96 pt,
+        /// less in a split pane, ``fitDesk``) each side, at most 880 pt, at least 320 pt.
+        static func fitZoom(pageWidth: CGFloat, viewWidth: CGFloat, desk: CGFloat = defaultFitDesk) -> CGFloat {
             guard pageWidth > 0 else { return 1 }
-            let width = max(320, min(viewWidth - 192, 880)).rounded()
+            let width = max(320, min(viewWidth - 2 * desk, 880)).rounded()
             return min(max(width / pageWidth, minimumZoom), maximumZoom)
+        }
+
+        public static let defaultFitDesk: CGFloat = 96
+
+        /// A new ``fitDesk``: a fitted page refits (unless a live resize holds the canvas; its end does).
+        func fitDeskDidChange(from old: CGFloat) {
+            guard fitDesk != old, lastBoundsSize != .zero, liveResize == nil else { return }
+            let size = lastBoundsSize
+            resize(from: size, to: size, refit: abs(scrollView.zoomScale - fitZoom) < 0.001)
         }
 
         func setZoom(_ zoom: CGFloat) {

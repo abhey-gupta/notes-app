@@ -30,6 +30,11 @@ import Tools
 /// Lifecycle: ``open()`` (from `.task`), ``flush()`` when the scene leaves the foreground, ``close()``
 /// when the editor goes away. Closing flushes in the background; reopening the same notebook waits for
 /// that flush so a package never has two writers.
+///
+/// Split view (#175): a notebook in both panes gets a companion (``init(companionOf:)``), a second canvas,
+/// engine and page residency on the same open store, edit pipeline and history. Every edit the store
+/// accepts reaches both mirrors and engines (`ResidencyMirror` followers), so ink drawn in one pane shows
+/// in the other; the owner alone writes the package, thumbnails and the library entry.
 @MainActor
 final class NotebookSession {
     /// The canvas host (and through it the engine), created on first use so building an `EditorScreen`
@@ -40,23 +45,23 @@ final class NotebookSession {
     let notebookID: NotebookID
 
     let library: any LibraryModel
-    private let initialPageCount: Int
-    private let initialPageSize: CGSize
-    private var initialTheme: PaperTheme
-    private(set) var store: DocumentStore?
+    let initialPageCount: Int
+    let initialPageSize: CGSize
+    var initialTheme: PaperTheme
+    var store: DocumentStore?
     /// Imported PDF pages by page ID (#119): the engine draws them under the ink, export flattens onto them.
     var artwork: [PageID: any PageArtwork] = [:]
     /// Where artwork sits on widened pages; follows the manifest (``refreshPages()``).
     let artworkPlacement = ArtworkPlacement()
-    private(set) var residency: PageResidency?
+    var residency: PageResidency?
     /// Page thumbs + cover (`+Thumbnails`, §5.5): fed on every accepted edit, flushed with the store.
-    private(set) var thumbnails: ThumbnailService?
+    var thumbnails: ThumbnailService?
     var thumbnailRegeneration: Task<Void, Never>?
     /// Overview cells on screen whose pages may lack a thumbnail, oldest first (`+Thumbnails`, #207).
     var thumbnailWants: [PageID] = []
     var thumbnailFill: Task<Void, Never>?
     /// The one path for changes to the notebook (strokes, erasing, selection, pages, undo); set by ``open()``.
-    private(set) var edits: EditPipeline?
+    var edits: EditPipeline?
     /// Automatic new pages (#172): a blank page waits at the end instead of the add-page button.
     var addsPagesAutomatically = false {
         didSet {
@@ -66,21 +71,28 @@ final class NotebookSession {
     }
 
     /// The toolbar's current tool (``setTool(_:allowsFingerDrawing:snapsShapes:)``); erasing reads its mode and size.
-    private var tool = ActiveTool.ink(.ballpoint, color: .primary, width: 2)
+    var tool = ActiveTool.ink(.ballpoint, color: .primary, width: 2)
     /// Lift after an eraser stroke (#156: the toolbar may switch back).
     var onErased: (() -> Void)?
-    private var isErasing = false
-    private(set) var isClosed = false
+    var isErasing = false
+    var isClosed = false
     private var awaitingFirstPage = true
     var awaitingFirstSharp = true
     /// Lasso selection (`+Selection`); set by ``open()``.
-    private(set) var selection: SelectionMachine?
+    var selection: SelectionMachine?
     let selectionOverlay = SelectionOverlayView()
     /// Pages expanding sideways (`+Width`, #129): the ink-extent lookup of a grab, the pages whose sharp
     /// ink lifts the frozen frame after a widen, and the timeout that lifts it anyway.
     var inkExtentLookup: Task<Void, Never>?
     var awaitingSharpInk: Set<PageID> = []
     var widenSettle: Task<Void, Never>?
+
+    /// The notebook's own session when this is a second view of it (split view, #175).
+    weak var owner: NotebookSession?
+    let isCompanion: Bool
+    /// This notebook's second views (owner only, `+Companion`).
+    var companionRefs: [WeakSession] = []
+    private var opening: Task<Void, Never>?
 
     private static var closing: [NotebookID: Task<Void, Never>] = [:]
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "editor")
@@ -92,6 +104,26 @@ final class NotebookSession {
         initialPageSize = notebook.pageSize
         initialTheme = notebook.theme
         state = EditorState(startsFocused: startsFocused)
+        isCompanion = false
+        wireState()
+    }
+
+    /// A second view of `owner`'s notebook (split view, #175): same document and history, its own canvas.
+    /// It opens once the owner has.
+    init(companionOf owner: NotebookSession) {
+        notebookID = owner.notebookID
+        library = owner.library
+        initialPageCount = max(owner.host.layout.pageCount, owner.initialPageCount)
+        initialPageSize = owner.host.layout.pageSize == .zero ? owner.initialPageSize : owner.host.layout.pageSize
+        initialTheme = owner.initialTheme
+        state = EditorState(edits: owner.state.edits)
+        state.keepsExactColors = owner.state.keepsExactColors
+        isCompanion = true
+        self.owner = owner
+        wireState()
+    }
+
+    private func wireState() {
         state.onSelectionAction = { [weak self] in self?.performSelectionAction($0) }
         state.onInsertPhoto = { [weak self] in self?.insertPhoto($0) }
         state.onKeepsExactColors = { [weak self] in self?.setKeepsExactColors($0) }
@@ -109,8 +141,24 @@ final class NotebookSession {
     // MARK: Open / close
 
     /// Opens the package (manifest only), lays out every page, then lets the page window load page 1,
-    /// pages 2–3 and the rest of the window, in that order.
+    /// pages 2–3 and the rest of the window, in that order. A companion opens on its owner's store. Calls
+    /// after the first wait for it.
     func open() async {
+        if let opening {
+            return await opening.value
+        }
+        let task = Task { @MainActor in
+            if let owner {
+                await openCompanion(of: owner)
+            } else {
+                await openDocument()
+            }
+        }
+        opening = task
+        await task.value
+    }
+
+    private func openDocument() async {
         guard store == nil, !isClosed else { return }
         _ = host
         await Self.closing[notebookID]?.value
@@ -141,16 +189,7 @@ final class NotebookSession {
             if let window = host.pageWindow {
                 residency.update(window)
             }
-            let edits = EditPipeline(
-                store: store,
-                mirror: ResidencyMirror(residency: residency) { [weak self] in await self?.refreshPages() },
-                history: state.edits,
-                undoManager: host.editUndoManager
-            )
-            edits.onPageEdited = { [weak self] page in self?.thumbnailChanged(page) }
-            edits.onHistoryWillApply = { [weak self] in self?.clearSelection() }
-            edits.onHistoryApplied = { [weak self] pages in self?.reveal(pages) }
-            edits.addsPagesAutomatically = addsPagesAutomatically
+            let edits = makeEdits(store: store, residency: residency)
             self.edits = edits
             selection = SelectionMachine(edits: edits, display: self)
             state.onUndo = { [weak self] in self?.edits?.undo() }
@@ -162,8 +201,33 @@ final class NotebookSession {
         }
     }
 
+    /// The notebook's edit pipeline: its mirror is this residency, followed by every companion's.
+    private func makeEdits(store: DocumentStore, residency: PageResidency) -> EditPipeline {
+        let mirror = ResidencyMirror(residency: residency) { [weak self] in
+            self?.companions.compactMap(\.residency) ?? []
+        } onPagesChanged: { [weak self] in
+            guard let self else { return }
+            await refreshPages()
+            for companion in companions {
+                await companion.refreshPages()
+            }
+        }
+        let edits = EditPipeline(store: store, mirror: mirror, history: state.edits, undoManager: host.editUndoManager)
+        edits.onPageEdited = { [weak self] page in self?.thumbnailChanged(page) }
+        edits.onHistoryWillApply = { [weak self] in
+            guard let self else { return }
+            for view in views {
+                view.clearSelection()
+            }
+        }
+        edits.onHistoryApplied = { [weak self] pages in self?.reveal(pages) }
+        edits.addsPagesAutomatically = addsPagesAutomatically
+        return edits
+    }
+
     /// Checkpoints every dirty page and renders pending thumbnails (scene left the foreground).
     func flush() {
+        guard !isCompanion else { return }
         if store != nil {
             savePosition()
         }
@@ -176,6 +240,9 @@ final class NotebookSession {
     /// The editor went away: stop input, finish queued edits, checkpoint, update the library entry.
     func close() {
         guard !isClosed else { return }
+        if isCompanion {
+            return closeCompanion()
+        }
         if store != nil {
             savePosition()
         }
@@ -217,11 +284,11 @@ final class NotebookSession {
         "readingPosition.\(notebookID.uuid.uuidString)"
     }
 
-    /// The notebook's real pages, at the position it was left in.
-    private func showPages(_ ids: [PageID], of notebook: Notebook) {
+    /// The notebook's real pages, at `position` (default: where it was left).
+    func showPages(_ ids: [PageID], of notebook: Notebook, at position: ReadingPosition? = nil) {
         host.pageExtension = PageExtension(notebook: notebook)
         host.layout = pageLayout(ids, pageSize: notebook.pageSize)
-        savedPosition().map(host.restore)
+        (position ?? savedPosition()).map(host.restore)
     }
 
     private func savedPosition(defaults: UserDefaults = .standard) -> ReadingPosition? {
@@ -233,53 +300,9 @@ final class NotebookSession {
         defaults.set(data, forKey: positionKey)
     }
 
-    // MARK: Settings
-
-    func setTool(_ tool: ActiveTool, allowsFingerDrawing: Bool, snapsShapes: Bool) {
-        if tool != .lasso {
-            clearSelection()
-        }
-        self.tool = tool
-        engine.setTool(tool.configuration(allowsFingerDrawing: allowsFingerDrawing, snapsShapes: snapsShapes))
-        host.allowsFingerDrawing = allowsFingerDrawing
-    }
-
-    /// Paper color and pattern from the title menu: the engine re-themes at once; the pattern becomes the
-    /// template of every page and of new pages.
-    func setPaper(theme: PaperTheme, style: PaperStyle) {
-        engine.setTheme(theme)
-        tintSelection(for: theme)
-        applyPaperAppearance(theme, to: host)
-        initialTheme = theme
-        edits?.run("paper") { [weak self] in
-            guard let self, let store, let residency else { return }
-            let manifest = await store.manifest
-            guard manifest.notebook.theme != theme || manifest.notebook.paper != style else { return }
-            try await store.updateNotebook { notebook in
-                notebook.theme = theme
-                notebook.paper = style
-            }
-            if manifest.notebook.paper != style {
-                try await store.setTemplate(style.defaultTemplate)
-                residency.setTemplate(style.defaultTemplate, for: residency.pageIDs)
-            }
-            await library.documentDidSave(store.manifest)
-            regenerateThumbnails()
-        }
-    }
-
-    // MARK: History
-
-    /// Undo/redo changed `ids`: scrolls to the first page `ids` touched if none of them is on screen.
-    func reveal(_ ids: [PageID]) {
-        guard let residency, residency.window != nil, !ids.contains(where: residency.isVisible),
-              let first = ids.lazy.compactMap(residency.pageIDs.firstIndex(of:)).first else { return }
-        host.scrollToPage(first, animated: true)
-    }
-
     // MARK: Pages
 
-    private func pageLoaded(_ id: PageID) {
+    func pageLoaded(_ id: PageID) {
         ensureThumbnails(id)
         guard awaitingFirstPage, residency?.isVisible(id) == true else { return }
         awaitingFirstPage = false
@@ -322,69 +345,5 @@ final class NotebookSession {
             return nil
         }
         return page.strokes.count == 1 ? "1 stroke" : "\(page.strokes.count) strokes"
-    }
-}
-
-// MARK: - Engine
-
-extension NotebookSession: InkEngineDelegate {
-    func engine(_: any InkEngine, didCommit pieces: [(page: PageID, stroke: Stroke)]) {
-        edits?.commitStroke(pieces)
-    }
-
-    /// Each batch is applied at once (stroke mode removes the strokes it touched, partial mode splits them,
-    /// highlighter included); at gesture end ``EditPipeline`` collapses the batches into one undo step.
-    func engine(_: any InkEngine, didReceiveEraser samples: [Sample], to page: PageID) {
-        guard case let .eraser(eraser) = tool else { return }
-        edits?.erase(samples, on: page, diameter: eraser.width, mode: eraser.mode)
-    }
-
-    /// A finished lasso: strokes with ≥ 50 % of their samples inside become the selection (`+Selection`).
-    func engine(_: any InkEngine, didReceiveLasso path: [CGPoint], to page: PageID) {
-        selection?.lassoClosed(path, on: page)
-    }
-
-    func engineDidBeginStroke(_: any InkEngine) {
-        clearSelection()
-        if !host.isFirstResponder {
-            host.becomeFirstResponder()
-        }
-        isErasing = tool.isEraser
-        edits?.beginGesture(erasing: isErasing)
-    }
-}
-
-// MARK: - Canvas
-
-extension NotebookSession: CanvasHostViewDelegate {
-    func canvasHost(_: CanvasHostView, didChange window: PageWindow) {
-        residency?.update(window)
-        if let selected = selection?.selection, residency?.isVisible(selected.pageID) != true {
-            clearSelection()
-        }
-    }
-
-    func canvasHostDidRequestNewPage(_: CanvasHostView) {
-        insertPage(after: nil, template: nil)
-    }
-
-    func canvasHostDidRequestUndo(_: CanvasHostView) {
-        state.undo()
-    }
-
-    func canvasHostDidRequestRedo(_: CanvasHostView) {
-        state.redo()
-    }
-
-    func canvasHostDidBeginTouch(_: CanvasHostView) {
-        state.collapseTabs()
-    }
-
-    func canvasHostDidLiftAllTouches(_: CanvasHostView) {
-        edits?.endGesture()
-        if isErasing {
-            isErasing = false
-            onErased?()
-        }
     }
 }

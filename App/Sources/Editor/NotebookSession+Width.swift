@@ -86,7 +86,23 @@ extension NotebookSession {
                 notebook.leftExtension = leftExtension
             }
             await library.documentDidSave(store.manifest)
-            regenerateThumbnails()
+            (owner ?? self).regenerateThumbnails()
+            for view in views where view !== self {
+                await view.followWidening()
+            }
+        }
+    }
+
+    /// Another view of this notebook widened it (split view, #175): the new page geometry, and every
+    /// loaded page read again (shifted ink).
+    func followWidening() async {
+        guard let store, let residency else { return }
+        let notebook = await store.manifest.notebook
+        artworkPlacement.pageExtension = PageExtension(notebook: notebook)
+        residency.setPageGeometry(size: notebook.pageSize, leftExtension: notebook.leftExtension)
+        await refreshPages()
+        for id in residency.pageIDs where residency.page(id) != nil {
+            await residency.reload(id)
         }
     }
 

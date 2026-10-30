@@ -1,0 +1,162 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#FCFBF7;--desk:#EDEAE4;--ink:#1E2129;--blue:#2C4FD6;--red:#D2402F;
+ --bar:#F7F6F2;--glass:rgba(255,255,255,.74);--gb:rgba(0,0,0,.07);--fg2:#55585f;--fg3:#8a8c92;
+ --ui:-apple-system,"SF Pro Text",system-ui,sans-serif;--ease:cubic-bezier(.32,.72,0,1)}
+.wrap{display:flex;flex-direction:column;gap:34px}
+.cap{font-family:var(--font-sans);margin:0 0 10px 2px}
+.cap b{font-size:15px;color:var(--foreground)}
+.cap span{display:block;font-size:13px;color:var(--muted-foreground);margin-top:3px;line-height:1.45}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.sub{font:500 12px var(--font-sans);color:var(--muted-foreground);margin:6px 0 0 2px}
+.fit{position:relative;flex:none}
+.dev{position:absolute;left:0;top:0;transform-origin:0 0;padding:10px;box-sizing:border-box;background:#0E0E10;border-radius:40px;box-shadow:0 24px 50px -20px rgba(0,0,0,.4)}
+.scr{position:relative;border-radius:30px;overflow:hidden;background:var(--desk);font-family:var(--ui);color:var(--ink);-webkit-font-smoothing:antialiased}
+.status{position:absolute;top:0;left:0;right:0;height:26px;display:flex;justify-content:space-between;padding:0 28px;font:600 13px var(--ui);align-items:center;z-index:9;color:var(--fg2)}
+.glass{background:var(--glass);backdrop-filter:blur(24px) saturate(180%);border:.5px solid var(--gb);box-shadow:0 10px 30px -8px rgba(20,20,30,.16),0 1px 0 rgba(255,255,255,.6) inset}
+.ico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.pane{position:absolute;top:0;bottom:0;left:0;overflow:hidden}
+.pbar{position:absolute;left:0;right:0;top:0;height:80px;padding:28px 12px 0;box-sizing:border-box;display:flex;align-items:center;gap:6px;z-index:5;background:var(--bar);border-bottom:.5px solid rgba(0,0,0,.08);white-space:nowrap}
+.ib{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#3a3d45;flex:none}
+.ib.dim{color:#b4b6bb}
+.vsep{width:1px;height:22px;background:rgba(0,0,0,.1);margin:0 3px;flex:none}
+.grow{flex:1;min-width:0}
+.chip{height:38px;padding:0 8px 0 12px;border-radius:12px;display:flex;align-items:center;gap:8px;font:600 14.5px var(--ui);background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 .5px rgba(0,0,0,.06);flex:none}
+.chip .n{font:600 11.5px var(--ui);color:var(--fg2);background:rgba(30,33,41,.07);border-radius:8px;padding:3px 6px;display:flex;gap:3px;align-items:center}
+.tab{height:38px;padding:0 12px;border-radius:12px;display:flex;align-items:center;font:500 14.5px var(--ui);color:var(--fg2);flex:none}
+.tab.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 .5px rgba(0,0,0,.06)}
+.pc{font:600 13px var(--ui);color:var(--fg2);padding:0 8px;height:40px;display:flex;align-items:center;gap:7px;border-radius:12px;flex:none}
+.tb{position:absolute;top:96px;left:50%;transform:translateX(-50%);height:52px;border-radius:26px;display:flex;align-items:center;padding:0 8px;gap:4px;z-index:6}
+.btn{width:44px;height:40px;border-radius:20px;display:grid;place-items:center;color:#3a3d45;flex:none}
+.btn.on{background:rgba(30,33,41,.08);color:var(--ink)}
+.sep{width:1px;height:22px;background:rgba(0,0,0,.1);margin:0 6px}
+.sw{width:22px;height:22px;border-radius:50%;margin:0 5px;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.15);flex:none}
+.sw.on{box-shadow:0 0 0 2px var(--paper),0 0 0 3.5px var(--ink)}
+.page{position:absolute;left:0;top:0;width:760px;height:900px;background:var(--paper);border-radius:4px;transform-origin:0 0;
+ box-shadow:0 1px 2px rgba(0,0,0,.06),0 12px 40px -12px rgba(40,30,10,.18);
+ background-image:radial-gradient(circle,rgba(30,33,41,.16) 1.05px,transparent 1.35px);background-size:24px 24px;background-position:12px 12px}
+.hw{font-family:Caveat,cursive;position:absolute;white-space:nowrap}
+.div{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,.13);z-index:7}
+.grab{position:absolute;top:50%;left:50%;width:6px;height:46px;margin:-23px 0 0 -3px;border-radius:3px;background:rgba(30,33,41,.28)}
+.grab.hot{width:8px;height:64px;margin:-32px 0 0 -4px;background:var(--ink)}
+.menu{position:absolute;width:260px;border-radius:16px;padding:6px;z-index:10;font:400 15px var(--ui);background:rgba(255,255,255,.94)}
+.menu div{padding:10px 12px;border-radius:9px;display:flex;align-items:center;gap:11px;color:var(--ink)}
+.menu div.hi{background:rgba(30,33,41,.07);font-weight:600}
+.menu hr{border:0;border-top:.5px solid rgba(0,0,0,.1);margin:5px 4px}
+.note{position:absolute;font:600 13px var(--ui);color:#fff;background:rgba(30,33,41,.82);padding:7px 12px;border-radius:12px;z-index:12;white-space:nowrap}
+.drop{position:absolute;border-radius:22px;background:rgba(44,79,214,.08);border:2px solid rgba(44,79,214,.35);z-index:4}
+.card{position:absolute;border-radius:14px;overflow:hidden;z-index:11;background:var(--paper);box-shadow:0 24px 50px -10px rgba(20,20,40,.35),0 0 0 .5px rgba(0,0,0,.1);transform:rotate(-2deg)}
+/* animated entrance */
+@keyframes paneL{0%,22%{width:1194px}34%,78%{width:596.5px}90%,100%{width:1194px}}
+@keyframes pageL{0%,22%{transform:translate(217px,112px) scale(1)}34%,78%{transform:translate(36px,112px) scale(.69)}90%,100%{transform:translate(217px,112px) scale(1)}}
+@keyframes paneR{0%,22%{transform:translateX(1194px)}34%,78%{transform:translateX(597.5px)}90%,100%{transform:translateX(1194px)}}
+@keyframes fadeDiv{0%,30%{opacity:0}36%,76%{opacity:1}80%,100%{opacity:0}}
+@keyframes menu{0%,6%{opacity:0;transform:scale(.92)}10%,19%{opacity:1;transform:scale(1)}22%,100%{opacity:0;transform:scale(1)}}
+@keyframes hi{0%,14%{background:transparent}15%,100%{background:rgba(30,33,41,.08)}}
+.a-paneL{animation:paneL 6s infinite;animation-timing-function:var(--ease)}
+.a-pageL{animation:pageL 6s infinite;animation-timing-function:var(--ease)}
+.a-paneR{animation:paneR 6s infinite;animation-timing-function:var(--ease)}
+.a-div{animation:fadeDiv 6s infinite}
+.a-menu{animation:menu 6s infinite;transform-origin:20% 0}
+.a-hi{animation:hi 6s infinite}
+@keyframes paneL2{0%,22%{width:1194px}34%,78%{width:596.5px}90%,100%{width:1194px}}
+</style></head><body>
+<div class="wrap" id="root"></div>
+<script>
+const I={
+back:'<path d="M14.5 5l-7 7 7 7"/>',
+undo:'<path d="M9 14.5L4.5 10 9 5.5M4.5 10H15a5 5 0 010 10h-3"/>',
+redo:'<path d="M15 14.5L19.5 10 15 5.5M19.5 10H9a5 5 0 000 10h3"/>',
+grid:'<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>',
+more:'<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+plus:'<path d="M12 5v14M5 12h14"/>',
+chev:'<path d="M7 10l5 5 5-5"/>',
+split:'<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M12 5v14"/>',
+x:'<path d="M6 6l12 12M18 6L6 18"/>',
+win:'<rect x="3.5" y="6" width="13" height="11" rx="2"/><path d="M8 3.5h10a2.5 2.5 0 012.5 2.5v8"/>',
+pen:'<path d="M4.5 19.5l1.2-4.6L16 4.6a2 2 0 012.9 0l.5.5a2 2 0 010 2.9L9.1 18.3z"/>',
+hl:'<path d="M4 20.5h6M8.6 15.4L17 5a1.8 1.8 0 012.6-.2l.6.6a1.8 1.8 0 01-.2 2.6l-10.4 8.4z"/>',
+er:'<path d="M9 20h11M4.8 14.6l8.6-8.9a2 2 0 012.9 0l2.9 2.9a2 2 0 010 2.9L11 20H8.6z"/>',
+lasso:'<ellipse cx="12" cy="9.5" rx="8" ry="5.2" stroke-dasharray="2.2 2.6"/>'};
+const ic=(n,s)=>`<svg class="ico" ${s?`style="${s}"`:''} viewBox="0 0 24 24">${I[n]}</svg>`;
+const chip=(t,n)=>`<div class="chip">${t}<span class="n">${n?n+' ':''}${ic('chev','width:11px;height:11px;stroke-width:2.4')}</span></div>`;
+const tail=(p)=>`<div class="grow"></div><div class="ib">${ic('undo')}</div><div class="ib dim">${ic('redo')}</div><div class="vsep"></div><div class="pc">${ic('grid')}${p}</div><div class="vsep"></div><div class="ib">${ic('more')}</div>`;
+const barL=(t,n,p)=>`<div class="pbar"><div class="ib">${ic('back')}</div><div class="vsep"></div>${chip(t,n)}${tail(p)}</div>`;
+const barR=(t,p)=>`<div class="pbar">${chip(t,'')}${tail(p)}</div>`;
+const tools=(top)=>`<div class="tb glass" ${top?`style="top:${top}px"`:''}><div class="btn on">${ic('pen')}</div><div class="btn">${ic('hl')}</div><div class="btn">${ic('er')}</div><div class="btn">${ic('lasso')}</div><div class="sep"></div><i class="sw on" style="background:#1E2129"></i><i class="sw" style="background:#2C4FD6"></i><i class="sw" style="background:#D2402F"></i></div>`;
+const C={
+thermo:`<div class="hw" style="left:70px;top:40px;font-size:44px;font-weight:600">Entropy &amp; the 2nd law</div>
+ <div class="hw" style="left:70px;top:88px;width:470px;height:3px;background:#2C4FD6;border-radius:2px"></div>
+ <div class="hw" style="left:80px;top:140px;font-size:30px">• dS ≥ δQ / T for any real process</div>
+ <div class="hw" style="left:80px;top:190px;font-size:30px;color:#2C4FD6">• reversible ⇒ equality</div>
+ <div class="hw" style="left:80px;top:240px;font-size:30px">• Carnot: η = 1 − T_c / T_h</div>
+ <div class="hw" style="left:110px;top:310px;font-size:26px;color:#D2402F">(check sign convention!)</div>`,
+lin:`<div class="hw" style="left:70px;top:40px;font-size:44px;font-weight:600">Eigenvalues</div>
+ <div class="hw" style="left:70px;top:88px;width:250px;height:3px;background:#D2402F;border-radius:2px"></div>
+ <div class="hw" style="left:80px;top:140px;font-size:34px">A v = λ v</div>
+ <div class="hw" style="left:80px;top:195px;font-size:30px">det(A − λI) = 0</div>
+ <div class="hw" style="left:80px;top:250px;font-size:30px;color:#2C4FD6">tr A = Σ λᵢ ,  det A = Π λᵢ</div>
+ <div class="hw" style="left:80px;top:320px;font-size:26px;color:#55585f">→ used in Ex. 4.2 (stability)</div>`};
+const page=(c,x,y,s,cls)=>`<div class="page ${cls||''}" style="${cls?'':`transform:translate(${x}px,${y}px) scale(${s})`}">${C[c]}</div>`;
+const dev=(W,H,s,inner)=>`<div class="fit" style="width:${W*s+20*s}px;height:${H*s+20*s}px"><div class="dev" style="transform:scale(${s});width:${W+20}px;height:${H+20}px"><div class="scr" style="width:${W}px;height:${H}px"><div class="status"><span>8:16 PM&nbsp; Fri 30 Oct</span><span>100%</span></div>${inner}</div></div></div>`;
+const divider=(x,hot,cls)=>`<div class="div ${cls||''}" style="left:${x}px"><div class="grab ${hot?'hot':''}"></div></div>`;
+const cap=(t,s)=>`<div class="cap"><b>${t}</b><span>${s}</span></div>`;
+// standard split, landscape, ratio r of 1194
+const split=(r,opts={})=>{const L=Math.round(1194*r),R=1194-L-1;const sl=Math.min((L-60)/760,.69),sr=Math.min((R-60)/760,.69);
+ return `<div class="pane" style="width:${L}px">${barL('Thermodynamics',3,'3 / 11')}${page('thermo',(L-760*sl)/2,112,sl)}</div>
+ <div class="pane" style="left:${L+1}px;width:${R}px;${opts.fadeR?'opacity:.45':''}">${barR('Linear Algebra','1 / 6')}${page('lin',(R-760*sr)/2,112,sr)}</div>
+ ${divider(L,opts.hot)}${opts.noTools?'':tools()}`;};
+
+let h='';
+// 1 animated
+h+=cap('1 · Opening split · animated (loops)','Long-press a tab → <i>Open in Split View</i>. One spring (~0.45 s, no bounce): the current page glides left and shrinks in place — same page, same spot in your notes, no reload flash — while the other notebook slides in from the right edge. The divider fades in last. Closing plays it backwards.');
+h+=dev(1194,834,.6,`
+ <div class="pane a-paneL">${barL('Thermodynamics',3,'3 / 11')}${page('thermo',0,0,1,'a-pageL')}</div>
+ <div class="pane a-paneR" style="width:596.5px">${barR('Linear Algebra','1 / 6')}${page('lin',36,112,.69)}</div>
+ <div class="div a-div" style="left:596.5px"><div class="grab"></div></div>
+ ${tools()}
+ <div class="menu glass a-menu" style="left:70px;top:76px"><div class="a-hi">${ic('split')}Open in Split View</div><div>${ic('win')}Open in New Window</div><hr><div>${ic('x')}Close Tab</div></div>`);
+
+// 2 recommended
+h+=cap('2 · In split — each side owns its bar (recommended)','The bar splits at the divider: every side has its own notebook chip (switch tabs per side), undo · redo, pages + counter and ⋯. Nothing acts on a hidden “active side”. One tool capsule for both — Pencil writes on either side instantly, no tap-to-focus. Fingers scroll/zoom each side independently.');
+h+=dev(1194,834,.6,split(.5));
+
+// 3 alternative
+h+=cap('3 · Alternative — one shared bar','Bar stays whole; the two notebooks become one paired chip (left half raised = the side you last touched). Undo, pages and ⋯ act on that side. Looks calmer, but which side undo hits is hidden state — easy to undo the wrong notebook.');
+h+=dev(1194,834,.6,`
+ <div class="pbar" style="z-index:8"><div class="ib">${ic('back')}</div><div class="vsep"></div>
+ <div style="display:flex;background:rgba(30,33,41,.06);border-radius:13px;padding:2px;gap:2px"><div class="tab on">Thermodynamics</div><div class="tab">Linear Algebra</div></div>
+ <div class="ib" style="width:36px">${ic('plus')}</div>${tail('3 / 11')}</div>
+ <div class="pane" style="width:597px">${page('thermo',36,112,.69)}</div>
+ <div class="pane" style="left:598px;width:596px">${page('lin',36,112,.69)}</div>
+ <div class="div" style="left:597px;top:80px"><div class="grab"></div></div>${tools()}`);
+
+// 4 ways in
+h+=cap('4 · Ways in','<b>a</b> Drag a tab out of the bar toward either edge: the current page eases aside, a soft drop zone shows where it lands; let go and the card grows into the pane. <b>b</b> Long-press a tab (or a notebook in the library) → <i>Open in Split View</i>. No new button in the bar.');
+h+=`<div class="row"><div>${dev(1194,834,.295,`
+ <div class="pane" style="width:640px"><div class="pbar"><div class="ib">${ic('back')}</div><div class="vsep"></div><div class="tab on">Thermodynamics</div><div class="tab">Linear Algebra</div><div class="tab" style="opacity:.35">Meeting notes</div><div class="ib">${ic('plus')}</div></div>${page('thermo',62,112,.68)}</div>
+ <div class="drop" style="left:656px;top:96px;width:522px;height:722px"></div>
+ <div class="card" style="left:770px;top:300px;width:300px;height:220px"><div style="font:600 15px var(--ui);padding:12px 14px;background:var(--bar);border-bottom:.5px solid rgba(0,0,0,.08)">Meeting notes</div><div class="hw" style="left:18px;top:62px;font-size:26px">Q4 roadmap</div><div class="hw" style="left:18px;top:100px;font-size:20px">• ship split screen</div><div class="hw" style="left:18px;top:130px;font-size:20px;color:#2C4FD6">• PDF annotations</div></div>`)}<div class="sub">a · drag a tab to an edge</div></div>
+ <div>${dev(1194,834,.295,`
+ <div class="pane" style="width:1194px">${barL('Thermodynamics',3,'3 / 11')}${page('thermo',217,112,1)}</div>${tools()}
+ <div class="menu glass" style="left:70px;top:150px;width:250px"><div style="font-weight:600;color:var(--fg3);font-size:13px;padding:6px 12px">TABS</div><div class="hi">Linear Algebra<span style="margin-left:auto">${ic('split')}</span></div><div>Meeting notes<span style="margin-left:auto">${ic('split')}</span></div></div>
+ <div class="note" style="left:330px;top:205px">long-press → Open in Split View</div>`)}<div class="sub">b · long-press a tab</div></div></div>`;
+
+// 5 divider
+h+=cap('5 · Resizing and closing','Drag the divider: both sides follow your finger live and snap to ⅓ · ½ · ⅔ with a light haptic tick; pages refit smoothly on release. Drag past ~15 % toward an edge and that side fades and slides away — let go to close it. Double-tap the divider to swap sides.');
+h+=`<div class="row"><div>${dev(1194,834,.295,split(1/3,{hot:1}))}<div class="sub">snapped to ⅓ while dragging</div></div>
+<div>${dev(1194,834,.295,split(.86,{fadeR:1,hot:1})+`<div class="note" style="left:860px;top:400px">release to close</div>`)}<div class="sub">drag toward edge → close</div></div></div>`;
+
+// 6 portrait
+const port=(stacked)=>{if(!stacked)return `<div class="pane" style="width:416px">${barL('Thermo…',3,'3/11').replace('<div class="vsep"></div><div class="pc">','<div class="pc" style="display:none">')}${page('thermo',18,112,.5)}</div>
+ <div class="pane" style="left:417px;width:417px">${barR('Linear Alg…','1/6')}${page('lin',18,112,.5)}</div>${divider(416)}`;
+ return `<div class="pane" style="width:834px;height:596px">${barL('Thermodynamics',3,'3 / 11')}${page('thermo',37,112,1)}</div>
+ <div class="pane" style="top:597px;width:834px;height:597px"><div class="pbar" style="padding-top:0;height:52px">${chip('Linear Algebra','')}${tail('1 / 6')}</div>${page('lin',37,72,1)}</div>
+ <div class="div" style="top:596px;left:0;right:0;width:auto;height:1px;bottom:auto"><div class="grab" style="width:46px;height:6px;margin:-3px 0 0 -23px"></div></div>`;};
+h+=cap('6 · Portrait','Side by side leaves each page ~5 cm wide — fine for reading, cramped for writing. Stacked keeps the page full width (top of the page in view), so writing scale doesn’t change. Proposal: side by side in landscape, stacked in portrait; rotating re-flows with the same spring.');
+h+=`<div class="row"><div>${dev(834,1194,.3,port(false))}<div class="sub">a · side by side</div></div><div>${dev(834,1194,.3,port(true))}<div class="sub">b · stacked (proposed)</div></div></div>`;
+document.getElementById('root').innerHTML=h;
+</script>
+</body></html>

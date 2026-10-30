@@ -48,11 +48,16 @@ public final class PageResidency {
     public var onPageLoaded: ((PageID) -> Void)?
     /// Called when a page leaves the window (its unflushed thumbnail should be rendered now).
     public var onPageEvicted: ((PageID) -> Void)?
+    /// Pages leaving the window are released from the store too. Off for a second view of a notebook
+    /// (split view, #175), which leaves the store's memory to the main one.
+    public var evictsFromStore = true
 
     private let sink: any PageSink
     private var resident: [PageID: Page] = [:]
     private var templates: [PageID: PageTemplate]
     private var inFlight: Set<PageID> = []
+    /// Loading pages an accepted edit passed by: the load may predate it, so it's read again.
+    private var staleLoads: Set<PageID> = []
     private var pushed: [PushedPage] = []
     private var isClosed = false
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "canvas")
@@ -129,6 +134,9 @@ public final class PageResidency {
 
     /// The store accepted `edit` on `page`: mirror it and echo it to the sink.
     public func didApply(_ edit: PageEdit, to page: PageID) {
+        if resident[page] == nil, inFlight.contains(page) {
+            staleLoads.insert(page)
+        }
         if var mirrored = resident[page] {
             do {
                 try mirrored.apply(edit)
@@ -238,6 +246,10 @@ public final class PageResidency {
 
     private func finishLoad(_ id: PageID, _ result: Result<Page, DocumentError>) {
         inFlight.remove(id)
+        if staleLoads.remove(id) != nil, case .success = result {
+            // An edit landed while it loaded: the next pump reads it again.
+            return pump()
+        }
         switch result {
         case let .success(page):
             if !isClosed, wantedPages().contains(id) {
@@ -269,6 +281,7 @@ public final class PageResidency {
 
     /// Releases `id` from the store unless, by the time it runs, the page is resident or loading again.
     private func evict(_ id: PageID) {
+        guard evictsFromStore else { return }
         let store = store
         Task {
             guard resident[id] == nil, !inFlight.contains(id) else { return }

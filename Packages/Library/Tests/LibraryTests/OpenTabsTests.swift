@@ -100,4 +100,114 @@ struct OpenTabsTests {
         copy.open(c)
         #expect(copy.ids == [a, b, c])
     }
+
+    // MARK: Split (#175)
+
+    @Test func openSplitShowsBesideAndFocuses() {
+        var tabs = OpenTabs()
+        tabs.open(a)
+        tabs.openSplit(b)
+        #expect(tabs.ids == [a, b])
+        #expect(tabs.showing(.primary) == a)
+        #expect(tabs.showing(.secondary) == b)
+        #expect(tabs.focus == .secondary)
+        tabs.open(c)
+        #expect(tabs.secondary == c, "opening goes to the focused pane")
+        #expect(tabs.active == a)
+    }
+
+    @Test func openSplitWithoutTabsJustOpens() {
+        var tabs = OpenTabs()
+        tabs.openSplit(a)
+        #expect(!tabs.isSplit)
+        #expect(tabs.active == a)
+    }
+
+    @Test func sameNotebookInBothPanes() {
+        var tabs = OpenTabs()
+        tabs.open(a)
+        tabs.openSplit(a)
+        #expect(tabs.ids == [a])
+        #expect(tabs.active == a && tabs.secondary == a)
+        tabs.close(a)
+        #expect(tabs.isEmpty && !tabs.isSplit)
+        #expect(tabs.active == nil)
+    }
+
+    @Test func closingAPaneTabKeepsTheOther() {
+        var tabs = OpenTabs()
+        tabs.open(c)
+        tabs.open(a)
+        tabs.openSplit(b)
+        tabs.close(b)
+        #expect(!tabs.isSplit)
+        #expect(tabs.active == a, "the primary pane stays as it was")
+        #expect(tabs.focus == .primary)
+
+        tabs.openSplit(b)
+        tabs.close(a)
+        #expect(!tabs.isSplit)
+        #expect(tabs.active == b, "the secondary pane's tab takes over")
+        #expect(tabs.ids == [c, b])
+    }
+
+    @Test func closeSplitKeepsChosenPane() {
+        var tabs = OpenTabs()
+        tabs.open(a)
+        tabs.openSplit(b)
+        tabs.closeSplit(keeping: .secondary)
+        #expect(tabs.active == b)
+        #expect(tabs.ids == [a, b], "the closed pane's tab stays open")
+        #expect(!tabs.isSplit)
+    }
+
+    @Test func swapAndFocus() {
+        var tabs = OpenTabs()
+        tabs.open(a)
+        tabs.openSplit(b)
+        tabs.swapPanes()
+        #expect(tabs.active == b && tabs.secondary == a)
+        #expect(tabs.focus == .primary, "focus follows its tab")
+        tabs.focus(.secondary)
+        tabs.activate(c)
+        #expect(tabs.secondary == a, "only open tabs show")
+        tabs.open(c)
+        #expect(tabs.secondary == c)
+        #expect(tabs.next == a)
+    }
+
+    @Test func evictionSparesBothPanes() {
+        var tabs = OpenTabs()
+        let ids = (0 ..< OpenTabs.limit).map { _ in NotebookID() }
+        for id in ids {
+            tabs.open(id)
+        }
+        tabs.show(ids[0], in: .primary)
+        tabs.openSplit(ids[1])
+        tabs.focus(.primary)
+        for id in ids[2...] {
+            tabs.activate(id)
+        }
+        tabs.show(ids[0], in: .primary)
+        let evicted = tabs.open(NotebookID())
+        #expect(evicted == ids[2], "ids[1] is cold but showing in the secondary pane")
+        #expect(tabs.secondary == ids[1])
+    }
+
+    @Test func closeOthersEndsSplit() {
+        var tabs = OpenTabs()
+        tabs.open(a)
+        tabs.openSplit(b)
+        tabs.closeOthers(keeping: b)
+        #expect(tabs.ids == [b] && tabs.active == b && !tabs.isSplit)
+    }
+
+    @Test func splitRoundTrips() throws {
+        var tabs = OpenTabs()
+        tabs.open(a)
+        tabs.openSplit(b)
+        tabs.splitFraction = 2.0 / 3
+        let decoded = try JSONDecoder().decode(OpenTabs.self, from: JSONEncoder().encode(tabs))
+        #expect(decoded == tabs)
+    }
 }

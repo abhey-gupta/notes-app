@@ -1,3 +1,4 @@
+import InkModel
 import Library
 import SwiftUI
 
@@ -11,13 +12,20 @@ enum LibraryPrompt: Hashable {
     case deleteFolder(LibraryFolder)
 }
 
-/// Cover / recent-card context menu: Rename, Move to Folder, Duplicate, Delete.
+/// Cover / recent-card context menu: Open in Split View (beside the showing tab, #175), Rename, Move to
+/// Folder, Duplicate, Delete.
 struct NotebookMenu: View {
     let notebook: NotebookSummary
     let library: any LibraryModel
     @Binding var prompt: LibraryPrompt?
+    @Environment(\.openInSplitView) private var openInSplitView
+    @Environment(\.chromeLayout) private var chrome
 
     var body: some View {
+        if let openInSplitView, !chrome.isCompact {
+            Button("Open in Split View", systemImage: TabStrip.splitSymbol) { openInSplitView(notebook.id) }
+            Divider()
+        }
         Button("Rename", systemImage: "pencil") { prompt = .renameNotebook(notebook) }
         Menu("Move to Folder", systemImage: "folder") {
             FolderMenuItems(folders: library.folders, selected: notebook.folderID) { library.move(notebook.id, to: $0) }
@@ -162,4 +170,9 @@ private struct LibraryPrompts: ViewModifier {
         ].compactMap(\.self)
         return parts.isEmpty ? nil : parts.joined(separator: " and ")
     }
+}
+
+extension EnvironmentValues {
+    /// Opens a notebook in split view beside the showing tab (#175); `nil` with no tab open or no room.
+    @Entry var openInSplitView: ((NotebookID) -> Void)?
 }

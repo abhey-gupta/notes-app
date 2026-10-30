@@ -29,12 +29,16 @@ struct RootView: View {
 
     /// - Parameter library: Defaults to the on-disk library (or a DEBUG launch-argument one); previews pass a sample.
     init(library: (any LibraryModel)? = nil) {
-        let library = library ?? LaunchOptions.makeLibrary()
-        let tools = LaunchOptions.makeToolState()
+        // Windows share the library and the tools (#175); previews bring their own library.
+        let tools = library == nil ? AppWindows.tools : LaunchOptions.makeToolState()
+        let library = library ?? AppWindows.library
         let tabs = LaunchOptions.makeTabs()
         let path = LaunchOptions.initialPath(in: library)
         for route in path {
             tabs.open(route.id)
+        }
+        if !path.isEmpty, let split = LaunchOptions.splitRoute(in: library) {
+            tabs.openSplit(split)
         }
         _library = State(initialValue: library)
         _tools = State(initialValue: tools)
@@ -54,13 +58,11 @@ struct RootView: View {
                 OpenTrace.begin()
                 open(route)
             }
+            .environment(\.openInSplitView, tabs.active == nil ? nil : { openSplit($0) })
             .navigationDestination(for: EditorRoute.self) { route in
-                if let notebook = library.notebook(id: route.id) {
-                    EditorScreen(
-                        notebook: notebook, library: library, tools: tools, tabs: tabs, sessions: sessions,
-                        startsFocused: route.startsFocused
-                    )
-                    .navigationTransition(.zoom(sourceID: route.transitionID, in: zoom))
+                if library.notebook(id: route.id) != nil {
+                    EditorScreen(library: library, tools: tools, tabs: tabs, sessions: sessions, startsFocused: route.startsFocused)
+                        .navigationTransition(.zoom(sourceID: route.transitionID, in: zoom))
                 }
             }
         }
@@ -69,8 +71,21 @@ struct RootView: View {
         .readsChromeLayout()
         // Library and editor chrome follow Dynamic Type up to AX1; capsules grow with it (#45).
         .dynamicTypeSize(...DynamicTypeSize.chromeLimit)
+        .background {
+            SceneProbe { [sessions] in sessions.scene = $0 }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         // After the first frame: finish a slow/rebuilding index load, purge old trash, warm up the canvas.
         .task {
+            AppWindows.register(sessions)
+            sessions.onReveal = { [tabs] id in
+                if tabs.showing(.secondary) == id {
+                    tabs.focus(.secondary)
+                } else {
+                    tabs.activate(id)
+                }
+            }
             await library.start()
             EditorWarmUp.run()
         }
@@ -88,7 +103,9 @@ struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active {
+            if phase == .active {
+                tabs.becomeWriter()
+            } else {
                 tools.flush()
             }
         }
@@ -100,11 +117,28 @@ struct RootView: View {
     }
 
     /// The notebook becomes the showing tab (closing the coldest one past the limit) and the editor opens on it.
+    /// Open in another window, that window comes forward on it instead (#175).
     private func open(_ route: EditorRoute) {
+        if let other = AppWindows.window(holding: route.id, besides: sessions) {
+            OpenTrace.cancel()
+            return other.reveal(route.id)
+        }
         if let evicted = tabs.open(route.id) {
             sessions.close(evicted)
         }
         path.append(route)
+    }
+
+    /// Library → Open in Split View (#175): the editor comes back split, the notebook beside the showing tab.
+    private func openSplit(_ id: NotebookID) {
+        if let other = AppWindows.window(holding: id, besides: sessions) {
+            return other.reveal(id)
+        }
+        OpenTrace.begin()
+        if let evicted = tabs.openSplit(id) {
+            sessions.close(evicted)
+        }
+        path.append(EditorRoute(id: id, source: .cover))
     }
 
     private var galleryBinding: Binding<Bool>? {

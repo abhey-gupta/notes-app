@@ -26,6 +26,8 @@ final class EditorState {
     let edits: EditStack
     /// Pages overview (§5.2, #32).
     let pages = PagesModel()
+    /// A touch on this notebook's canvas (split view: its pane takes focus, #175).
+    @ObservationIgnored var onTouch: () -> Void = {}
     @ObservationIgnored var onUndo: () -> Void = {}
     @ObservationIgnored var onRedo: () -> Void = {}
     /// Lasso selection box in screen (canvas view) space for the context bar; `nil` when there is no

@@ -20,11 +20,14 @@ struct TabStrip: View {
     let onClose: (NotebookID) -> Void
     let onCloseOthers: () -> Void
     let onAdd: () -> Void
+    /// Opens a tab in split view (#175), beside the showing one; `nil` where there's no split (compact).
+    var onSplit: ((NotebookID) -> Void)?
 
     @Namespace private var strip
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    static let splitSymbol = "rectangle.split.2x1"
     private static let spacing = Tokens.Spacing.xs
     private static let height: CGFloat = 36
 
@@ -72,6 +75,15 @@ struct TabStrip: View {
         }
         .buttonStyle(.plain)
         .matchedGeometryEffect(id: "active", in: strip)
+        .contextMenu {
+            if let onSplit {
+                Menu("Open in Split View", systemImage: Self.splitSymbol) {
+                    ForEach(tabs) { tab in
+                        Button(tab.id == active ? "\(tab.title) (again)" : tab.title) { onSplit(tab.id) }
+                    }
+                }
+            }
+        }
         .accessibilityLabel(activeTab?.title ?? "Tabs")
         .accessibilityValue(tabs.count == 1 ? "1 tab" : "\(tabs.count) tabs")
         .accessibilityHint("Shows the open notebooks")
@@ -142,8 +154,16 @@ struct TabStrip: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            // Dragged onto the page, it opens in split view (#175).
+            .draggable(NotebookReference(id: tab.id)) {
+                Text(tab.title)
+                    .scaledFont(size: 14, weight: .semibold)
+                    .padding(.horizontal, Tokens.Spacing.l)
+                    .frame(height: Self.height)
+                    .background(Capsule().fill(.regularMaterial))
+            }
             .accessibilityLabel(tab.title)
-            .accessibilityAddTraits(isActive ? .isSelected : [])
+            .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
             .accessibilityHint(isActive ? "Folds the tabs" : "Shows this notebook")
             .accessibilityIdentifier("tab-\(tab.title)")
             if isActive {
@@ -157,6 +177,9 @@ struct TabStrip: View {
         }
         .matchedGeometryEffect(id: isActive ? "active" : "tab-\(tab.id)", in: strip)
         .contextMenu {
+            if let onSplit {
+                Button("Open in Split View", systemImage: Self.splitSymbol) { onSplit(tab.id) }
+            }
             Button("Close Tab", systemImage: "xmark") { onClose(tab.id) }
             if tabs.count > 1 {
                 Button("Close Other Tabs") {

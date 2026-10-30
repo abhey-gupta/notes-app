@@ -40,6 +40,9 @@
         public weak var delegate: (any CanvasHostViewDelegate)?
         /// Undo manager for ⌘Z and the system's three-finger gestures while the canvas is first responder.
         public let editUndoManager = UndoManager()
+        /// Another canvas's undo manager this one answers ⌘Z with: a second view of the same notebook (split
+        /// view, #175) shares its history.
+        public weak var sharedUndoManager: UndoManager?
 
         /// Page frames. Set it when pages are added, removed or moved; the scroll offset is kept.
         public var layout = PageLayout(pageIDs: [], footer: CanvasHostView.footerHeight) {
@@ -60,6 +63,11 @@
         /// 14 pt gap, sides keep a desk margin when zoomed in, bottom clears the page pill.
         public var margins = UIEdgeInsets(top: 72, left: 16, bottom: 96, right: 16) {
             didSet { marginsDidChange(from: oldValue) }
+        }
+
+        /// Desk each side of a fitted page (pt): less in a split pane (#175), so the page keeps its width.
+        public var fitDesk = CanvasHostView.defaultFitDesk {
+            didSet { fitDeskDidChange(from: oldValue) }
         }
 
         /// "Draw with finger": one finger inks (until a Pencil is seen) and scrolling takes two fingers.
@@ -124,6 +132,8 @@
         var widthTag: UILabel?
         var freezeFrame: UIView?
         var isSettling = false
+        /// Split view (#175): a live resize under way, and the last one's snapshot fading out (`+LiveResize`).
+        var liveResize: LiveResize?, settlingSnapshot: UIView?
         private let dismissGestures = DismissGestureClaim()
 
         /// Creates a host around `engine`.
@@ -204,21 +214,6 @@
 
         // MARK: Public
 
-        /// Scrolls so page `index`'s top sits under the top margin.
-        public func scrollToPage(_ index: Int, animated: Bool) {
-            guard layout.frames.indices.contains(index) else { return }
-            let z = scrollView.zoomScale
-            let inset = scrollView.contentInset
-            let maxY = max(scrollView.contentSize.height + inset.bottom - scrollView.bounds.height, -inset.top)
-            let y = min(layout.frame(at: index).minY * z - inset.top, maxY)
-            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: y), animated: animated)
-        }
-
-        /// Scroll offset and zoom in content terms (tests, state restoration).
-        public var viewport: Viewport {
-            makeViewport()
-        }
-
         // MARK: UIView
 
         override public var canBecomeFirstResponder: Bool {
@@ -226,7 +221,7 @@
         }
 
         override public var undoManager: UndoManager? {
-            editUndoManager
+            sharedUndoManager ?? editUndoManager
         }
 
         /// While tap undo is on, the system's three-finger editing gestures are off for the canvas: their tap
@@ -263,6 +258,9 @@
             super.layoutSubviews()
             let size = bounds.size
             guard size.width > 0, size.height > 0 else { return }
+            if liveResize != nil {
+                return layoutLiveResize()
+            }
             if size != lastBoundsSize {
                 cancelSideGrabForResize()
                 resize(from: lastBoundsSize, to: size)
@@ -289,7 +287,7 @@
             scrollView.bounds.offsetBy(dx: -grabLeftShift * scrollView.zoomScale, dy: 0)
         }
 
-        private func makeViewport() -> Viewport {
+        func makeViewport() -> Viewport {
             let bounds = contentBounds
             let z = scrollView.zoomScale
             let visible = layout.visiblePages(in: contentRect(bounds, zoom: z))
