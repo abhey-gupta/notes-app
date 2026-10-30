@@ -191,7 +191,11 @@ struct PagesOverview: View {
         .animation(.snappy(duration: 0.18), value: dragging)
         .animation(isAnchor ? nil : rippleSegment(index, anchor: flight.anchorIndex(current: currentIndex)), value: flight.isOpen)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { flight.geometry.cells[index] = $0 }
-        .onDisappear { flight.geometry.cells[index] = nil }
+        .onAppear { model.onCellAppear(entry.id) }
+        .onDisappear {
+            flight.geometry.cells[index] = nil
+            model.onCellDisappear(entry.id)
+        }
         .onTapGesture { tapped(entry, at: index) }
         .accessibilityAction { tapped(entry, at: index) }
         .gesture(PageLift(isEnabled: !isSelecting) { phase in reorder(index, phase) })

@@ -52,6 +52,9 @@ final class NotebookSession {
     /// Page thumbs + cover (`+Thumbnails`, §5.5): fed on every accepted edit, flushed with the store.
     private(set) var thumbnails: ThumbnailService?
     var thumbnailRegeneration: Task<Void, Never>?
+    /// Overview cells on screen whose pages may lack a thumbnail, oldest first (`+Thumbnails`, #207).
+    var thumbnailWants: [PageID] = []
+    var thumbnailFill: Task<Void, Never>?
     /// The one path for changes to the notebook (strokes, erasing, selection, pages, undo); set by ``open()``.
     private(set) var edits: EditPipeline?
     /// Automatic new pages (#172): a blank page waits at the end instead of the add-page button.
@@ -183,6 +186,7 @@ final class NotebookSession {
         widenSettle?.cancel()
         residency?.close()
         thumbnailRegeneration?.cancel()
+        thumbnailFill?.cancel()
         edits?.close()
         let (edits, store, thumbnails, library, id) = (edits, store, thumbnails, library, notebookID)
         let task = Task { @MainActor in

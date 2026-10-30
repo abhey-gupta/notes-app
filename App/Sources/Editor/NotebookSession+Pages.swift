@@ -22,6 +22,8 @@ extension NotebookSession {
         pages.onMove = { [weak self] from, to in self?.movePage(from: from, to: to) }
         pages.onDelete = { [weak self] in self?.deletePages($0) }
         pages.hasInk = { [weak self] ids in await self?.pagesHaveInk(ids) ?? false }
+        pages.onCellAppear = { [weak self] in self?.wantThumbnail($0) }
+        pages.onCellDisappear = { [weak self] in self?.unwantThumbnail($0) }
     }
 
     /// Puts the page at `index` on screen (under the overview, which flies it up and then dismisses).

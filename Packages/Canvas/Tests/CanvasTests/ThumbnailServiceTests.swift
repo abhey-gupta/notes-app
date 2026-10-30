@@ -66,6 +66,27 @@
             #expect(await service.renderCount == 2, "the missing cover is rendered")
         }
 
+        /// Pages overview (#207): a page that never loaded is loaded and rendered only if its thumb is missing.
+        @Test func fillLoadsOnlyMissingThumbnails() async throws {
+            let service = await makeService()
+            let page = RenderFixtures.allPens
+            let loads = Counter()
+            let load: @Sendable (PageID) async throws -> PageSnapshot? = { id in
+                #expect(id == page.id)
+                loads.increment()
+                return page
+            }
+            await service.fill(page.id, isCover: false, load: load)
+            #expect(await service.renderCount == 1)
+            #expect(loads.value == 1)
+            let thumb = try HEIC(service.thumbnailURL(for: page.id))
+            #expect(RGBAPixels(thumb.image).hasInk(near: 177, 95), "the loaded page's ink")
+
+            await service.fill(page.id, isCover: false, load: load)
+            #expect(loads.value == 1, "existing thumb: page not loaded again")
+            #expect(await service.renderCount == 1)
+        }
+
         @Test func debounceCoalescesEdits() async throws {
             let service = await makeService(debounce: .milliseconds(150))
             var page = RenderFixtures.blank.page
