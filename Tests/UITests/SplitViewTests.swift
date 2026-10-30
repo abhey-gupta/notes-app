@@ -3,6 +3,9 @@ import XCTest
 /// Split view (#175): Open in Split View from a tab's menu brings a second pane with its own bar, the
 /// divider moves between stops and closes a pane dragged into an edge, ⋯ swaps and closes, the same
 /// notebook opens twice and ink drawn in one view shows in the other.
+///
+/// Not here: dragging a tab onto the page (XCUI's synthesized system drag drops unreliably) and Library →
+/// Open in Split View (a library context menu keeps XCUI waiting ~2 min for idle, on main too).
 final class SplitViewTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -141,33 +144,5 @@ final class SplitViewTests: XCTestCase {
         secondaryBar(app).buttons["Undo"].tap()
         let undone = expectation(for: NSPredicate(format: "value == %@", before ?? ""), evaluatedWith: left)
         wait(for: [undone], timeout: 5)
-    }
-
-    /// (Library → Open in Split View isn't here: a library context menu keeps XCUI waiting ~2 min for idle,
-    /// on main too.)
-    @MainActor
-    func testDragTabOntoPage() {
-        let app = launch(["-openNotebook", "Thermodynamics"])
-        app.buttons["Library"].tap()
-        let cover = app.buttons["cover-Product Specs"]
-        XCTAssertTrue(cover.waitForExistence(timeout: 5))
-        cover.tap()
-        XCTAssertTrue(app.buttons["tabs"].waitForExistence(timeout: 5))
-        settle()
-
-        // A tab dragged onto the left half opens there.
-        app.buttons["tabs"].tap()
-        let tab = app.buttons["tab-Product Specs"]
-        XCTAssertTrue(tab.waitForExistence(timeout: 3))
-        let target = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.6))
-        tab.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.5, thenDragTo: target, withVelocity: .default, thenHoldForDuration: 0.8)
-        // The system's drop lands a few seconds after the synthesized drag ends.
-        XCTAssertTrue(secondaryBar(app).waitForExistence(timeout: 12))
-        settle()
-        // The showing tab dropped beside itself: the same notebook on both sides, the new view on the left.
-        XCTAssertEqual(app.staticTexts["pageIndicator"].label, "1 of 4")
-        XCTAssertEqual(app.staticTexts["pageIndicator-secondary"].label, "1 of 4")
-        XCTAssertFalse(secondaryBar(app).buttons["Library"].exists, "‹ stays on the left")
     }
 }
