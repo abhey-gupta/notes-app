@@ -48,14 +48,14 @@ struct LibraryHeader: View {
     }
 
     private var header: some View {
-        // The title stays level with the controls; the sync line sits on its baseline, so the bar never
-        // changes height (its scroll-edge effect would follow anything drawn below it).
+        // The title stays level with the controls; the sync line sits on its baseline, outside the layout, so
+        // the bar never changes height (its scroll-edge effect would follow anything drawn below it).
         HStack(alignment: .titleCenter, spacing: Tokens.Spacing.m) {
             if let showSidebar {
                 circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
                     .accessibilityIdentifier("sidebarButton")
             }
-            HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.l) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(title)
                     .font(.libraryTitle)
                     .tracking(-0.5)
@@ -74,7 +74,13 @@ struct LibraryHeader: View {
                         }
                     }
                     .alignmentGuide(.titleCenter) { $0[VerticalAlignment.center] }
-                SyncStatusLine()
+                    // Hangs off the title's trailing edge, outside the layout: the search group never
+                    // shifts when the line comes and goes.
+                    .overlay(alignment: Alignment(horizontal: .trailing, vertical: .firstTextBaseline)) {
+                        SyncStatusLine()
+                            .fixedSize()
+                            .alignmentGuide(.trailing) { $0[.leading] - Tokens.Spacing.l }
+                    }
             }
             .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
