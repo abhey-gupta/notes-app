@@ -8,6 +8,9 @@ import UniformTypeIdentifiers
 struct SyncStatusLine: View {
     @Environment(SyncModel.self) private var sync: SyncModel?
 
+    /// The line's height (6 pt gap + one caption line): the regular header reserves it.
+    static let height: CGFloat = 22
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let line = sync?.line {

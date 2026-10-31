@@ -48,7 +48,8 @@ struct LibraryHeader: View {
     }
 
     private var header: some View {
-        // The title stays level with the controls; the sync line hangs below it, outside the layout.
+        // The title stays level with the controls; the sync line has a fixed slot below it, so the bar (and
+        // its scroll-edge effect) never changes height.
         HStack(alignment: .titleCenter, spacing: Tokens.Spacing.m) {
             if let showSidebar {
                 circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
@@ -73,7 +74,8 @@ struct LibraryHeader: View {
                         }
                     }
                     .alignmentGuide(.titleCenter) { $0[VerticalAlignment.center] }
-                    .overlay(alignment: .bottomLeading) { hangingSyncLine }
+                SyncStatusLine()
+                    .frame(height: SyncStatusLine.height, alignment: .top)
             }
             .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
@@ -268,8 +270,8 @@ struct CompactLibraryTitle: View {
     }
 }
 
-/// The sync line under a library title, in the gap before the content: it never moves what is below it.
-var hangingSyncLine: some View {
+/// The sync line under the compact title, in the gap before the content: it never moves what is below it.
+private var hangingSyncLine: some View {
     SyncStatusLine()
         .fixedSize()
         .alignmentGuide(.bottom) { $0[.top] }
