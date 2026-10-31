@@ -244,6 +244,8 @@ final class BackupModel {
             if run.notebooks > 0 {
                 uploading += run.written
             }
+            // What the folder lists now (a folder just chosen on a fresh iPad: the restore card needs it).
+            catalog = try? await engine.catalog()
             // Polling pauses during runs; any run picks it up again.
             if uploading.isEmpty {
                 status = .idle(run.summary)

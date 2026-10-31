@@ -12,14 +12,17 @@ enum LocalScan {
         let trashed = snapshot.trash.map {
             ($0.entry, BackupLocation.trash, locations.trashDirectory.appending(path: $0.entry.packagePath, directoryHint: .isDirectory))
         }
-        return (live + trashed).map { entry, location, url in
-            let thumbs = NotebookPackage.thumbnailsDirectory(in: url)
-            return LocalNotebook(
-                entry: entry, location: location, packageURL: url,
-                manifestModified: stamp(url.appending(path: "manifest.json"))?.modified,
-                cover: stamp(thumbs.appending(path: "cover.heic"))
-            )
-        }
+        return (live + trashed).map { notebook($0, at: $1, url: $2) }
+    }
+
+    /// One package, as a run first sees it (manifest and cover stamps, no contents).
+    static func notebook(_ entry: LibraryEntry, at location: BackupLocation, url: URL) -> LocalNotebook {
+        let thumbs = NotebookPackage.thumbnailsDirectory(in: url)
+        return LocalNotebook(
+            entry: entry, location: location, packageURL: url,
+            manifestModified: stamp(url.appending(path: "manifest.json"))?.modified,
+            cover: stamp(thumbs.appending(path: "cover.heic"))
+        )
     }
 
     /// Reads the manifest and lists the files a backup holds. Unreadable: left uninspected (and so unplanned).

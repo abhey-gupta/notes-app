@@ -149,7 +149,8 @@ public actor BackupEngine {
         (try? folder.access { _ in written.count { !BackupDestination.isUploaded($0) } }) ?? 0
     }
 
-    /// Brings one backed-up notebook back into the library with its folders (``LibraryStore/adoptPackage(at:in:folders:)``).
+    /// Brings one backed-up notebook back into the library with its folders (``LibraryStore/adoptPackage(at:in:folders:)``)
+    /// and records it as backed up, so the next run leaves it alone (a deleted one is moved out of `Trash/`).
     /// - Returns: `false` if the library already has it (it is never replaced).
     @discardableResult
     public func restore(_ item: BackupCatalog.Notebook, from catalog: BackupCatalog) async throws(BackupError) -> Bool {
@@ -163,15 +164,31 @@ public actor BackupEngine {
             destination.timeout = .seconds(300)
             try destination.copyOut(BackupLayout.package(item.id, in: item.trashed ? .trash : .notebooks), to: staging)
         }
+        let entry: LibraryEntry
         do {
-            try await library.adoptPackage(at: staging, in: item.folderID, folders: catalog.folders)
-            return true
+            entry = try await library.adoptPackage(at: staging, in: item.folderID, folders: catalog.folders)
         } catch {
             try? FileManager.default.removeItem(at: staging)
             if case .alreadyInLibrary = error {
                 return false
             }
             throw BackupError(error)
+        }
+        record(entry, heldAt: item.trashed ? .trash : .notebooks)
+        return true
+    }
+
+    /// The folder already holds a restored notebook file for file: record it as copied, so the next run
+    /// doesn't copy it back (restoring a library would otherwise re-upload all of it).
+    private func record(_ entry: LibraryEntry, heldAt location: BackupLocation) {
+        let url = stateURL
+        var local = LocalScan.notebook(entry, at: .notebooks, url: library.locations.packageURL(for: entry))
+        LocalScan.inspect(&local)
+        guard let recorded = BackupPlanner.recorded(local, at: location) else { return }
+        _ = try? folder.access(refreshed: bookmarkRefreshed) { root in
+            var state = BackupState.load(from: url, destination: root.path(percentEncoded: false))
+            state.notebooks[entry.id] = recorded
+            try state.save(to: url)
         }
     }
 }

@@ -165,6 +165,8 @@ struct BackupEngineTests {
         #expect(try restored.manifest == old.package(a).manifest)
         #expect(try restored.loadPage(at: 0).strokes.count == 1)
         #expect(try await engine.restore(item, from: catalog) == false, "never replaces a local notebook")
+        let next = try await engine.run()
+        #expect(next.notebooks == 0, "the restored notebook is recorded as backed up, not copied back")
         let staged = try FileManager.default.contentsOfDirectory(atPath: fresh.locations.notebooksDirectory.path(percentEncoded: false))
         #expect(staged == ["\(a.id).nb"], "no staging left behind")
     }

@@ -153,6 +153,25 @@ public enum BackupPlanner {
         return NotebookPlan(id: id, title: notebook.entry.title, operations: operations, state: next)
     }
 
+    /// What a run records for a package the folder already holds file for file (a notebook just restored from
+    /// it): the state after copying all of `notebook`, without copying anything. `location` is where the
+    /// folder's copy sits. `nil` if the package wasn't inspected.
+    public static func recorded(_ notebook: LocalNotebook, at location: BackupLocation) -> BackupState.Notebook? {
+        guard let contents = notebook.contents else { return nil }
+        var next = BackupState.Notebook.empty(at: location)
+        _ = contentOperations(
+            contents,
+            base: next,
+            next: &next,
+            package: "",
+            copy: { file, bytes in .copy(notebook.packageURL, to: file, bytes: bytes) }
+        )
+        next.manifestModified = notebook.manifestModified
+        next.cover = notebook.cover
+        next.bytes += notebook.cover?.size ?? 0
+        return next
+    }
+
     /// Stroke files whose page `rev` moved, assets not copied yet, and deletions of remote stroke files of
     /// pages that lost theirs; sets `next`'s strokes, assets, rev and bytes (without the cover).
     private static func contentOperations(
