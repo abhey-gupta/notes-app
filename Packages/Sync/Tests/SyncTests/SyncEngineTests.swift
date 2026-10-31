@@ -101,10 +101,11 @@ struct SyncEngineTests {
         try await a.engine.push() // the trash goes out within seconds; the purge comes 30 days later
         try await a.store.purgeTrash(now: folder.clock.now.addingTimeInterval(31 * 86400))
         try await a.engine.push()
-        try await b.ink(id, page: 1)
-        try await b.engine.push()
-        try await b.ink(id, page: 1)
-        try await b.engine.push()
+        // Three edits: B's clock ends past A's two ops (trash, tombstone), so "later" never comes down to a tie.
+        for _ in 0 ..< 3 {
+            try await b.ink(id, page: 1)
+            try await b.engine.push()
+        }
 
         try await a.sync()
         let back = try #require(await a.store.snapshot().notebook(id))
