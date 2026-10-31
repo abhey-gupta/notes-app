@@ -48,7 +48,7 @@ struct LibraryHeader: View {
     }
 
     private var header: some View {
-        // The title stays level with the controls; the sync line grows the header below it.
+        // The title stays level with the controls; the sync line hangs below it, outside the layout.
         HStack(alignment: .titleCenter, spacing: Tokens.Spacing.m) {
             if let showSidebar {
                 circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
@@ -73,7 +73,7 @@ struct LibraryHeader: View {
                         }
                     }
                     .alignmentGuide(.titleCenter) { $0[VerticalAlignment.center] }
-                SyncStatusLine()
+                    .overlay(alignment: .bottomLeading) { hangingSyncLine }
             }
             .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
@@ -258,16 +258,21 @@ struct CompactLibraryTitle: View {
     let title: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title)
-                .font(.libraryTitle)
-                .tracking(-0.5)
-                .foregroundStyle(Tokens.Colors.textPrimary)
-                .lineLimit(2)
-                .accessibilityAddTraits(.isHeader)
-            SyncStatusLine()
-        }
+        Text(title)
+            .font(.libraryTitle)
+            .tracking(-0.5)
+            .foregroundStyle(Tokens.Colors.textPrimary)
+            .lineLimit(2)
+            .accessibilityAddTraits(.isHeader)
+            .overlay(alignment: .bottomLeading) { hangingSyncLine }
     }
+}
+
+/// The sync line under a library title, in the gap before the content: it never moves what is below it.
+var hangingSyncLine: some View {
+    SyncStatusLine()
+        .fixedSize()
+        .alignmentGuide(.bottom) { $0[.top] }
 }
 
 extension VerticalAlignment {
