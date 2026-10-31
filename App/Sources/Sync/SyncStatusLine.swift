@@ -2,35 +2,31 @@ import DesignSystem
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Under the library title while sync sends, receives or uploads (#174 mock 05-D, #225 mock 03): "Sending
-/// Thermodynamics · 2 pages" or "Updating from iPhone · 3 of 7 pages" in caption grey with a 120 pt hairline,
-/// then "Synced just now" or "Updated from iPhone" for 2 s, then it folds away. Nothing when idle or off.
+/// Beside the library title, on its baseline (#225 mock 03, moved off the line below: anything under the
+/// title grows the bar or drags its scroll-edge effect down): "Sending Thermodynamics · 2 pages" or "Updating
+/// from iPhone · 3 of 7 pages" in caption grey with a 120 pt hairline, then "Synced just now" or "Updated from
+/// iPhone" for 2 s, then it fades. Nothing when idle or off. It gives way before the title does.
 struct SyncStatusLine: View {
     @Environment(SyncModel.self) private var sync: SyncModel?
 
-    /// The line's height (6 pt gap + one caption line): the regular header reserves it.
-    static let height: CGFloat = 22
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let line = sync?.line {
-                HStack(spacing: 10) {
-                    Text(text(line))
-                        .scaledFont(size: 13, weight: .medium)
-                        .foregroundStyle(Tokens.Colors.textSecondary)
-                        .lineLimit(1)
-                    if case let .progress(_, fraction) = line {
-                        Hairline(fraction: fraction)
-                            .frame(width: 120)
-                    }
+        if let line = sync?.line {
+            HStack(spacing: 10) {
+                Text(text(line))
+                    .scaledFont(size: 13, weight: .medium)
+                    .foregroundStyle(Tokens.Colors.textSecondary)
+                    .lineLimit(1)
+                if case let .progress(_, fraction) = line {
+                    Hairline(fraction: fraction)
+                        .frame(width: 120)
                 }
-                .padding(.top, 6)
-                .transition(.opacity)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("syncStatus")
             }
+            .layoutPriority(-1)
+            .transition(.opacity)
+            .animation(.spring(duration: 0.35, bounce: 0), value: sync?.line == nil)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("syncStatus")
         }
-        .animation(.spring(duration: 0.35, bounce: 0), value: sync?.line == nil)
     }
 
     private func text(_ line: SyncModel.Line) -> String {

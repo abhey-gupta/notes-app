@@ -117,7 +117,7 @@ struct LibraryScreen: View {
                     .padding(.horizontal, margin)
                     .padding(.top, isCompact ? Tokens.Spacing.xl : 26)
             }
-            .padding(.top, isCompact ? Tokens.Spacing.s : Tokens.Spacing.m)
+            .padding(.top, isCompact ? Tokens.Spacing.s : 22)
             .padding(.bottom, 60)
         }
         .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }

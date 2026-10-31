@@ -48,14 +48,14 @@ struct LibraryHeader: View {
     }
 
     private var header: some View {
-        // The title stays level with the controls; the sync line has a fixed slot below it, so the bar (and
-        // its scroll-edge effect) never changes height.
+        // The title stays level with the controls; the sync line sits on its baseline, so the bar never
+        // changes height (its scroll-edge effect would follow anything drawn below it).
         HStack(alignment: .titleCenter, spacing: Tokens.Spacing.m) {
             if let showSidebar {
                 circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
                     .accessibilityIdentifier("sidebarButton")
             }
-            VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.l) {
                 Text(title)
                     .font(.libraryTitle)
                     .tracking(-0.5)
@@ -75,7 +75,6 @@ struct LibraryHeader: View {
                     }
                     .alignmentGuide(.titleCenter) { $0[VerticalAlignment.center] }
                 SyncStatusLine()
-                    .frame(height: SyncStatusLine.height, alignment: .top)
             }
             .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
@@ -255,26 +254,21 @@ struct LibraryHeader: View {
     }
 }
 
-/// Compact chrome's serif title, scrolling with the content (#118), with the sync line under it (#225).
+/// Compact chrome's serif title, scrolling with the content (#118), with the sync line beside it (#225).
 struct CompactLibraryTitle: View {
     let title: String
 
     var body: some View {
-        Text(title)
-            .font(.libraryTitle)
-            .tracking(-0.5)
-            .foregroundStyle(Tokens.Colors.textPrimary)
-            .lineLimit(2)
-            .accessibilityAddTraits(.isHeader)
-            .overlay(alignment: .bottomLeading) { hangingSyncLine }
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.l) {
+            Text(title)
+                .font(.libraryTitle)
+                .tracking(-0.5)
+                .foregroundStyle(Tokens.Colors.textPrimary)
+                .lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
+            SyncStatusLine()
+        }
     }
-}
-
-/// The sync line under the compact title, in the gap before the content: it never moves what is below it.
-private var hangingSyncLine: some View {
-    SyncStatusLine()
-        .fixedSize()
-        .alignmentGuide(.bottom) { $0[.top] }
 }
 
 extension VerticalAlignment {
