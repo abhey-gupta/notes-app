@@ -9,6 +9,29 @@ On-disk layout of a Notespace notebook and what we promise about it. Details: AR
 - `Application Support/Library/Trash/<notebookID>.nb`: deleted notebooks, purged after 30 days.
 - `Application Support/Library/backup-state.json`: what the last backup copied (#174): the folder's path, last backup time, and per notebook its location (`notebooks`/`trash`), manifest modification date, `rev`, page `rev`s of copied stroke files, copied assets, cover date and size, bytes. Derived: missing, damaged or about another folder means the next backup copies everything again.
 
+- `Application Support/Library/sync-state.json`: what this device knows of the sync folder (#225): `formatVersion`, `folder` (path), `deviceId`, Lamport `clock`, `nextSeq`, `applied` (device → last seq read), `notebooks` (per notebook: `fields` {name: {stamp, value, local}}, `pages` {pageId: {stamp, base, blob, meta, removed, local {stamp, rev, blob}, replaced}}, `cover` {stamp, blob, localStamp, local}, `assets`, `localAssets`, `tombstone`, `materialised`, `localRev`, `modifiedAt`, `from`), `folders` {id: {fields: name, parent, removed}}, `deferred` (notebooks waiting for their editor to close), `conflicts` [{notebook, page, theirs, mine, device, since}], `garbage` {path: {since, acks}}. A stamp is `{clock, device}`; `local` is the value the library held at the last pull or push. Derived: missing, damaged, newer, or about another folder or device ID means the next pull re-reads every log and the next push re-sends the whole library.
+
+## Sync folder (#225)
+
+```
+<picked folder>/
+  sync.json                                   formatVersion 1, created. No sync.json: nothing in the folder is read
+                                              (a #174 backup folder's files are left alone)
+  devices/<deviceId>.json                     id, name, model, lastSeen, clock, applied {deviceId: seq} (the acks GC waits for)
+  log/<deviceId>/<seq, 10 digits>.json        {seq, device, writtenAt, ops: [op]}: append-only, written once
+  log/<deviceId>/snapshot.json                same shape: the device's ops folded (latest per field/page/cover…), seq = last folded
+  blobs/<notebookId>/pages/<pageId>/<clock 12 digits>-<deviceId>.strokes   stroke file, written once
+  blobs/<notebookId>/cover/<clock 12 digits>-<deviceId>.heic                cover, written once
+  blobs/<notebookId>/images/<name>            package assets by their package name (unique), written once
+  blobs/<notebookId>/backgrounds/<name>
+```
+
+- Each device writes only under its own names, and every file but `devices/<me>.json` and `snapshot.json` is written once: providers never see two devices write one file, readers never see half of one (temp file + rename, coordinated).
+- An op is `{"op": <kind>, "clock": <Lamport>, "at": <ms>, …}`: `notebookSet` {notebook, fields} (fields: `title`, `folder`, `cover`, `paper`, `theme`, `keepsExactColors`, `pageSize`, `leftExtension`, `createdAt`, `extra`, `pages` = page order) · `pageSet` {notebook, page, base, entry {template, background?, extra}, strokes?} · `pageRemove` {notebook, page} · `coverSet` {notebook, blob} · `assetAdd` {notebook, kind `images`/`backgrounds`, name} · `notebookTrash` / `notebookRestore` / `notebookDelete` {notebook} · `folderSet` {folder, fields: `name`, `parent`} · `folderRemove` {folder}. Unknown kinds are skipped. Dates are Unix ms, keys sorted.
+- Merge: per field and per page, the later stamp (clock, then device ID) wins. A `pageSet` whose `base` isn't the clock of the version the reader shows, with ink on both sides, records a conflict; the replaced blob stays for Keep mine. `notebookDelete` is a tombstone: a later op brings the notebook back, at the root.
+- Order: blobs first, then the log entry that names them, then `devices/<me>.json`. A reader that sees an entry before its blobs keeps the notebook as it was and retries; a gap in a device's seqs stops that device until the missing entry arrives.
+- GC: a device deletes its own blobs 30 days after they stopped being referenced, once every device seen in the last 90 days has read past the op that replaced them; it folds its log into `snapshot.json` and deletes the entries those devices have read.
+
 ## Backup folder (#174)
 
 ```

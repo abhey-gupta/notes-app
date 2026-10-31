@@ -57,6 +57,26 @@ struct LibraryFolderTests {
         #expect(await store.snapshot().notebook(nested.id)?.folderID == nil)
     }
 
+    /// Sync (#225) applies another device's folders by ID.
+    @Test func upsertFolderCreatesRenamesAndMovesByID() async throws {
+        let lib = try TempLibrary()
+        let store = lib.store()
+        let uni = LibraryFolder(name: "University")
+        let physics = LibraryFolder(name: "Physics", parentID: uni.id)
+        await #expect(throws: LibraryError.unknownFolder(uni.id)) { try await store.upsertFolder(physics) }
+        try await store.upsertFolder(uni)
+        try await store.upsertFolder(physics)
+        #expect(await store.snapshot().folders == [uni, physics])
+
+        try await store.upsertFolder(LibraryFolder(id: physics.id, name: "  ", parentID: nil))
+        #expect(await store.snapshot().folders.last == LibraryFolder(id: physics.id, name: "New Folder", parentID: nil))
+        try await store.upsertFolder(LibraryFolder(id: physics.id, name: "Physics II", parentID: uni.id))
+        // Moving University into its own child would make a cycle: it goes to the top level instead.
+        try await store.upsertFolder(LibraryFolder(id: uni.id, name: "Uni", parentID: physics.id))
+        let folders = await lib.store().snapshot().folders
+        #expect(folders == [LibraryFolder(id: uni.id, name: "Uni"), LibraryFolder(id: physics.id, name: "Physics II", parentID: uni.id)])
+    }
+
     @Test func folderParentRoundTripsThroughTheIndex() throws {
         let parent = LibraryFolder(name: "University")
         let child = LibraryFolder(name: "Semester 3", parentID: parent.id)
