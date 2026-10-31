@@ -31,6 +31,7 @@ packages:
   Canvas: { path: Packages/Canvas }
   Document: { path: Packages/Document }
   Library: { path: Packages/Library }
+  Backup: { path: Packages/Backup }
   Export: { path: Packages/Export }
   DesignSystem: { path: Packages/DesignSystem }
   Perf: { path: Packages/Perf }
@@ -54,6 +55,7 @@ targets:
       - package: Canvas
       - package: Document
       - package: Library
+      - package: Backup
       - package: Export
       - package: DesignSystem
       - package: Perf
@@ -158,6 +160,7 @@ schemes:
         - package: Canvas/CanvasTests
         - package: Document/DocumentTests
         - package: Library/LibraryTests
+        - package: Backup/BackupTests
         - package: Export/ExportTests
         - package: DesignSystem/DesignSystemTests
         - package: Perf/PerfTests
