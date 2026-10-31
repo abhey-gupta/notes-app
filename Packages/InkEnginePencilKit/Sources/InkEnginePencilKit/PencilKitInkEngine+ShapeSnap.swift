@@ -190,7 +190,7 @@ extension PencilKitInkEngine {
     }
 
     /// A freehand stroke is being drawn on `page` right now.
-    private func freehandIsLive(on page: PageID) -> Bool {
+    func freehandIsLive(on page: PageID) -> Bool {
         if usesHighlighter {
             return selection.liveHighlight?.page == page
         }
@@ -201,7 +201,7 @@ extension PencilKitInkEngine {
     }
 
     /// Ends the freehand stroke on `page` without committing it.
-    private func cutFreehand(on page: PageID) {
+    func cutFreehand(on page: PageID) {
         if drawsThroughInput {
             input.cancelActiveStroke()
             // Whatever the input view had in progress, the engine draws no freehand stroke from here on.

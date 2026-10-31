@@ -70,10 +70,12 @@ final class NotebookSession {
         }
     }
 
-    /// The toolbar's current tool (``setTool(_:allowsFingerDrawing:snapsShapes:)``); erasing reads its mode and size.
+    /// The toolbar's current tool (``setTool(_:allowsFingerDrawing:snapsShapes:holdsToErase:)``); erasing reads its mode and size.
     var tool = ActiveTool.ink(.ballpoint, color: .primary, width: 2)
     /// Lift after an eraser stroke (#156: the toolbar may switch back).
     var onErased: (() -> Void)?
+    /// A pen touch held still (#211): the toolbar switches to the eraser until lift (``onErased``).
+    var onHoldErase: (() -> Void)?
     var isErasing = false
     var isClosed = false
     private var awaitingFirstPage = true

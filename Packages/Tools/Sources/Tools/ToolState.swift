@@ -18,6 +18,7 @@ public final class ToolState {
         didSet {
             if tool != oldValue {
                 previousTool = oldValue
+                isHoldErasing = false
             }
             changed(tool != oldValue)
         }
@@ -25,6 +26,9 @@ public final class ToolState {
 
     /// Tool before the last switch (not persisted): Pencil "switch to previous" and eraser toggles go back to it.
     public private(set) var previousTool: Tool = .pen
+
+    /// The eraser is only on while the Pencil is held (#211): ``finishedErasing()`` always goes back.
+    public private(set) var isHoldErasing = false
 
     /// Pen settings.
     public var pen: PenSettings {
@@ -121,10 +125,17 @@ public final class ToolState {
         tool = tool == .eraser ? (previousTool == .eraser ? .pen : previousTool) : .eraser
     }
 
+    /// A pen touch held still (#211): the eraser until it lifts (``finishedErasing()``).
+    public func holdToErase() {
+        guard tool != .eraser else { return }
+        tool = .eraser
+        isHoldErasing = true
+    }
+
     /// An eraser stroke lifted: back to the tool before the eraser if
-    /// ``EraserSettings/autoDeselect`` is on (#156).
+    /// ``EraserSettings/autoDeselect`` is on (#156) or the eraser came from a hold (#211).
     public func finishedErasing() {
-        guard tool == .eraser, eraser.autoDeselect else { return }
+        guard tool == .eraser, eraser.autoDeselect || isHoldErasing else { return }
         toggleEraser()
     }
 

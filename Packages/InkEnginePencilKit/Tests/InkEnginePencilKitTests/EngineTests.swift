@@ -15,6 +15,9 @@ final class Recorder: InkEngineDelegate {
     var eraser: [([Sample], PageID)] = []
     var lassos: [([CGPoint], PageID)] = []
     var begins = 0
+    /// `engineDidHoldToErase` calls; ``onHold`` runs inside each (a tool switch made there is synchronous).
+    var holds = 0
+    var onHold: (() -> Void)?
     var sharp: [PageID] = []
 
     func engine(_: any InkEngine, didCommit pieces: [(page: PageID, stroke: Stroke)]) {
@@ -32,6 +35,11 @@ final class Recorder: InkEngineDelegate {
 
     func engineDidBeginStroke(_: any InkEngine) {
         begins += 1
+    }
+
+    func engineDidHoldToErase(_: any InkEngine) {
+        holds += 1
+        onHold?()
     }
 
     func engine(_: any InkEngine, didShowSharpInkOn page: PageID) {

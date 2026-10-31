@@ -5,12 +5,14 @@ import Tools
 extension NotebookSession {
     // MARK: Settings
 
-    func setTool(_ tool: ActiveTool, allowsFingerDrawing: Bool, snapsShapes: Bool) {
+    func setTool(_ tool: ActiveTool, allowsFingerDrawing: Bool, snapsShapes: Bool, holdsToErase: Bool) {
         if tool != .lasso {
             clearSelection()
         }
         self.tool = tool
-        engine.setTool(tool.configuration(allowsFingerDrawing: allowsFingerDrawing, snapsShapes: snapsShapes))
+        engine.setTool(tool.configuration(
+            allowsFingerDrawing: allowsFingerDrawing, snapsShapes: snapsShapes, holdsToErase: holdsToErase
+        ))
         host.allowsFingerDrawing = allowsFingerDrawing
     }
 

@@ -297,3 +297,26 @@ struct ToolStateTests {
         #expect(state.active != eraser, "the eraser's own mode does")
     }
 }
+
+// MARK: Hold to erase (#211)
+
+extension ToolStateTests {
+    @Test func holdToEraseAlwaysGoesBackOnLift() throws {
+        let state = try makeState(makeDefaults())
+        state.eraser.autoDeselect = false
+        state.select(.highlighter)
+        state.holdToErase()
+        #expect(state.tool == .eraser)
+        #expect(state.isHoldErasing)
+        state.finishedErasing()
+        #expect(state.tool == .highlighter, "back even with auto switch off")
+        #expect(!state.isHoldErasing)
+
+        // Picking the eraser by hand after a hold keeps it.
+        state.holdToErase()
+        state.select(.pen)
+        state.select(.eraser)
+        state.finishedErasing()
+        #expect(state.tool == .eraser)
+    }
+}

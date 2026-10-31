@@ -30,6 +30,12 @@ extension NotebookSession: InkEngineDelegate {
         isErasing = tool.isEraser
         edits?.beginGesture(erasing: isErasing)
     }
+
+    /// Lift reports ``onErased`` even if it comes before the eraser does.
+    func engineDidHoldToErase(_: any InkEngine) {
+        isErasing = true
+        onHoldErase?()
+    }
 }
 
 // MARK: - Canvas

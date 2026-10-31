@@ -80,6 +80,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     let laser = LaserPointer()
     /// Hold to snap: the drawing touch and the shape following it (`+ShapeSnap`, #165).
     let shapeSnap = ShapeSnap()
+    /// Hold to erase: the touch held still and its eraser stroke (`+HoldErase`, #211).
+    let holdErase = HoldErase()
     /// Ink running onto other pages while the Pencil is down (`+CrossPage`, #163).
     let crossPage = CrossPage()
 
@@ -116,6 +118,7 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
         input.delegate = self
         host.addSubview(input)
         setUpShapeSnap()
+        setUpHoldErase()
         setUpCrossPage()
         applyTool()
         installHousekeeping()
@@ -159,8 +162,10 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
             input.cancelActiveStroke()
         }
         cancelShapeSnap(unlessKeptBy: tool)
+        cancelHoldErase(unlessKeptBy: tool)
         self.tool = tool
         applyTool()
+        beginHoldErasingIfReady()
     }
 
     public func setPalette(_ palette: any InkPalette) {
