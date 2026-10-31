@@ -47,6 +47,8 @@ struct SettingsView: View {
                 }
             }
         }
+        // A full-screen cover keeps its own status bar: follow "Hide status bar" like the rest of the app.
+        .statusBarHidden(hidesStatusBar)
     }
 
     private var closeButton: some View {
