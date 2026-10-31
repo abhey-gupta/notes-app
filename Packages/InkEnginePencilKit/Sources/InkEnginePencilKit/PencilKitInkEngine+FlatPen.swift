@@ -31,6 +31,10 @@ extension PencilKitInkEngine {
         selection.flatPen.anchorPoint = .zero
         selection.flatPen.contentsGravity = .resize
         selection.flatPen.isHidden = true
+        // Never animate: a settle outside a touch (the canvas's render callback) would otherwise start a
+        // crossfade of the last stroke's image to nothing, and the next stroke's frame change would stretch
+        // that fading image into its own bounds: a ghost of the last stroke growing with the pen.
+        selection.flatPen.actions = ["contents": NSNull(), "hidden": NSNull(), "bounds": NSNull(), "position": NSNull()]
         selection.view.layer.insertSublayer(selection.flatPen, at: 0)
     }
 
@@ -96,6 +100,9 @@ extension PencilKitInkEngine {
     }
 
     func settleFlatPen() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
         selection.flatPenAwaiting = []
         selection.flatPenGeneration += 1
         selection.flatPenSettling = []
