@@ -33,6 +33,7 @@ notes-app/
     Document/                 package format, codec, WAL autosave, migrations (Foundation only)
     Library/                  index store, search, folders (Foundation only)
     Backup/                   incremental mirror of the library to a Files folder, restore (Foundation only, #174)
+    Sync/                     two-way sync through a Files folder: folder format, merge, engine (Foundation only, #225)
     Export/                   PDF renderer (CoreGraphics)
     DesignSystem/             tokens, glass capsule, typography, themes (SwiftUI)
     Perf/                     signposts, MetricKit, debug HUD
@@ -53,13 +54,14 @@ App
  ├─ Tools       ├─ InkEnginePencilKit ├─ InkEngine ─┐
  ├─ Library     │                    │             ├─ InkGeometry ─ InkModel
  ├─ Backup ─ Library, Document
+ ├─ Sync ─ Library, Document
  ├─ Export ─────┤                    │             │
  ├─ Document ───┘                    └─────────────┘
  ├─ DesignSystem
  └─ Perf
 ```
 
-Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Document`, `Library`, `Backup`, `Tools`, `Editing`, `Export` (CoreGraphics is available on macOS), and `Canvas`'s `PageLayout`, `PageWindow` and `PageResidency` (its UIKit host compiles out). Simulator-only: `InkEngine*`, the rest of `Canvas`, `DesignSystem`, App.
+Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Document`, `Library`, `Backup`, `Sync`, `Tools`, `Editing`, `Export` (CoreGraphics is available on macOS), and `Canvas`'s `PageLayout`, `PageWindow` and `PageResidency` (its UIKit host compiles out). Simulator-only: `InkEngine*`, the rest of `Canvas`, `DesignSystem`, App.
 
 Concurrency: value types everywhere in `InkModel` (`Sendable` structs). UIKit/Metal view classes are `@MainActor`. Background work lives in actors (`DocumentStore`, `LibraryStore`, `ThumbnailService`, `TileRenderer`). No `@unchecked Sendable` without a comment explaining why.
 
@@ -323,6 +325,7 @@ Glass: native Liquid Glass, verified in the iOS 27.1 SDK (all `@available(iOS 26
 - New notebook sheet (mock §06): title, cover color (8), paper (Blank/Lined/Dotted/Grid), paper style (White/Cream/Night), A4 portrait fixed. Create → write package + index entry → push editor on page 1 in the same transaction (no interim library state).
 - Management: rename, move to folder, delete (trash to `Library/Trash/`, purged after 30 days), duplicate. Context menu on covers.
 - Open notebook < 150 ms (#43): index already has everything the editor needs to lay out pages (page count, page size), so the first frame is paper for every page; as soon as the manifest is read (page IDs) page 1 shows `thumbs/<id>.heic` scaled up, `DocumentStore` loads page 1's strokes (< 10 ms) and the first sharp raster (or the canvas's own render, whichever lands first) replaces the thumbnail with a 120 ms crossfade (`canvas.firstSharpTile`). Pages 2–3 load next (`PageWindow.loadOrder`). Nothing else is read until scrolled near. The index holds no page IDs, so the thumbnail can't be in the very first frame; it follows a few ms later.
+- **Sync** (#225, `Packages/Sync`; app wiring follows): `SyncEngine` actor over a user-picked Files folder in the format of FORMAT.md › Sync folder: per-device append-only logs of ops + immutable blobs, so no two devices write one file. Push = scan the library against `sync-state.json`'s local markers (one index `rev` + one cover `stat` per notebook; the manifest only when its `rev` moved) → ops with fresh Lamport clocks → blobs, then one log entry. Pull = read entries past the acked seq per device → merge last-writer-wins per field and per page (`Apply`, pure) → write into the library only where it still holds the marker (the device's own unsent edits stay and win on the next push): folders (`LibraryStore.upsertFolder`), packages (strokes copied out, stale `.wal` and page thumbnail dropped, manifest rewritten with `rev` bumped, `didSave`), new notebooks staged and adopted, trash, tombstones (`LibraryStore.purge`). Notebooks open in an editor are deferred until `applyDeferred`; a blob not downloaded yet leaves its notebook as it was until the next pull. A page replaced while this device had unsent ink (or by an op written without seeing the shown version) becomes a conflict; `keepMine` resends the replaced blob with a fresh clock. GC folds each device's log into a snapshot and deletes its own unreferenced blobs after 30 days, once every device seen in 90 days has acked. Tests: two or three engines on one temp folder behind `FaultyFileSystem` (late arrivals, evicted files, partial listings).
 
 ### 8.1 Backup (#174)
 

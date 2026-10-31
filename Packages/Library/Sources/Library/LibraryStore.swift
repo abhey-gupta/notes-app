@@ -170,6 +170,22 @@ public actor LibraryStore {
         return expired.count
     }
 
+    /// Deletes a notebook now, from the library or its trash, package and all (another device purged it,
+    /// #225). Index first, then files, so a crash leaves only orphaned files.
+    public func purge(_ id: NotebookID) async throws(LibraryError) {
+        var next = await loadedIndex()
+        let url: URL
+        if let i = next.notebooks.firstIndex(where: { $0.id == id }) {
+            url = locations.packageURL(for: next.notebooks.remove(at: i))
+        } else if let t = next.trash.firstIndex(where: { $0.id == id }) {
+            url = trashURL(for: next.trash.remove(at: t).entry)
+        } else {
+            throw .notFound(id)
+        }
+        try commit(next)
+        try? FileManager.default.removeItem(at: url)
+    }
+
     /// Copies a notebook's package under a new ID, titled "<title> copy", in the same folder.
     @discardableResult
     public func duplicate(_ id: NotebookID) async throws(LibraryError) -> LibraryEntry {
@@ -265,6 +281,29 @@ public actor LibraryStore {
         var next = await loadedIndex()
         guard let i = next.folders.firstIndex(where: { $0.id == id }) else { throw .unknownFolder(id) }
         next.folders[i].name = Self.cleaned(name, fallback: "New Folder")
+        try commit(next)
+    }
+
+    /// Creates `folder` with its ID, or renames and moves the folder with that ID (sync, #225). Blank names
+    /// become "New Folder"; a parent that would put the folder inside itself files it at the top level
+    /// (two devices each moved one folder into the other: both end up valid).
+    /// - Throws: ``LibraryError/unknownFolder(_:)`` if the parent isn't in the library.
+    public func upsertFolder(_ folder: LibraryFolder) async throws(LibraryError) {
+        var next = await loadedIndex()
+        var folder = folder
+        folder.name = Self.cleaned(folder.name, fallback: "New Folder")
+        if let parent = folder.parentID {
+            try Self.check(parent, in: next)
+            if next.folders.subtree(of: folder.id).contains(parent) {
+                folder.parentID = nil
+            }
+        }
+        if let i = next.folders.firstIndex(where: { $0.id == folder.id }) {
+            guard next.folders[i] != folder else { return }
+            next.folders[i] = folder
+        } else {
+            next.folders.append(folder)
+        }
         try commit(next)
     }
 

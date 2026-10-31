@@ -62,4 +62,20 @@ struct LibraryAdoptTests {
         let manifest = try NotebookPackage.readManifest(at: lib.locations.packageURL(for: live))
         #expect(manifest.notebook.title == "Live")
     }
+
+    /// Another device purged it (#225): gone from the library or its trash, files and all.
+    @Test func purgeDeletesNotebookOrTrashedNotebook() async throws {
+        let lib = try TempLibrary()
+        let store = lib.store()
+        let live = try await store.create(notebook("Live"))
+        let trashed = try await store.create(notebook("Trashed"))
+        try await store.delete(trashed.id)
+        try await store.purge(live.id)
+        try await store.purge(trashed.id)
+        let snapshot = await lib.store().snapshot()
+        #expect(snapshot.notebooks.isEmpty && snapshot.trash.isEmpty)
+        #expect(!lib.exists(lib.locations.packageURL(for: live)))
+        #expect(!lib.exists(lib.locations.trashDirectory.appending(path: trashed.packagePath)))
+        await #expect(throws: LibraryError.notFound(live.id)) { try await store.purge(live.id) }
+    }
 }

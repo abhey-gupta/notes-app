@@ -2,7 +2,7 @@ import Document
 import Foundation
 import InkModel
 
-/// Packages written elsewhere: Restore from a backup (#174).
+/// Packages written elsewhere: Restore from a backup (#174), sync (#225).
 public extension LibraryStore {
     /// Takes in the package at `url` (staged by the caller in the Notebooks directory, so the move is a
     /// rename): moves it to `Notebooks/<id>.nb`, files it in `folder` and adds its index entry. Folders on

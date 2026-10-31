@@ -46,6 +46,44 @@ _Avoid_: Destination, remote, cloud
 Bringing notebooks from the backup folder into the library, with their folders. Never replaces a notebook the library has.
 _Avoid_: Import, sync, download
 
+## Sync
+
+**Sync**:
+Keeping the library the same on every device that uses one sync folder: each device sends what changed on it and takes in what changed elsewhere.
+_Avoid_: Backup (for the two-way case), replication, mirror
+
+**Sync folder**:
+The folder in Files every device picked for sync (iCloud Drive, Google Drive, Dropbox…). It holds each device's log and the blobs its ops name; it is also the backup.
+_Avoid_: Remote, server, cloud
+
+**Op**:
+One change a device sends: a notebook's fields, one page's content, a page removed, a cover, an asset, trash/restore/delete, a folder's fields or removal. A push writes its ops as one log entry.
+_Avoid_: Event, mutation, change set
+
+**Clock**:
+The Lamport number every op carries: one more than the largest the device has seen. Of two changes to the same field or page, the later clock wins (equal clocks: the larger device ID).
+_Avoid_: Timestamp, version, rev (that is the notebook's own counter)
+
+**Blob**:
+A file in the sync folder an op refers to by name (a page's strokes, a cover, a photo, a PDF). Written once, never changed; named by its clock and device so no two devices write the same one.
+_Avoid_: Attachment, upload
+
+**Tombstone**:
+The op a device sends when a deleted notebook leaves its trash for good. It wins over everything older; a later change brings the notebook back, outside any folder.
+_Avoid_: Purge (for the op), hard delete
+
+**Adopt**:
+A fresh device taking in everything the sync folder holds, with its folders, without the user picking notebooks.
+_Avoid_: Restore, import, download
+
+**Deferred**:
+Changes from another device to a notebook open in an editor: kept until the editor closes, then written. Folder and trash changes apply at once.
+_Avoid_: Queued, pending (for the concept)
+
+**Conflict**:
+The same page changed on two devices before either saw the other's change: the later version is shown, and the replaced ink can come back with Keep mine.
+_Avoid_: Merge, collision
+
 ## Changes
 
 **Page edit**:

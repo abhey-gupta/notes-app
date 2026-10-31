@@ -32,6 +32,7 @@ packages:
   Document: { path: Packages/Document }
   Library: { path: Packages/Library }
   Backup: { path: Packages/Backup }
+  Sync: { path: Packages/Sync }
   Export: { path: Packages/Export }
   DesignSystem: { path: Packages/DesignSystem }
   Perf: { path: Packages/Perf }
@@ -161,6 +162,7 @@ schemes:
         - package: Document/DocumentTests
         - package: Library/LibraryTests
         - package: Backup/BackupTests
+        - package: Sync/SyncTests
         - package: Export/ExportTests
         - package: DesignSystem/DesignSystemTests
         - package: Perf/PerfTests
