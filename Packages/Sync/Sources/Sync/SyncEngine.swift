@@ -244,6 +244,8 @@ public struct SyncProgress: Hashable, Sendable {
     /// Pages done before this notebook, and the pass's total (sending: this notebook's pages).
     public var done: Int
     public var total: Int
+    /// Receiving: notebooks the pass writes ("Bringing in 14 notebooks"); sending: 0.
+    public var notebooks = 0
 }
 
 /// What a pull wrote into the library.

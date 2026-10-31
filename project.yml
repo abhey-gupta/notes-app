@@ -31,7 +31,6 @@ packages:
   Canvas: { path: Packages/Canvas }
   Document: { path: Packages/Document }
   Library: { path: Packages/Library }
-  Backup: { path: Packages/Backup }
   Sync: { path: Packages/Sync }
   Export: { path: Packages/Export }
   DesignSystem: { path: Packages/DesignSystem }
@@ -56,7 +55,7 @@ targets:
       - package: Canvas
       - package: Document
       - package: Library
-      - package: Backup
+      - package: Sync
       - package: Export
       - package: DesignSystem
       - package: Perf
@@ -118,6 +117,11 @@ targets:
     sources: [Tests/UITests]
     dependencies:
       - target: Notespace
+      # SyncTests' second device: an engine writing into the app's -syncRoot folder (#225).
+      - package: Sync
+      - package: Library
+      - package: Document
+      - package: InkModel
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.abhey.notespace.uitests
@@ -161,7 +165,6 @@ schemes:
         - package: Canvas/CanvasTests
         - package: Document/DocumentTests
         - package: Library/LibraryTests
-        - package: Backup/BackupTests
         - package: Sync/SyncTests
         - package: Export/ExportTests
         - package: DesignSystem/DesignSystemTests

@@ -95,6 +95,8 @@ final class NotebookSession {
     /// This notebook's second views (owner only, `+Companion`).
     var companionRefs: [WeakSession] = []
     private var opening: Task<Void, Never>?
+    /// Counted in ``openNotebooks`` (from opening the package until the close's last checkpoint).
+    private var holdsPackage = false
 
     private static var closing: [NotebookID: Task<Void, Never>] = [:]
 
@@ -164,6 +166,8 @@ final class NotebookSession {
     private func openDocument() async {
         guard store == nil, !isClosed else { return }
         _ = host
+        holdsPackage = true
+        Self.writerOpened(notebookID)
         await Self.closing[notebookID]?.value
         do {
             let url = try await library.documentURL(for: notebookID)
@@ -258,7 +262,8 @@ final class NotebookSession {
         thumbnailRegeneration?.cancel()
         thumbnailFill?.cancel()
         edits?.close()
-        let (edits, store, thumbnails, library, id) = (edits, store, thumbnails, library, notebookID)
+        let (edits, store, thumbnails, library, id, holds) = (edits, store, thumbnails, library, notebookID, holdsPackage)
+        holdsPackage = false
         let task = Task { @MainActor in
             await edits?.drain()
             guard let store else { return }
@@ -277,30 +282,10 @@ final class NotebookSession {
             if Self.closing[id] == task {
                 Self.closing[id] = nil
             }
+            if holds {
+                Self.writerClosed(id)
+            }
         }
-    }
-
-    // MARK: Reading position
-
-    /// Scroll and zoom per notebook, on this device, so a notebook reopens where it was left.
-    private var positionKey: String {
-        "readingPosition.\(notebookID.uuid.uuidString)"
-    }
-
-    /// The notebook's real pages, at `position` (default: where it was left).
-    func showPages(_ ids: [PageID], of notebook: Notebook, at position: ReadingPosition? = nil) {
-        host.pageExtension = PageExtension(notebook: notebook)
-        host.layout = pageLayout(ids, pageSize: notebook.pageSize)
-        (position ?? savedPosition()).map(host.restore)
-    }
-
-    private func savedPosition(defaults: UserDefaults = .standard) -> ReadingPosition? {
-        defaults.data(forKey: positionKey).flatMap { try? JSONDecoder().decode(ReadingPosition.self, from: $0) }
-    }
-
-    private func savePosition(defaults: UserDefaults = .standard) {
-        guard let position = host.readingPosition, let data = try? JSONEncoder().encode(position) else { return }
-        defaults.set(data, forKey: positionKey)
     }
 
     // MARK: Pages
@@ -352,10 +337,59 @@ final class NotebookSession {
 }
 
 extension NotebookSession {
-    /// Waits for every closing notebook's last checkpoint (backup after leaving the editor, #174).
+    /// Waits for every closing notebook's last checkpoint (sync after leaving the editor, #225).
     static func closingFinished() async {
         for task in closing.values {
             await task.value
         }
+    }
+
+    /// Notebooks an editor writes, in every window: from opening the package until the close's last
+    /// checkpoint landed. Sync defers incoming page changes for them (#225).
+    static var openNotebooks: Set<NotebookID> {
+        Set(writers.keys)
+    }
+
+    /// Called whenever ``openNotebooks`` changes (``SyncModel``).
+    static var openNotebooksDidChange: ((Set<NotebookID>) -> Void)?
+
+    /// Writers per notebook (normally 0 or 1; a reopen can overlap the previous close).
+    private static var writers: [NotebookID: Int] = [:]
+
+    private static func writerOpened(_ id: NotebookID) {
+        writers[id, default: 0] += 1
+        openNotebooksDidChange?(openNotebooks)
+    }
+
+    private static func writerClosed(_ id: NotebookID) {
+        writers[id, default: 1] -= 1
+        if writers[id] == 0 {
+            writers[id] = nil
+        }
+        openNotebooksDidChange?(openNotebooks)
+    }
+}
+
+/// Reading position: scroll and zoom per notebook, on this device.
+extension NotebookSession {
+    /// Scroll and zoom per notebook, on this device, so a notebook reopens where it was left.
+    private var positionKey: String {
+        "readingPosition.\(notebookID.uuid.uuidString)"
+    }
+
+    /// The notebook's real pages, at `position` (default: where it was left).
+    func showPages(_ ids: [PageID], of notebook: Notebook, at position: ReadingPosition? = nil) {
+        host.pageExtension = PageExtension(notebook: notebook)
+        host.layout = pageLayout(ids, pageSize: notebook.pageSize)
+        (position ?? savedPosition()).map(host.restore)
+    }
+
+    private func savedPosition(defaults: UserDefaults = .standard) -> ReadingPosition? {
+        defaults.data(forKey: positionKey).flatMap { try? JSONDecoder().decode(ReadingPosition.self, from: $0) }
+    }
+
+    private func savePosition(defaults: UserDefaults = .standard) {
+        guard let position = host.readingPosition, let data = try? JSONEncoder().encode(position) else { return }
+        defaults.set(data, forKey: positionKey)
     }
 }

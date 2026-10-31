@@ -44,7 +44,7 @@ extension SyncEngine {
             let from = record.from.sorted().map { names[$0] ?? $0 }
             progress(SyncProgress(
                 direction: .receiving, notebook: record[.title]?.value.decoded(String.self) ?? "", device: from.first, done: done,
-                total: total
+                total: total, notebooks: pending.count
             ))
             done += record.pages.values.count { $0.isPending }
             let conflicts = state.conflicts.count

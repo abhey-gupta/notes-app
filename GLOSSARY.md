@@ -32,29 +32,15 @@ _Avoid_: Picker, gallery, media browser
 Paper added beside the original page width, on the left and/or the right; every page of a notebook shares it. A side grab (press-hold at a page edge, drag) changes it.
 _Avoid_: Margin, canvas size, landscape
 
-## Backup
-
-**Backup**:
-A copy of the library in a folder outside the app, kept up to date as the user writes: only what changed since the last copy is copied. One way: a backup never changes the library.
-_Avoid_: Sync, export, archive
-
-**Backup folder**:
-The folder in Files the user picked for the backup (in iCloud Drive, Google Drive, Dropbox…). It holds the notebooks, deleted notebooks until their purge, and a list of both.
-_Avoid_: Destination, remote, cloud
-
-**Restore**:
-Bringing notebooks from the backup folder into the library, with their folders. Never replaces a notebook the library has.
-_Avoid_: Import, sync, download
-
 ## Sync
 
 **Sync**:
 Keeping the library the same on every device that uses one sync folder: each device sends what changed on it and takes in what changed elsewhere.
-_Avoid_: Backup (for the two-way case), replication, mirror
+_Avoid_: Backup, replication, mirror
 
 **Sync folder**:
-The folder in Files every device picked for sync (iCloud Drive, Google Drive, Dropbox…). It holds each device's log and the blobs its ops name; it is also the backup.
-_Avoid_: Remote, server, cloud
+The folder in Files every device picked for sync (iCloud Drive, Google Drive, Dropbox…). It holds each device's log and the blobs its ops name; it is also the backup: a fresh device adopts it.
+_Avoid_: Backup folder, remote, server, cloud
 
 **Op**:
 One change a device sends: a notebook's fields, one page's content, a page removed, a cover, an asset, trash/restore/delete, a folder's fields or removal. A push writes its ops as one log entry.
@@ -73,7 +59,7 @@ The op a device sends when a deleted notebook leaves its trash for good. It wins
 _Avoid_: Purge (for the op), hard delete
 
 **Adopt**:
-A fresh device taking in everything the sync folder holds, with its folders, without the user picking notebooks.
+A device with an empty library taking in everything the sync folder holds, with its folders, without the user picking notebooks. Replaces #174's Restore.
 _Avoid_: Restore, import, download
 
 **Deferred**:

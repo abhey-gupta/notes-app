@@ -6,7 +6,7 @@ Ultra-fast, minimal, beautiful handwritten notes for iPad.
 
 - Scope and perf budgets: [`docs/SCOPE.md`](docs/SCOPE.md)
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Mockups: [`design/mockups-v1.html`](design/mockups-v1.html), backup: [`design/mockups-backup.html`](design/mockups-backup.html)
+- Mockups: [`design/mockups-v1.html`](design/mockups-v1.html), sync: [`design/mockups-sync.html`](design/mockups-sync.html)
 - Tracker: GitHub Issues, milestone "Day 0"
 
 ## Requirements

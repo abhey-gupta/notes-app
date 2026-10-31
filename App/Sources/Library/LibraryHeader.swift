@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 /// Library header (mock §01): serif title (the folder showing, under its breadcrumb, #117) · search · settings ·
 /// New, with a sidebar button while the sidebar is hidden. Compact chrome (#118): sidebar on the left,
 /// search · settings · + on the right; search swaps the row for the field and Cancel. Either way it starts
-/// clear of an iPadOS window's controls. While a backup runs, a quiet line sits under the title (#174, mock 05-D).
+/// clear of an iPadOS window's controls. While sync runs, a quiet line sits under the title (#174 mock 05-D, #225).
 struct LibraryHeader: View {
     @Binding var query: String
     @Binding var showsNewNotebook: Bool
@@ -30,7 +30,6 @@ struct LibraryHeader: View {
     @FocusState private var searchFocused: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.chromeLayout) private var chrome
-    @Environment(BackupModel.self) private var backup: BackupModel?
 
     private var margin: CGFloat {
         chrome.margin
@@ -41,23 +40,15 @@ struct LibraryHeader: View {
     }
 
     var body: some View {
-        Group {
-            if isCompact {
-                compactHeader
-            } else {
-                header
-            }
-        }
-        // The fresh-iPad card's "Choose…": Settings opens on Restore.
-        .onChange(of: backup?.opensRestore) { _, opens in
-            if opens == true {
-                showsSettings = true
-            }
+        if isCompact {
+            compactHeader
+        } else {
+            header
         }
     }
 
     private var header: some View {
-        // The title stays level with the controls; the backup line grows the header below it.
+        // The title stays level with the controls; the sync line grows the header below it.
         HStack(alignment: .titleCenter, spacing: Tokens.Spacing.m) {
             if let showSidebar {
                 circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
@@ -82,7 +73,7 @@ struct LibraryHeader: View {
                         }
                     }
                     .alignmentGuide(.titleCenter) { $0[VerticalAlignment.center] }
-                BackupStatusLine()
+                SyncStatusLine()
             }
             .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
@@ -262,7 +253,7 @@ struct LibraryHeader: View {
     }
 }
 
-/// Compact chrome's serif title, scrolling with the content (#118), with the backup line under it (#174).
+/// Compact chrome's serif title, scrolling with the content (#118), with the sync line under it (#225).
 struct CompactLibraryTitle: View {
     let title: String
 
@@ -274,7 +265,7 @@ struct CompactLibraryTitle: View {
                 .foregroundStyle(Tokens.Colors.textPrimary)
                 .lineLimit(2)
                 .accessibilityAddTraits(.isHeader)
-            BackupStatusLine()
+            SyncStatusLine()
         }
     }
 }
