@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 struct SyncStatusLine: View {
     @Environment(SyncModel.self) private var sync: SyncModel?
 
-    /// The slot's height: a 4 pt gap and one caption line.
+    /// The slot’s height: one caption line, drawn tight under the title, with the rest as gap to the content.
     static let slot: CGFloat = 20
 
     var body: some View {
@@ -25,7 +25,7 @@ struct SyncStatusLine: View {
                             .frame(width: 120)
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, -4) // up into the serif’s descender room: it belongs to the title, not the content
                 .transition(.opacity)
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("syncStatus")
