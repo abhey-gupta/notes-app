@@ -98,12 +98,7 @@ struct LibraryScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if isCompact {
-                    Text(library.folder(id: folder)?.name ?? "Library")
-                        .font(.libraryTitle)
-                        .tracking(-0.5)
-                        .foregroundStyle(Tokens.Colors.textPrimary)
-                        .lineLimit(2)
-                        .accessibilityAddTraits(.isHeader)
+                    CompactLibraryTitle(title: library.folder(id: folder)?.name ?? "Library")
                         .padding(.horizontal, margin)
                         .padding(.bottom, Tokens.Spacing.xxl)
                 }
@@ -226,11 +221,13 @@ struct LibraryScreen: View {
         if notebooks.isEmpty {
             // Hidden while a slow index load/rebuild is still running: never flash "No notebooks yet".
             if library.isLoaded {
-                Text(emptyText)
-                    .scaledFont(size: 15)
-                    .foregroundStyle(Tokens.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, Tokens.Spacing.xxxl)
+                RestoreOffer(applies: library.notebooks.isEmpty && folder == nil && query.isEmpty) {
+                    Text(emptyText)
+                        .scaledFont(size: 15)
+                        .foregroundStyle(Tokens.Colors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, Tokens.Spacing.xxxl)
+                }
             }
         } else {
             LazyVGrid(columns: gridColumns, alignment: .leading, spacing: isCompact ? Tokens.Spacing.xxl : 30) {

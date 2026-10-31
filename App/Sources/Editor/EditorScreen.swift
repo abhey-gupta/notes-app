@@ -48,6 +48,7 @@ struct EditorScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(BackupModel.self) private var backup: BackupModel?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chromeLayout) private var chrome
 
@@ -159,7 +160,10 @@ struct EditorScreen: View {
                 sessions.flushAll()
             }
         }
-        .onDisappear { sessions.closeAll() }
+        .onDisappear {
+            sessions.closeAll()
+            backup?.editorDidClose()
+        }
     }
 
     // MARK: Panes

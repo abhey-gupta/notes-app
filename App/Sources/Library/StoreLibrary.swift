@@ -29,6 +29,8 @@ final class StoreLibrary: LibraryModel {
     /// When the editor last wrote a notebook's cover this launch; keeps the cover's cache key moving even
     /// when the index entry (and so `modifiedAt`) didn't change.
     @ObservationIgnored private var coverVersions: [NotebookID: Date] = [:]
+    /// After every change the store made (checkpoints included): the backup's trigger (#174).
+    @ObservationIgnored var didChange: (() -> Void)?
 
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "library")
 
@@ -189,8 +191,14 @@ final class StoreLibrary: LibraryModel {
         }
     }
 
+    /// Shows the store's state after a change made outside this model (a restored notebook, #174).
+    func reload() async {
+        await refresh()
+    }
+
     private func refresh() async {
         await apply(store.snapshot())
+        didChange?()
     }
 
     /// Shows `snapshot` unless a newer one is already shown.

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings popover from the library gear.
+/// Settings popover from the library gear. A `NavigationStack`, so Backup › Restore pushes inside it (#174).
 struct SettingsView: View {
     /// `UserDefaults` key of "Tap to undo" (#121): two fingers undo, three redo, on the canvas.
     static let tapToUndoKey = "tapToUndo"
@@ -17,6 +17,8 @@ struct SettingsView: View {
     let showsGallery: Binding<Bool>?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(BackupModel.self) private var backup: BackupModel?
+    @State private var path: [SettingsRoute] = []
     @AppStorage(tapToUndoKey) private var tapToUndo = true
     @AppStorage(snapsShapesKey) private var snapsShapes = true
     @AppStorage(holdsToEraseKey) private var holdsToErase = true
@@ -24,6 +26,26 @@ struct SettingsView: View {
     @AppStorage(hidesStatusBarKey) private var hidesStatusBar = false
 
     var body: some View {
+        NavigationStack(path: $path) {
+            form
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: SettingsRoute.self) { _ in
+                    if let backup {
+                        RestoreView(backup: backup)
+                    }
+                }
+        }
+        .frame(width: 340, height: 500)
+        .onAppear {
+            // The fresh-iPad card's "Choose…" opens Settings on Restore.
+            if backup?.opensRestore == true {
+                backup?.opensRestore = false
+                path = [.restore]
+            }
+        }
+    }
+
+    private var form: some View {
         Form {
             Section {
                 Toggle("Tap to undo", isOn: $tapToUndo)
@@ -61,6 +83,9 @@ struct SettingsView: View {
             } footer: {
                 Text("Hides the time and battery everywhere in Notespace.")
             }
+            if let backup {
+                BackupSettingsSection(backup: backup)
+            }
             #if DEBUG
                 Section {
                     if let showsGallery {
@@ -77,7 +102,6 @@ struct SettingsView: View {
                 LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
             }
         }
-        .frame(width: 340, height: 500)
     }
 }
 

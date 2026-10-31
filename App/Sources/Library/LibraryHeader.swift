@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 /// Library header (mock §01): serif title (the folder showing, under its breadcrumb, #117) · search · settings ·
 /// New, with a sidebar button while the sidebar is hidden. Compact chrome (#118): sidebar on the left,
 /// search · settings · + on the right; search swaps the row for the field and Cancel. Either way it starts
-/// clear of an iPadOS window's controls.
+/// clear of an iPadOS window's controls. While a backup runs, a quiet line sits under the title (#174, mock 05-D).
 struct LibraryHeader: View {
     @Binding var query: String
     @Binding var showsNewNotebook: Bool
@@ -30,6 +30,7 @@ struct LibraryHeader: View {
     @FocusState private var searchFocused: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.chromeLayout) private var chrome
+    @Environment(BackupModel.self) private var backup: BackupModel?
 
     private var margin: CGFloat {
         chrome.margin
@@ -40,37 +41,50 @@ struct LibraryHeader: View {
     }
 
     var body: some View {
-        if isCompact {
-            compactHeader
-        } else {
-            header
+        Group {
+            if isCompact {
+                compactHeader
+            } else {
+                header
+            }
+        }
+        // The fresh-iPad card's "Choose…": Settings opens on Restore.
+        .onChange(of: backup?.opensRestore) { _, opens in
+            if opens == true {
+                showsSettings = true
+            }
         }
     }
 
     private var header: some View {
-        HStack(spacing: Tokens.Spacing.m) {
+        // The title stays level with the controls; the backup line grows the header below it.
+        HStack(alignment: .titleCenter, spacing: Tokens.Spacing.m) {
             if let showSidebar {
                 circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
                     .accessibilityIdentifier("sidebarButton")
             }
-            Text(title)
-                .font(.libraryTitle)
-                .tracking(-0.5)
-                .foregroundStyle(Tokens.Colors.textPrimary)
-                // One line in any window width (#195): shrinks, then truncates, before the controls give way.
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .layoutPriority(1)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("libraryTitle")
-                // Above the title, outside its layout: the title doesn't move between Library and a folder.
-                .overlay(alignment: .topLeading) {
-                    if !ancestors.isEmpty {
-                        breadcrumb
-                            .fixedSize()
-                            .alignmentGuide(.top) { $0[.bottom] + 6 }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.libraryTitle)
+                    .tracking(-0.5)
+                    .foregroundStyle(Tokens.Colors.textPrimary)
+                    // One line in any window width (#195): shrinks, then truncates, before the controls give way.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("libraryTitle")
+                    // Above the title, outside its layout: the title doesn't move between Library and a folder.
+                    .overlay(alignment: .topLeading) {
+                        if !ancestors.isEmpty {
+                            breadcrumb
+                                .fixedSize()
+                                .alignmentGuide(.top) { $0[.bottom] + 6 }
+                        }
                     }
-                }
+                    .alignmentGuide(.titleCenter) { $0[VerticalAlignment.center] }
+                BackupStatusLine()
+            }
+            .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
             GlassChrome(spacing: Tokens.Spacing.s) {
                 HStack(spacing: Tokens.Spacing.m) {
@@ -246,4 +260,32 @@ struct LibraryHeader: View {
             pdfImport = PDFInbox.stage(result)
         }
     }
+}
+
+/// Compact chrome's serif title, scrolling with the content (#118), with the backup line under it (#174).
+struct CompactLibraryTitle: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.libraryTitle)
+                .tracking(-0.5)
+                .foregroundStyle(Tokens.Colors.textPrimary)
+                .lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
+            BackupStatusLine()
+        }
+    }
+}
+
+extension VerticalAlignment {
+    private enum TitleCenter: AlignmentID {
+        static func defaultValue(in d: ViewDimensions) -> CGFloat {
+            d[VerticalAlignment.center]
+        }
+    }
+
+    /// The library title's center: the header's controls line up with it, whatever hangs below.
+    static let titleCenter = VerticalAlignment(TitleCenter.self)
 }

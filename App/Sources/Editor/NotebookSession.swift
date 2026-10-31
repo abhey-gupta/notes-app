@@ -97,6 +97,7 @@ final class NotebookSession {
     private var opening: Task<Void, Never>?
 
     private static var closing: [NotebookID: Task<Void, Never>] = [:]
+
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "editor")
 
     init(notebook: NotebookSummary, library: any LibraryModel, startsFocused: Bool = false) {
@@ -347,5 +348,14 @@ final class NotebookSession {
             return nil
         }
         return page.strokes.count == 1 ? "1 stroke" : "\(page.strokes.count) strokes"
+    }
+}
+
+extension NotebookSession {
+    /// Waits for every closing notebook's last checkpoint (backup after leaving the editor, #174).
+    static func closingFinished() async {
+        for task in closing.values {
+            await task.value
+        }
     }
 }

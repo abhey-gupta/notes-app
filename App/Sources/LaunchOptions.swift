@@ -12,6 +12,8 @@ import Tools
 /// - `-resetLibrary YES`: erase the on-disk library (index, packages, trash) before launch.
 /// - `-libraryRoot <path>`: use the library under path (`Documents/Notebooks`, `Application Support/Library`)
 ///   instead of the container's. Perf tests point it at fixture libraries the test runner builds (#15).
+/// - `-backupRoot <path>`: back up to this folder (created if missing) instead of a bookmarked one; no Files
+///   picker (#174 UI tests). Simulator Release builds honor it too.
 /// - `-seedNotebooks <n>`: if the on-disk library is empty, fill it with n mock-shaped notebooks.
 /// - `-openNotebook <title>`: start in the editor for that notebook (`first` = most recent).
 /// - `-focusMode YES`: with `-openNotebook`, start in focus mode (compact pill, other chrome hidden).
@@ -104,6 +106,19 @@ enum LaunchOptions {
             }
         #endif
         return StoreLibrary()
+    }
+
+    /// Backup for the on-disk library (none for in-memory ones); `-backupRoot` fixes its folder.
+    static func makeBackup(for library: any LibraryModel) -> BackupModel? {
+        guard let library = library as? StoreLibrary else { return nil }
+        #if DEBUG || targetEnvironment(simulator)
+            if let root = UserDefaults.standard.string(forKey: "backupRoot") {
+                let url = URL(filePath: root, directoryHint: .isDirectory)
+                try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                return BackupModel(library: library, fixedRoot: url)
+            }
+        #endif
+        return BackupModel(library: library)
     }
 
     static func initialPath(in library: any LibraryModel) -> [EditorRoute] {

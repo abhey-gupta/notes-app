@@ -7,6 +7,17 @@ On-disk layout of a Notespace notebook and what we promise about it. Details: AR
 - `Documents/Notebooks/<notebookID>.nb/`: one directory package per notebook (UTType `com.abhey.notespace.notebook`, conforms to `com.apple.package`). Named by ID, never by title.
 - `Application Support/Library/index.json`: library index (titles, folders, recents). A cache: rebuilt from the packages if missing or damaged.
 - `Application Support/Library/Trash/<notebookID>.nb`: deleted notebooks, purged after 30 days.
+- `Application Support/Library/backup-state.json`: what the last backup copied (#174): the folder's path, last backup time, and per notebook its location (`notebooks`/`trash`), manifest modification date, `rev`, page `rev`s of copied stroke files, copied assets, cover date and size, bytes. Derived: missing, damaged or about another folder means the next backup copies everything again.
+
+## Backup folder (#174)
+
+```
+<picked folder>/
+  library.json           formatVersion 1, folders, notebooks (id, title, folderID, cover, paper, theme, pageCount, pageSize,
+                         modifiedAt, rev, trashed), device, writtenAt (pretty JSON, sorted keys, dates as Unix ms)
+  Notebooks/<id>.nb/     manifest.json, pages/*.strokes, images/*, backgrounds/*, thumbs/cover.heic (no journals, no page thumbnails)
+  Trash/<id>.nb/         deleted notebooks, same contents, removed with the local purge
+```
 
 ## Package
 
