@@ -13,7 +13,10 @@ struct LogRead: Sendable {
 /// The folder's files: `sync.json`, logs, device records; and the push's scan and markers.
 extension SyncEngine {
     /// Folder ops, then each notebook's ops (``LocalScan``), then tombstones for notebooks the library no
-    /// longer has (trash purged). Clocks are taken from `state` in that order.
+    /// longer has. Only a notebook last seen in the trash gets one: every purge goes through the trash, so a
+    /// live notebook that is suddenly missing (an index rebuild that skipped an unreadable package, an empty
+    /// snapshot) is a local problem, never a delete sent to every device. Clocks are taken from `state` in
+    /// that order.
     static func scan(
         _ snapshot: LibrarySnapshot, locations: LibraryLocations, state: inout SyncState, now date: Date
     ) -> (ops: [SyncOp], scanned: [(LocalNotebook, NotebookChanges)]) {
@@ -27,7 +30,7 @@ extension SyncEngine {
         }
         let present = Set(locals.map(\.id))
         for (id, record) in state.notebooks.sorted(by: { $0.key < $1.key })
-            where record.materialised && !record.isDeleted && !present.contains(id)
+            where record.materialised && !record.isDeleted && !present.contains(id) && record[.trashed]?.local == .bool(true)
         {
             ops.append(SyncOp(clock: state.tick(), at: date, .lifecycle(id, .delete)))
         }

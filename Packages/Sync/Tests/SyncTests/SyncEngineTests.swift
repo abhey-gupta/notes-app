@@ -98,6 +98,7 @@ struct SyncEngineTests {
         let pair = try await Pair.make()
         let folder = pair.folder, a = pair.a, b = pair.b, id = pair.id
         try await a.store.delete(id)
+        try await a.engine.push() // the trash goes out within seconds; the purge comes 30 days later
         try await a.store.purgeTrash(now: folder.clock.now.addingTimeInterval(31 * 86400))
         try await a.engine.push()
         try await b.ink(id, page: 1)
@@ -120,6 +121,7 @@ struct SyncEngineTests {
         try await b.ink(id, page: 1)
         try await b.engine.push()
         try await a.store.delete(id)
+        try await a.engine.push() // the trash goes out within seconds; the purge comes 30 days later
         try await a.store.purgeTrash(now: folder.clock.now.addingTimeInterval(31 * 86400))
         try await a.sync()
         try await b.sync()
@@ -143,12 +145,24 @@ struct SyncEngineTests {
         #expect(await b.store.snapshot().trash.isEmpty)
 
         try await a.store.delete(id)
+        try await a.engine.push() // the trash goes out within seconds; the purge comes 30 days later
         try await a.store.purgeTrash(now: folder.clock.now.addingTimeInterval(31 * 86400))
         try await a.sync()
         try await b.sync()
         let snapshot = await b.store.snapshot()
         #expect(snapshot.notebook(id) == nil && snapshot.trash.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: b.locations.trashDirectory.appending(path: "\(id).nb").path(percentEncoded: false)))
+    }
+
+    /// A live notebook that vanishes without passing through the trash (a rebuild skipped its unreadable
+    /// package) is never sent as a delete: the other device keeps it.
+    @Test func liveNotebookMissingFromTheLibraryIsNotADelete() async throws {
+        let pair = try await Pair.make()
+        let a = pair.a, b = pair.b, id = pair.id
+        try await a.store.purge(id)
+        try await a.sync()
+        try await b.sync()
+        #expect(await b.store.snapshot().notebook(id) != nil)
     }
 
     @Test func folderRenameAndRemovePropagate() async throws {
