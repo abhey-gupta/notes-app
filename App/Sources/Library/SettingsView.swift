@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings popover from the library gear. A `NavigationStack`, so Backup › Restore pushes inside it (#174).
+/// Settings popover from the library gear. A `NavigationStack`, so Sync › Devices pushes inside it (#225).
 struct SettingsView: View {
     /// `UserDefaults` key of "Tap to undo" (#121): two fingers undo, three redo, on the canvas.
     static let tapToUndoKey = "tapToUndo"
@@ -17,7 +17,7 @@ struct SettingsView: View {
     let showsGallery: Binding<Bool>?
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(BackupModel.self) private var backup: BackupModel?
+    @Environment(SyncModel.self) private var sync: SyncModel?
     @State private var path: [SettingsRoute] = []
     @AppStorage(tapToUndoKey) private var tapToUndo = true
     @AppStorage(snapsShapesKey) private var snapsShapes = true
@@ -30,19 +30,12 @@ struct SettingsView: View {
             form
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: SettingsRoute.self) { _ in
-                    if let backup {
-                        RestoreView(backup: backup)
+                    if let sync {
+                        DevicesView(sync: sync)
                     }
                 }
         }
         .frame(width: 340, height: 500)
-        .onAppear {
-            // The fresh-iPad card's "Choose…" opens Settings on Restore.
-            if backup?.opensRestore == true {
-                backup?.opensRestore = false
-                path = [.restore]
-            }
-        }
     }
 
     private var form: some View {
@@ -83,8 +76,8 @@ struct SettingsView: View {
             } footer: {
                 Text("Hides the time and battery everywhere in Notespace.")
             }
-            if let backup {
-                BackupSettingsSection(backup: backup)
+            if let sync {
+                SyncSettingsSection(sync: sync)
             }
             #if DEBUG
                 Section {

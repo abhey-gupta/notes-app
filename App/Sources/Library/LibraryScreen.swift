@@ -221,12 +221,11 @@ struct LibraryScreen: View {
         if notebooks.isEmpty {
             // Hidden while a slow index load/rebuild is still running: never flash "No notebooks yet".
             if library.isLoaded {
-                RestoreOffer(applies: library.notebooks.isEmpty && folder == nil && query.isEmpty) {
+                SyncEmptyState(applies: library.notebooks.isEmpty && folder == nil && query.isEmpty) {
                     Text(emptyText)
                         .scaledFont(size: 15)
                         .foregroundStyle(Tokens.Colors.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, Tokens.Spacing.xxxl)
                 }
             }
         } else {

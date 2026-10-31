@@ -18,8 +18,8 @@ struct RootView: View {
     /// Open editor tabs (#191), persisted; their sessions live only while the editor is up.
     @State private var tabs: TabsModel
     @State private var sessions: SessionStore
-    /// Backup to a Files folder (#174), shared by the windows; `nil` in previews and in-memory libraries.
-    private let backup: BackupModel?
+    /// Sync through a Files folder (#225), shared by the windows; `nil` in previews and in-memory libraries.
+    private let sync: SyncModel?
     /// Settings → "Hide status bar" (#191): the bar sits flush at the top edge.
     @AppStorage(SettingsView.hidesStatusBarKey) private var hidesStatusBar = false
     @Environment(\.scenePhase) private var scenePhase
@@ -33,7 +33,7 @@ struct RootView: View {
     init(library: (any LibraryModel)? = nil) {
         // Windows share the library and the tools (#175); previews bring their own library.
         let tools = library == nil ? AppWindows.tools : LaunchOptions.makeToolState()
-        backup = library == nil ? AppWindows.backup : nil
+        sync = library == nil ? AppWindows.sync : nil
         let library = library ?? AppWindows.library
         let tabs = LaunchOptions.makeTabs()
         let path = LaunchOptions.initialPath(in: library)
@@ -69,7 +69,7 @@ struct RootView: View {
                 }
             }
         }
-        .environment(backup)
+        .environment(sync)
         .statusBarHidden(hidesStatusBar)
         // Compact chrome and room for the window controls (#118).
         .readsChromeLayout()
@@ -92,7 +92,7 @@ struct RootView: View {
             }
             await library.start()
             EditorWarmUp.run()
-            await backup?.start()
+            await sync?.start()
         }
         // Files / share sheet "Open in Notespace" (PDF document type): back to the library, import sheet up.
         .onOpenURL { url in
@@ -110,12 +110,12 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 tabs.becomeWriter()
-                backup?.sceneDidBecomeActive()
+                sync?.sceneDidBecomeActive()
             } else {
                 tools.flush()
             }
             if phase == .background {
-                backup?.sceneDidEnterBackground()
+                sync?.sceneDidEnterBackground()
             }
         }
         #if DEBUG

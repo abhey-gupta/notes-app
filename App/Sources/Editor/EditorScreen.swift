@@ -48,7 +48,7 @@ struct EditorScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(BackupModel.self) private var backup: BackupModel?
+    @Environment(SyncModel.self) private var sync: SyncModel?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chromeLayout) private var chrome
 
@@ -162,7 +162,7 @@ struct EditorScreen: View {
         }
         .onDisappear {
             sessions.closeAll()
-            backup?.editorDidClose()
+            sync?.editorDidClose()
         }
     }
 
