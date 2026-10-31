@@ -47,12 +47,12 @@ final class BackupModel {
     private(set) var folderName: String?
     /// The folder's own name ("Notespace").
     private(set) var folderShortName = ""
-    /// The folder's `library.json`: read at launch and when Restore opens.
-    private(set) var catalog: BackupCatalog?
-    private(set) var restoring: Set<NotebookID> = []
-    private(set) var restored: Set<NotebookID> = []
+    /// The folder's `library.json`: read at launch and when Restore opens (`+Restore`).
+    var catalog: BackupCatalog?
+    var restoring: Set<NotebookID> = []
+    var restored: Set<NotebookID> = []
     /// Already in the library (or its trash) when Restore tried.
-    private(set) var skipped: Set<NotebookID> = []
+    var skipped: Set<NotebookID> = []
     /// Fresh-iPad card → Settings opens on Restore.
     var opensRestore = false
 
@@ -63,10 +63,10 @@ final class BackupModel {
     /// After the last background run, how long the background task waits for more changes (late flushes).
     static let backgroundGrace = Duration.seconds(3)
 
-    @ObservationIgnored private let library: StoreLibrary
+    @ObservationIgnored let library: StoreLibrary
     /// `-backupRoot`: a fixed folder, no picker, no bookmark (UI tests).
     @ObservationIgnored private let fixedRoot: URL?
-    @ObservationIgnored private var engine: BackupEngine?
+    @ObservationIgnored private(set) var engine: BackupEngine?
     @ObservationIgnored private var isRunning = false
     @ObservationIgnored private var runsAgain = false
     @ObservationIgnored private var runID = 0
@@ -249,13 +249,18 @@ final class BackupModel {
             guard self.engine === engine else { return }
             runID += 1
             line = nil
-            switch error {
-            case .folderUnavailable:
-                status = .folderUnavailable
-            case let .failed(message):
-                Self.log.error("backup: \(message, privacy: .public)")
-                status = .failed(message)
-            }
+            fail(error)
+        }
+    }
+
+    /// Shows a run's or a restore's failure in Settings' footer.
+    func fail(_ error: BackupError) {
+        switch error {
+        case .folderUnavailable:
+            status = .folderUnavailable
+        case let .failed(message):
+            Self.log.error("backup: \(message, privacy: .public)")
+            status = .failed(message)
         }
     }
 
@@ -305,64 +310,5 @@ final class BackupModel {
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
-    }
-
-    // MARK: Restore
-
-    /// Re-reads the folder's `library.json`.
-    func loadCatalog() async {
-        guard let engine else { return }
-        do {
-            catalog = try await engine.catalog()
-        } catch {
-            if error == .folderUnavailable {
-                status = .folderUnavailable
-            }
-        }
-    }
-
-    /// Backed-up notebooks the library doesn't have, not deleted ones (the fresh-iPad card's count).
-    var restorableCount: Int {
-        catalog?.notebooks.count { !$0.trashed && rowState($0) == .restorable } ?? 0
-    }
-
-    func rowState(_ item: BackupCatalog.Notebook) -> RowState {
-        if restored.contains(item.id) {
-            return .restored
-        }
-        if restoring.contains(item.id) {
-            return .restoring
-        }
-        if skipped.contains(item.id) || library.notebook(id: item.id) != nil {
-            return .onThisIPad
-        }
-        return .restorable
-    }
-
-    /// Restores `items` one by one; each shows in the library as it lands. Local notebooks are never touched.
-    func restore(_ items: [BackupCatalog.Notebook]) async {
-        guard let engine, let catalog else { return }
-        for item in items where rowState(item) == .restorable {
-            restoring.insert(item.id)
-            do {
-                if try await engine.restore(item, from: catalog) {
-                    restored.insert(item.id)
-                    await library.reload()
-                } else {
-                    skipped.insert(item.id)
-                }
-            } catch {
-                switch error {
-                case .folderUnavailable: status = .folderUnavailable
-                case let .failed(message): status = .failed(message)
-                }
-            }
-            restoring.remove(item.id)
-        }
-    }
-
-    /// Restore all (the fresh-iPad card, Restore's nav button): every notebook that isn't deleted.
-    func restoreAll() async {
-        await restore(catalog?.notebooks.filter { !$0.trashed } ?? [])
     }
 }

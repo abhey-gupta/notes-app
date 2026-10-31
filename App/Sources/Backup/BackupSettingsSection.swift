@@ -75,7 +75,7 @@ struct BackupSettingsSection: View {
                 .foregroundStyle(Tokens.Colors.textPrimary)
                 .lineLimit(1)
             Text(
-                "\(progress.done + 1) of \(EditedLabel.notebooks(progress.total)) · \(progress.bytesLeft.formatted(.byteCount(style: .file))) left"
+                "\(progress.done + 1) of \(EditedLabel.notebooks(progress.total)) · \(Self.size(progress.bytesLeft)) left"
             )
             .scaledFont(size: 13)
             .foregroundStyle(Tokens.Colors.textSecondary)
@@ -97,7 +97,7 @@ struct BackupSettingsSection: View {
         case let .idle(summary):
             if let last = summary.last {
                 "Up to date. Last backup \(Self.ago(last, now: now)) · \(EditedLabel.notebooks(summary.notebooks)), "
-                    + "\(summary.bytes.formatted(.byteCount(style: .file)))."
+                    + "\(Self.size(summary.bytes))."
             } else {
                 "Notebooks are copied here as you write."
             }
@@ -110,6 +110,11 @@ struct BackupSettingsSection: View {
         case let .failed(message):
             message
         }
+    }
+
+    /// "86 MB".
+    static func size(_ bytes: Int64) -> String {
+        bytes.formatted(.byteCount(style: .file))
     }
 
     /// "just now", "2 minutes ago", "yesterday".

@@ -20,9 +20,14 @@ struct RestoreView: View {
                         ForEach(live) { row($0, folders: catalog.folders) }
                     } header: {
                         Text("In \(backup.folderShortName) · \(EditedLabel.notebooks(live.count))")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     } footer: {
                         Text(
-                            "Notebooks already on this iPad are skipped. Folders come back as they were. Restoring never changes what is on this iPad."
+                            """
+                            Notebooks already on this iPad are skipped. Folders come back as they were. Restoring never \
+                            changes what is on this iPad.
+                            """
                         )
                     }
                 }

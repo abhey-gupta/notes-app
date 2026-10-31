@@ -262,6 +262,23 @@ struct LibraryHeader: View {
     }
 }
 
+/// Compact chrome's serif title, scrolling with the content (#118), with the backup line under it (#174).
+struct CompactLibraryTitle: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.libraryTitle)
+                .tracking(-0.5)
+                .foregroundStyle(Tokens.Colors.textPrimary)
+                .lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
+            BackupStatusLine()
+        }
+    }
+}
+
 extension VerticalAlignment {
     private enum TitleCenter: AlignmentID {
         static func defaultValue(in d: ViewDimensions) -> CGFloat {

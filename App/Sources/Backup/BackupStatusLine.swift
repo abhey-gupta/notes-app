@@ -37,6 +37,25 @@ struct BackupStatusLine: View {
     }
 }
 
+/// The library's empty state on All Notebooks with no search (`applies`): the fresh-iPad card while the
+/// backup has notebooks this library lacks, else `fallback`.
+struct RestoreOffer<Fallback: View>: View {
+    let applies: Bool
+    @ViewBuilder let fallback: Fallback
+
+    @Environment(BackupModel.self) private var backup: BackupModel?
+
+    var body: some View {
+        if applies, let backup, backup.restorableCount > 0 {
+            RestoreCard(backup: backup, count: backup.restorableCount)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Tokens.Spacing.xxl)
+        } else {
+            fallback
+        }
+    }
+}
+
 /// Fresh iPad (mock 04): the library is empty and the backup folder lists notebooks. "Restore all" brings them
 /// back with their folders; "Choose…" opens Settings on Restore. Gone once the library has a notebook.
 struct RestoreCard: View {
