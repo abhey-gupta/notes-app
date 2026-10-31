@@ -28,7 +28,7 @@
     public final class CanvasHostView: UIView {
         /// Zoom range (scale of page points).
         public static let minimumZoom: CGFloat = 0.5
-        public static let maximumZoom: CGFloat = 4
+        public static let maximumZoom: CGFloat = 10
         /// Space below the last page for the add-page button (content pt).
         public static let footerHeight: CGFloat = 96
 

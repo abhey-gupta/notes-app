@@ -245,7 +245,7 @@ Whole body after header compressed with `Compression` framework lz4 (`COMPRESSIO
 
 ### 5.1 Host
 
-`CanvasHostView` (`Canvas`, UIKit, wrapped in `UIViewRepresentable`): a `UIScrollView` for native 120 Hz physics, rubber-banding, and pinch zoom (`minimumZoomScale 0.5`, `maximumZoomScale 4`), with a transparent content view of total notebook size that the engine's `view` fills (content space, unzoomed points), so the scroll view's zoom transform applies to paper and ink alike (§3, Zoom). Content-sized views draw nothing themselves, so they cost no memory; the engine creates layers and canvases only for the visible pages. `scrollViewDidScroll`/`DidZoom` → `engine.setViewport(...)`. The host's overlay (lasso chrome) stays pinned to the visible rect.
+`CanvasHostView` (`Canvas`, UIKit, wrapped in `UIViewRepresentable`): a `UIScrollView` for native 120 Hz physics, rubber-banding, and pinch zoom (`minimumZoomScale 0.5`, `maximumZoomScale 10`, #213), with a transparent content view of total notebook size that the engine's `view` fills (content space, unzoomed points), so the scroll view's zoom transform applies to paper and ink alike (§3, Zoom). Content-sized views draw nothing themselves, so they cost no memory; the engine creates layers and canvases only for the visible pages. `scrollViewDidScroll`/`DidZoom` → `engine.setViewport(...)`. The host's overlay (lasso chrome) stays pinned to the visible rect.
 
 ### 5.2 Page layout
 
