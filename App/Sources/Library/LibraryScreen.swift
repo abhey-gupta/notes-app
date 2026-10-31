@@ -117,8 +117,7 @@ struct LibraryScreen: View {
                     .padding(.horizontal, margin)
                     .padding(.top, isCompact ? Tokens.Spacing.xl : 26)
             }
-            // Regular: the header's sync-line slot is the gap above the content.
-            .padding(.top, isCompact ? Tokens.Spacing.s : 0)
+            .padding(.top, isCompact ? Tokens.Spacing.s : Tokens.Spacing.m)
             .padding(.bottom, 60)
         }
         .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
