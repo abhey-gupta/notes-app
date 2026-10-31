@@ -15,6 +15,8 @@ import os
 ///   replaced pages dropped, `manifest.json` rewritten with its `rev` bumped), trash, deletes. A notebook
 ///   whose blobs haven't downloaded yet keeps its previous version and is retried next pass; one open in an
 ///   editor is deferred until ``applyDeferred(_:)``. Then `devices/<me>.json` records the acks.
+/// - **Opening**: an editor about to read a package calls ``willOpen(_:)`` first; it returns once a write of
+///   that notebook already under way has finished, and no write starts after it (``OpenGate``).
 ///
 /// Everything after the library snapshot is synchronous file I/O on this actor, never on main.
 public actor SyncEngine {
@@ -27,12 +29,14 @@ public actor SyncEngine {
 
     public nonisolated let folder: SyncFolder
     public nonisolated let device: DeviceIdentity
-    let fs: any SyncFileSystem
+    nonisolated let fs: any SyncFileSystem
     nonisolated let library: LibraryStore
     let stateURL: URL
     let now: @Sendable () -> Date
-    private let bookmarkRefreshed: @Sendable (Data) -> Void
+    private nonisolated let bookmarkRefreshed: @Sendable (Data) -> Void
     var openNotebooks: Set<NotebookID> = []
+    /// Notebooks being opened and the one being written, outside the actor (``willOpen(_:)``).
+    nonisolated let gate = OpenGate()
     private var cached: SyncState?
     var lastDeviceRecord: DeviceRecord?
     static let log = Logger(subsystem: "com.abhey.notespace", category: "sync")
@@ -161,22 +165,53 @@ public actor SyncEngine {
         try await withState { state throws(SyncError) in state.conflicts }
     }
 
-    /// Keep mine: sends the replaced version again as a new `pageSet` (a fresh clock, so it wins everywhere)
-    /// and writes it back into the page (deferred while the notebook is open).
-    public func keepMine(notebook: NotebookID, page: PageID) async throws(SyncError) {
+    /// Keep mine: sends the replaced version again as a new `pageSet` (a fresh clock, so it wins everywhere).
+    /// - Parameter rev: The page `rev` at which an open editor already wrote the replaced version into the
+    ///   package (it shows it at once): recorded as this version, so nothing is deferred or sent again. `nil`
+    ///   (no editor): the version is written into the page here.
+    public func keepMine(notebook: NotebookID, page: PageID, rev: UInt64? = nil) async throws(SyncError) {
         try await withState { state throws(SyncError) in
             guard let conflict = state.conflicts.first(where: { $0.notebook == notebook && $0.page == page }),
                   let current = state.notebooks[notebook]?.pages[page] else { return }
+            let stamp = Stamp(clock: state.tick(), device: device.id)
             let op = SyncOp(
-                clock: state.tick(), at: now(),
+                clock: stamp.clock, at: now(),
                 .pageSet(notebook, page: page, base: current.stamp.clock, entry: current.meta, strokes: conflict.mine)
             )
             _ = try append([op], to: &state)
             state.conflicts.removeAll { $0.notebook == notebook && $0.page == page }
+            if let rev {
+                state.notebooks[notebook]?.pages[page]?.local = LocalPage(stamp: stamp, rev: rev, blob: conflict.mine)
+            }
             try writeDevice(state, force: true)
             var report = PullReport()
             try await materialise(&state, report: &report, only: notebook, progress: { _ in })
         }
+    }
+
+    /// The ink of a conflict's replaced version (`mine`, a stroke file); `nil` while it isn't downloaded (a
+    /// download starts). Reads the folder only, so it never waits for a pass.
+    public nonisolated func replacedStrokes(of conflict: Conflict) throws(SyncError) -> Data? {
+        let scope = try folder.beginAccess(refreshed: bookmarkRefreshed)
+        defer { scope.end() }
+        let path = SyncLayout.strokes(conflict.mine, notebook: conflict.notebook, page: conflict.page)
+        guard fs.isDownloaded(path) else {
+            fs.startDownload(path)
+            return nil
+        }
+        return try fs.read(path)
+    }
+
+    /// An editor is about to read notebook `id`'s package: returns once a write of it already under way has
+    /// finished; from then on its changes wait (as for ``setOpenNotebooks(_:)``) until ``didClose(_:)``.
+    /// Outside the actor, so opening never waits for a pass, only for that notebook's write.
+    public nonisolated func willOpen(_ id: NotebookID) async {
+        await gate.open(id)
+    }
+
+    /// The editor that called ``willOpen(_:)`` closed (its last checkpoint landed).
+    public nonisolated func didClose(_ id: NotebookID) {
+        gate.close(id)
     }
 
     /// Lets the replaced version go (the pill's ×, or its 30 s).
@@ -246,6 +281,8 @@ public struct SyncProgress: Hashable, Sendable {
     public var total: Int
     /// Receiving: notebooks the pass writes ("Bringing in 14 notebooks"); sending: 0.
     public var notebooks = 0
+    /// Receiving: notebooks written before this one (the adopt card's "4 of 14").
+    public var notebooksDone = 0
 }
 
 /// What a pull wrote into the library.
@@ -260,6 +297,9 @@ public struct PullReport: Hashable, Sendable {
     public var conflicts: [Conflict] = []
     /// Names of the devices the written changes came from.
     public var fromDevices: [String] = []
+    /// Per written notebook, the device (ID) its changes came from; the first by ID if several (the card's
+    /// "From iPhone").
+    public var senders: [NotebookID: String] = [:]
 
     public init() {}
 }

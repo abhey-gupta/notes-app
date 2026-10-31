@@ -26,6 +26,7 @@ extension SyncEngine {
             names = Dictionary((try? readDevices())?.map { ($0.id, $0.name) } ?? [], uniquingKeysWith: { first, _ in first })
         }
         var done = 0
+        var started = 0
         for id in pending {
             guard let record = state.notebooks[id] else { continue }
             let snapshot = await library.snapshot()
@@ -33,7 +34,7 @@ extension SyncEngine {
             if record.materialised, !record.isDeleted, !inLibrary {
                 continue // purged here since the last pass: the push sends the delete, never brought back
             }
-            if openNotebooks.contains(id) {
+            if openNotebooks.contains(id) || !gate.beginWrite(id) {
                 try await writeLibraryFields(id, &state, snapshot: snapshot)
                 if state.notebooks[id]?.isPending == true {
                     state.deferred.insert(id)
@@ -41,11 +42,14 @@ extension SyncEngine {
                 }
                 continue
             }
-            let from = record.from.sorted().map { names[$0] ?? $0 }
+            defer { gate.endWrite() }
+            let senders = record.from.sorted()
+            let from = senders.map { names[$0] ?? $0 }
             progress(SyncProgress(
                 direction: .receiving, notebook: record[.title]?.value.decoded(String.self) ?? "", device: from.first, done: done,
-                total: total, notebooks: pending.count
+                total: total, notebooks: pending.count, notebooksDone: started
             ))
+            started += 1
             done += record.pages.values.count { $0.isPending }
             let conflicts = state.conflicts.count
             guard try await materialise(id, &state, snapshot: snapshot) else {
@@ -55,6 +59,7 @@ extension SyncEngine {
             state.deferred.remove(id)
             state.notebooks[id]?.from = []
             report.applied.append(id)
+            report.senders[id] = senders.first
             report.conflicts += state.conflicts[conflicts...]
             for name in from where !report.fromDevices.contains(name) {
                 report.fromDevices.append(name)

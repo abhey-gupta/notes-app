@@ -3,6 +3,7 @@ import Foundation
 import InkModel
 import Library
 @testable import Sync
+import Synchronization
 import Testing
 
 /// Fresh devices, open editors, and folders that aren't (yet) sync folders (#225).
@@ -20,8 +21,11 @@ struct SyncAdoptTests {
         try await a.sync()
 
         let c = Device("C", folder: folder)
-        let report = try await c.engine.adoptAll()
+        let progress = Mutex<[SyncProgress]>([])
+        let report = try await c.engine.adoptAll { p in progress.withLock { $0.append(p) } }
         #expect(Set(report.applied) == [thermo.id, old.id])
+        #expect(progress.withLock { $0.map(\.notebooksDone) } == [0, 1], "the adopt card counts notebooks")
+        #expect(progress.withLock { $0.allSatisfy { $0.notebooks == 2 && $0.device == "A" } })
         let snapshot = await c.store.snapshot()
         #expect(Set(snapshot.folders) == [university, physics])
         #expect(snapshot.notebook(thermo.id)?.folderID == physics.id)
@@ -56,6 +60,43 @@ struct SyncAdoptTests {
         #expect(applied.applied == [id] && applied.fromDevices == ["A"])
         #expect(try await b.strokes(id, page: 0) == a.strokes(id, page: 0))
         #expect(await b.store.snapshot().notebook(id)?.title == "Heat")
+    }
+
+    @Test func openingANotebookWhileAPullWritesItWaitsForTheWrite() async throws {
+        let pair = try await Pair.make()
+        let a = pair.a, b = pair.b, id = pair.id
+        try await a.ink(id, page: 0)
+        try await a.ink(id, page: 1)
+        try await a.sync()
+
+        b.fs.stallCopyOut("\(SyncLayout.blobs)/\(id)/pages/")
+        let pull = Task { try await b.engine.pull() }
+        while !b.fs.isStalling {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let opened = Mutex(false)
+        let open = Task {
+            await b.engine.willOpen(id)
+            opened.withLock { $0 = true }
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!opened.withLock { $0 }, "waits for the write under way")
+        b.fs.releaseStall()
+        await open.value
+        #expect(try await b.strokes(id, page: 0) == a.strokes(id, page: 0), "the editor reads the written package")
+        #expect(try await b.strokes(id, page: 1) == a.strokes(id, page: 1))
+        let pulled = try await pull.value
+        #expect(pulled.applied == [id] && pulled.deferred.isEmpty)
+
+        // Open now: the next change waits for the editor even before the app's open set says so.
+        try await a.ink(id, page: 0)
+        try await a.sync()
+        let deferred = try await b.engine.pull()
+        #expect(deferred.deferred == [id])
+        b.engine.didClose(id)
+        let applied = try await b.engine.applyDeferred(id)
+        #expect(applied.applied == [id])
+        #expect(try await b.strokes(id, page: 0) == a.strokes(id, page: 0))
     }
 
     @Test func oldBackupFolderIsIgnored() async throws {

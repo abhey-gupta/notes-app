@@ -46,6 +46,7 @@ struct SyncEngineTests {
         let before = try await b.strokes(id, page: 0)
         let pulled = try await b.engine.pull()
         #expect(pulled.applied == [id] && pulled.fromDevices == ["A"])
+        #expect(pulled.senders == [id: a.id], "the card says who sent it")
         #expect(try await b.strokes(id, page: 1) == a.strokes(id, page: 1))
         #expect(try await b.strokes(id, page: 0) == before)
     }
@@ -92,6 +93,36 @@ struct SyncEngineTests {
         #expect(try await a.strokes(id, page: 0) == mine)
         try await b.sync()
         #expect(try await b.strokes(id, page: 0) == mine)
+    }
+
+    @Test func keepMineInAnOpenEditorIsSentAtOnceAndNotDeferred() async throws {
+        let pair = try await Pair.make()
+        let a = pair.a, b = pair.b, id = pair.id
+        try await a.ink(id, page: 0)
+        try await b.ink(id, page: 0)
+        let mine = try #require(try await b.strokes(id, page: 0))
+        try await a.sync()
+        let (pulled, _) = try await b.sync()
+        let conflict = try #require(pulled.conflicts.first)
+        #expect(try await b.engine.replacedStrokes(of: conflict) == mine, "the ghost reads the replaced version")
+
+        // The editor has the notebook open and writes the replaced version into the page itself.
+        await b.engine.setOpenNotebooks([id])
+        await b.engine.willOpen(id)
+        let rev = try await b.write(mine, to: id, page: 0)
+        try await b.engine.keepMine(notebook: id, page: conflict.page, rev: rev)
+        #expect(try await b.engine.conflicts().isEmpty)
+        let pushed = try await b.engine.push()
+        #expect(pushed.written.isEmpty, "Keep mine already sent it")
+        let pulledAgain = try await b.engine.pull()
+        #expect(pulledAgain.deferred.isEmpty, "nothing waits for the editor")
+
+        let (back, _) = try await a.sync()
+        #expect(back.conflicts.isEmpty)
+        #expect(try await a.strokes(id, page: 0) == mine, "A shows the kept version, byte for byte")
+        b.engine.didClose(id)
+        let (after, _) = try await b.sync()
+        #expect(after.applied.isEmpty && after.conflicts.isEmpty, "B already shows it")
     }
 
     @Test func editAfterDeleteBringsTheNotebookBackToTheRoot() async throws {
