@@ -48,8 +48,8 @@ struct LibraryHeader: View {
     }
 
     private var header: some View {
-        // The title stays level with the controls; the sync line sits on its baseline, outside the layout, so
-        // the bar never changes height (its scroll-edge effect would follow anything drawn below it).
+        // The title stays level with the controls; the sync line has a fixed slot under the title, so the bar
+        // never changes height (nothing shifts; its scroll-edge effect would follow anything hung below it).
         HStack(alignment: .titleCenter, spacing: Tokens.Spacing.m) {
             if let showSidebar {
                 circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
@@ -74,13 +74,8 @@ struct LibraryHeader: View {
                         }
                     }
                     .alignmentGuide(.titleCenter) { $0[VerticalAlignment.center] }
-                    // Hangs off the title's trailing edge, outside the layout: the search group never
-                    // shifts when the line comes and goes.
-                    .overlay(alignment: Alignment(horizontal: .trailing, vertical: .firstTextBaseline)) {
-                        SyncStatusLine()
-                            .fixedSize()
-                            .alignmentGuide(.trailing) { $0[.leading] - Tokens.Spacing.l }
-                    }
+                SyncStatusLine()
+                    .frame(height: SyncStatusLine.slot, alignment: .top)
             }
             .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
@@ -260,12 +255,12 @@ struct LibraryHeader: View {
     }
 }
 
-/// Compact chrome's serif title, scrolling with the content (#118), with the sync line beside it (#225).
+/// Compact chrome's serif title, scrolling with the content (#118), with the sync line's slot under it (#225).
 struct CompactLibraryTitle: View {
     let title: String
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.l) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(title)
                 .font(.libraryTitle)
                 .tracking(-0.5)
@@ -273,6 +268,7 @@ struct CompactLibraryTitle: View {
                 .lineLimit(2)
                 .accessibilityAddTraits(.isHeader)
             SyncStatusLine()
+                .frame(height: SyncStatusLine.slot, alignment: .top)
         }
     }
 }

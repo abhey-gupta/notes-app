@@ -100,7 +100,7 @@ struct LibraryScreen: View {
                 if isCompact {
                     CompactLibraryTitle(title: library.folder(id: folder)?.name ?? "Library")
                         .padding(.horizontal, margin)
-                        .padding(.bottom, Tokens.Spacing.xxl)
+                        .padding(.bottom, Tokens.Spacing.s)
                 }
                 if query.isEmpty, folder == nil, !library.recents.isEmpty {
                     Text("Continue")
@@ -117,7 +117,8 @@ struct LibraryScreen: View {
                     .padding(.horizontal, margin)
                     .padding(.top, isCompact ? Tokens.Spacing.xl : 26)
             }
-            .padding(.top, isCompact ? Tokens.Spacing.s : 22)
+            // Regular: the header's sync-line slot gives most of the gap above the content.
+            .padding(.top, Tokens.Spacing.s)
             .padding(.bottom, 60)
         }
         .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
