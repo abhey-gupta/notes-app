@@ -32,6 +32,20 @@ _Avoid_: Picker, gallery, media browser
 Paper added beside the original page width, on the left and/or the right; every page of a notebook shares it. A side grab (press-hold at a page edge, drag) changes it.
 _Avoid_: Margin, canvas size, landscape
 
+## Backup
+
+**Backup**:
+A copy of the library in a folder outside the app, kept up to date as the user writes: only what changed since the last copy is copied. One way: a backup never changes the library.
+_Avoid_: Sync, export, archive
+
+**Backup folder**:
+The folder in Files the user picked for the backup (in iCloud Drive, Google Drive, Dropbox…). It holds the notebooks, deleted notebooks until their purge, and a list of both.
+_Avoid_: Destination, remote, cloud
+
+**Restore**:
+Bringing notebooks from the backup folder into the library, with their folders. Never replaces a notebook the library has.
+_Avoid_: Import, sync, download
+
 ## Changes
 
 **Page edit**:

@@ -32,6 +32,7 @@ notes-app/
     Canvas/                   page layout, virtualization, scroll/zoom host, thumbnails (UIKit)
     Document/                 package format, codec, WAL autosave, migrations (Foundation only)
     Library/                  index store, search, folders (Foundation only)
+    Backup/                   incremental mirror of the library to a Files folder, restore (Foundation only, #174)
     Export/                   PDF renderer (CoreGraphics)
     DesignSystem/             tokens, glass capsule, typography, themes (SwiftUI)
     Perf/                     signposts, MetricKit, debug HUD
@@ -51,13 +52,14 @@ App
  ├─ Editing ─ Tools, Document
  ├─ Tools       ├─ InkEnginePencilKit ├─ InkEngine ─┐
  ├─ Library     │                    │             ├─ InkGeometry ─ InkModel
+ ├─ Backup ─ Library, Document
  ├─ Export ─────┤                    │             │
  ├─ Document ───┘                    └─────────────┘
  ├─ DesignSystem
  └─ Perf
 ```
 
-Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Document`, `Library`, `Tools`, `Editing`, `Export` (CoreGraphics is available on macOS), and `Canvas`'s `PageLayout`, `PageWindow` and `PageResidency` (its UIKit host compiles out). Simulator-only: `InkEngine*`, the rest of `Canvas`, `DesignSystem`, App.
+Headless-testable with `swift test` on macOS: `InkModel`, `InkGeometry`, `Document`, `Library`, `Backup`, `Tools`, `Editing`, `Export` (CoreGraphics is available on macOS), and `Canvas`'s `PageLayout`, `PageWindow` and `PageResidency` (its UIKit host compiles out). Simulator-only: `InkEngine*`, the rest of `Canvas`, `DesignSystem`, App.
 
 Concurrency: value types everywhere in `InkModel` (`Sendable` structs). UIKit/Metal view classes are `@MainActor`. Background work lives in actors (`DocumentStore`, `LibraryStore`, `ThumbnailService`, `TileRenderer`). No `@unchecked Sendable` without a comment explaining why.
 
@@ -321,6 +323,18 @@ Glass: native Liquid Glass, verified in the iOS 27.1 SDK (all `@available(iOS 26
 - New notebook sheet (mock §06): title, cover color (8), paper (Blank/Lined/Dotted/Grid), paper style (White/Cream/Night), A4 portrait fixed. Create → write package + index entry → push editor on page 1 in the same transaction (no interim library state).
 - Management: rename, move to folder, delete (trash to `Library/Trash/`, purged after 30 days), duplicate. Context menu on covers.
 - Open notebook < 150 ms (#43): index already has everything the editor needs to lay out pages (page count, page size), so the first frame is paper for every page; as soon as the manifest is read (page IDs) page 1 shows `thumbs/<id>.heic` scaled up, `DocumentStore` loads page 1's strokes (< 10 ms) and the first sharp raster (or the canvas's own render, whichever lands first) replaces the thumbnail with a 120 ms crossfade (`canvas.firstSharpTile`). Pages 2–3 load next (`PageWindow.loadOrder`). Nothing else is read until scrolled near. The index holds no page IDs, so the thumbnail can't be in the very first frame; it follows a few ms later.
+
+### 8.1 Backup (#174)
+
+A one-way, incremental mirror of the library into a folder the user picks once in Files (`.fileImporter`, `.folder`), kept as a bookmark in `UserDefaults`. iCloud Drive, Google Drive, Dropbox… are all just folders there: no entitlements, no SDKs; the provider uploads out of process. Off until a folder is chosen. Backup, not sync: this iPad's copy always wins (§16 sync ships the journal).
+
+- **Folder layout**: `library.json` (folders, notebooks with title, folder, cover, paper, pages, modified, rev, trashed; device; written at) · `Notebooks/<id>.nb/` · `Trash/<id>.nb/`. `library.json` is what Restore lists (no manifest reads) and keeps notebooks another device or an earlier install backed up, while their packages are there.
+- **Incremental** (`Packages/Backup`): `BackupPlanner` is pure: library snapshot (+ trash), `backup-state.json` (FORMAT.md) and a listing of the folder → per-notebook operations. One `stat` per package (manifest, cover); a manifest whose date moved is read: `manifest.json`, `pages/<id>.strokes` of pages whose `rev` moved, remote stroke files of pages gone, `images/*` and `backgrounds/*` once (immutable, by name), `thumbs/cover.heic` when its date moved. Never journals (revs only move at checkpoint, so the stroke file is complete), page thumbnails or `backup-v*`. Trashed → package moves to `Trash/`; restored → back; purged or removed → deleted. Operations run move first, `manifest.json` last; `library.json` after all. A package missing from the folder, or a missing/damaged state, means copy everything again.
+- **Writes**: copy to a hidden temp file beside the target inside the folder (APFS clone where it can), then atomic replace, under `NSFileCoordinator` (`.forReplacing`/`.forMoving`/`.forDeleting`); reads (`library.json`, Restore) are coordinated reads, which download placeholders. Coordination is cancelled after 60 s (Restore 300 s): the run fails, the next trigger retries.
+- **Triggers** (`BackupModel`, app): any library change (checkpoints arrive as `documentDidSave`; rename, move, trash, new…) → 10 s debounce; leaving the editor → once its sessions' final checkpoints land; scene background → at once, in `beginBackgroundTask` (and every change until active again); launch → after the library loads; Back Up Now. Runs serialize on the `BackupEngine` actor (off main); one asked for during a run makes it run once more.
+- **Status**: off · idle (last backup, notebooks, bytes) · copying (notebook, n of m, bytes left) · uploading (iCloud Drive files written this session with `ubiquitousItemIsUploaded == false`, polled every 3 s; other providers don't say, so idle) · folder unavailable (bookmark doesn't resolve: choose it again) · failed (sentence; retried next trigger). Settings › Backup shows it in the footer and a 3 pt hairline while copying; under the library title a caption line "Backing up <title> · n of m" with a 120 pt hairline, then "Backed up just now" for 2 s, then it folds away (mock 05-D). No spinners.
+- **Restore**: Settings › Restore… pushes a list in the popover (mock 03); a fresh library with a backup shows a glass card (mock 04). The package is copied to a hidden staging directory in `Documents/Notebooks`, then `LibraryStore.adoptPackage` renames it into place, recreates its folders with their IDs and adds the entry; a notebook the library (or its trash) has is never replaced.
+- `-backupRoot <path>` (DEBUG, simulator): back up to that folder without the picker (UI tests).
 
 ## 9. PDF export
 
