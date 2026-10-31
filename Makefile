@@ -3,7 +3,7 @@ DEST := platform=iOS Simulator,name=$(SIM)
 HEADLESS := InkModel InkGeometry Document Library Sync Tools Editing Export Fixtures Canvas
 XCB := $(shell command -v xcbeautify >/dev/null && echo "| xcbeautify" )
 
-.PHONY: gen lint format test-packages build device ipa test test-unit test-ui perf perf-device perf-gate perf-baseline fixtures open clean
+.PHONY: gen lint format test-packages build device phone ipa test test-unit test-ui perf perf-device perf-gate perf-baseline fixtures open clean
 
 gen:
 	xcodegen generate --quiet
@@ -30,6 +30,11 @@ device: gen
 		ASSETCATALOG_COMPILER_APPICON_NAME=AppIconDev $(XCB)
 	xcrun devicectl device install app --device $(DEVICE) build/device/Build/Products/Release-iphoneos/Notespace.app
 	xcrun devicectl device process launch --device $(DEVICE) com.abhey.notespace
+
+# Same onto the test iPhone (#209).
+IPHONE ?= 00008130-000C188801F0001C
+phone:
+	$(MAKE) device DEVICE=$(IPHONE)
 
 # Unsigned Release .ipa + dSYM zip for sideloading (AltStore/SideStore re-sign it with your Apple ID).
 # VERSION/BUILD override MARKETING_VERSION/CURRENT_PROJECT_VERSION (release.yml: tag, run number).

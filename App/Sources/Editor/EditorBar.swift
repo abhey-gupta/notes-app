@@ -131,10 +131,14 @@ struct EditorBar: View {
         }
     }
 
+    /// "1 of 11"; "1/11" in compact chrome (#209), read as "1 of 11".
     private var counter: some View {
         let scale = typeSize.chromeScale
-        return Text("\(page.current) of \(page.total)")
+        return Text(chrome.isCompact ? "\(page.current)/\(page.total)" : "\(page.current) of \(page.total)")
             .font(.pill)
+            .lineLimit(1)
+            .fixedSize()
+            .accessibilityLabel("\(page.current) of \(page.total)")
             .foregroundStyle(Tokens.Colors.textSecondary)
             .contentTransition(.numericText())
             .padding(.trailing, Tokens.Spacing.m)

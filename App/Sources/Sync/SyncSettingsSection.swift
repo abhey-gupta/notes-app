@@ -15,7 +15,9 @@ struct SyncSettingsSection: View {
 
     var body: some View {
         Section {
-            SettingRow(.sync, "Sync", "Pick a folder in Files. Every device that uses it keeps the same notebooks.") {
+            SettingRow(
+                .sync, "Sync", "Pick a folder in Files. Every device that uses it keeps the same notebooks.", controlBelow: true
+            ) {
                 if sync.folderName == nil {
                     Button("Choose Folder…") { picksFolder = true }
                         .accessibilityIdentifier("chooseSyncFolder")

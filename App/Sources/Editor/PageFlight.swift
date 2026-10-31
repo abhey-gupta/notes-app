@@ -82,12 +82,12 @@ final class PageFlightView: UIView {
     // MARK: Poses
 
     /// The page where it is on screen: the container is the visible part, the thumbnail region sits
-    /// top-left of the page behind it. `capture` frames are window coordinates.
-    func pagePose(_ capture: PageCapture) -> Pose {
+    /// top-left of the page behind it. `capture` frames are window coordinates; `thumb` is the cell's size.
+    func pagePose(_ capture: PageCapture, thumb: CGSize) -> Pose {
         let page = convert(capture.pageFrame, from: nil)
         let visible = convert(capture.visibleFrame, from: nil)
-        let scale = Self.thumbScale(pageSize: page.size)
-        let thumbSize = CGSize(width: Tokens.Size.pageThumb.width / scale, height: Tokens.Size.pageThumb.height / scale)
+        let scale = Self.thumbScale(pageSize: page.size, thumb: thumb)
+        let thumbSize = CGSize(width: thumb.width / scale, height: thumb.height / scale)
         let origin = CGPoint(x: page.minX - visible.minX, y: page.minY - visible.minY)
         return Pose(
             container: visible,
@@ -103,7 +103,7 @@ final class PageFlightView: UIView {
     func cellPose(_ capture: PageCapture, cell: CGRect) -> Pose {
         let page = capture.pageFrame
         let visible = capture.visibleFrame
-        let scale = Self.thumbScale(pageSize: page.size)
+        let scale = Self.thumbScale(pageSize: page.size, thumb: cell.size)
         let local = CGRect(
             x: (visible.minX - page.minX) * scale, y: (visible.minY - page.minY) * scale,
             width: visible.width * scale, height: visible.height * scale
@@ -111,16 +111,15 @@ final class PageFlightView: UIView {
         return Pose(
             container: convert(cell, from: nil),
             snapshot: local,
-            thumb: CGRect(origin: .zero, size: Tokens.Size.pageThumb),
+            thumb: CGRect(origin: .zero, size: cell.size),
             radius: Tokens.Radius.pageThumb,
             shadowOpacity: Float(Tokens.Shadows.thumb.color.alpha)
         )
     }
 
     /// `ThumbnailService.Frame.pageFrame`: the page scaled to fill the thumb, top-left aligned.
-    private static func thumbScale(pageSize: CGSize) -> CGFloat {
-        let thumb = Tokens.Size.pageThumb
-        return max(thumb.width / max(pageSize.width, 1), thumb.height / max(pageSize.height, 1))
+    private static func thumbScale(pageSize: CGSize, thumb: CGSize) -> CGFloat {
+        max(thumb.width / max(pageSize.width, 1), thumb.height / max(pageSize.height, 1))
     }
 
     // MARK: Flight
