@@ -9,7 +9,9 @@ import UIKit
 ///
 /// - Tap a page: close and scroll the canvas to it.
 /// - Long-press and drag a page onto another: move it there (one undo step).
-/// - Bottom capsule: new page with that template after the current one.
+/// - Bottom capsule: new page with that template after the current one (compact: a "New page" menu).
+///
+/// Compact (iPhone, #209): the header in two rows, two columns of smaller thumbs.
 /// - Select: multi-select, Delete asks first only if a selected page has ink.
 /// - Go to page (#214): type a number; the grid scrolls there and the page lifts with a fading halo.
 ///
@@ -34,6 +36,7 @@ struct PagesOverview: View {
     @State private var confirmsDelete = false
     @State private var drag: Drag?
     @State private var isJumping = false
+    @State private var gridWidth: CGFloat = 0
     @State private var arrival = PageArrival()
     @State private var flight: PagesFlight
 
@@ -62,8 +65,12 @@ struct PagesOverview: View {
                 grid
             }
             if !isSelecting {
-                TemplateCapsule(paper: paper) { style in
-                    model.onInsert(currentIndex, style)
+                Group {
+                    if chrome.isCompact {
+                        TemplateMenuButton { style in model.onInsert(currentIndex, style) }
+                    } else {
+                        TemplateCapsule(paper: paper) { style in model.onInsert(currentIndex, style) }
+                    }
                 }
                 .padding(.bottom, Tokens.Spacing.xxl)
                 .transition(.opacity)
@@ -101,50 +108,24 @@ struct PagesOverview: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .center, spacing: Tokens.Spacing.m) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.pagesHeading)
-                    .foregroundStyle(Tokens.Colors.textPrimary)
-                    .lineLimit(1)
-                    .accessibilityAddTraits(.isHeader)
-                Text(EditedLabel.pages(model.entries.count))
-                    .scaledFont(size: 13, weight: .medium)
-                    .foregroundStyle(Tokens.Colors.textSecondary)
-                    .contentTransition(.numericText())
-                    .accessibilityIdentifier("pagesCount")
-            }
-            Spacer(minLength: Tokens.Spacing.m)
-            if !isSelecting {
-                PageJumpControl(count: model.entries.count, isOpen: $isJumping) { index in
-                    arrival.jump(to: model.entries[index].id, number: index + 1, reduceMotion: reduceMotion)
-                }
-                .transition(.opacity)
-            }
-            GlassCapsule(height: Tokens.Size.focusPillHeight, leading: Tokens.Spacing.xs, trailing: Tokens.Spacing.xs) {
-                ToolButton(.undo, "Undo", size: Tokens.Size.compactToolButton, action: state.undo)
-                    .disabled(!state.canUndo)
-                ToolButton(.redo, "Redo", size: Tokens.Size.compactToolButton, action: state.redo)
-                    .disabled(!state.canRedo)
-            }
-            OverviewHeaderButtons(
-                isSelecting: isSelecting,
-                selectedCount: selected.count,
-                canDelete: !selected.isEmpty && selected.count < model.entries.count,
-                onSelect: {
-                    isJumping = false
-                    isSelecting = true
-                },
-                onDelete: requestDelete,
-                onCancel: endSelecting,
-                onDone: { flight.close(to: nil, current: currentIndex, reduceMotion: reduceMotion) }
-            )
-        }
-        // Clear of an iPadOS window's controls (#118).
-        .padding(.leading, chrome.margin + chrome.windowControls.leading)
-        .padding(.trailing, chrome.margin)
-        .padding(.top, Tokens.Spacing.xxl)
-        .padding(.bottom, Tokens.Spacing.s)
+        PagesOverviewHeader(
+            title: title,
+            count: model.entries.count,
+            state: state,
+            isSelecting: isSelecting,
+            selectedCount: selected.count,
+            isJumping: $isJumping,
+            onJump: { index in
+                arrival.jump(to: model.entries[index].id, number: index + 1, reduceMotion: reduceMotion)
+            },
+            onSelect: {
+                isJumping = false
+                isSelecting = true
+            },
+            onDelete: requestDelete,
+            onCancel: endSelecting,
+            onDone: { flight.close(to: nil, current: currentIndex, reduceMotion: reduceMotion) }
+        )
     }
 
     // MARK: Grid
@@ -152,7 +133,7 @@ struct PagesOverview: View {
     private var grid: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVGrid(columns: Self.columns, alignment: .center, spacing: Tokens.Spacing.xxl) {
+                LazyVGrid(columns: layout.columns, alignment: .center, spacing: Tokens.Spacing.xxl) {
                     ForEach(Array(model.entries.enumerated()), id: \.element.id) { index, entry in
                         cell(entry, at: index)
                     }
@@ -165,12 +146,16 @@ struct PagesOverview: View {
             .coordinateSpace(.named(Self.gridSpace))
             .scrollIndicators(.hidden)
             .scrollDisabled(drag != nil)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { flight.geometry.scroll = $0 }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                flight.geometry.scroll = $0
+                gridWidth = $0.width
+            }
             .onAppear {
                 arrival.proxy = proxy
                 FrameAfter.next { flight.arrive(proxy, current: currentIndex, reduceMotion: reduceMotion) }
             }
             .onDisappear(perform: arrival.cancel)
+            .onChange(of: layout, initial: true) { flight.geometry.layout = layout }
         }
     }
 
@@ -192,16 +177,10 @@ struct PagesOverview: View {
             showsContent: !(isAnchor && flight.hidesAnchorContent),
             showsChrome: !isAnchor || flight.isOpen,
             chromeAnimation: isAnchor ? segment(0.7, 1) : nil,
-            halo: arriving ? (lifted ? 1 : 0.6) : 0
+            halo: arriving ? (lifted ? 1 : 0.6) : 0,
+            size: layout.thumb
         )
-        .overlay(alignment: dropEdge(for: index)) {
-            if drag?.target == index, !dragging {
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Tokens.Colors.selection)
-                    .frame(width: Tokens.Size.pageThumbRing, height: Tokens.Size.pageThumb.height)
-                    .offset(x: dropEdge(for: index) == .leading ? -Tokens.Size.pageThumbGap / 2 : Tokens.Size.pageThumbGap / 2)
-            }
-        }
+        .overlay(alignment: dropEdge(for: index)) { dropIndicator(index, dragging: dragging) }
         .scaleEffect(dragging ? 1.04 : lifted ? 1.06 : settled ? 1 : 0.96)
         .opacity(settled ? 1 : 0)
         .offset(dragging ? drag?.translation ?? .zero : .zero)
@@ -224,6 +203,16 @@ struct PagesOverview: View {
             if index < model.entries.count - 1 {
                 Button("Move later") { model.onMove(index, index + 1) }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func dropIndicator(_ index: Int, dragging: Bool) -> some View {
+        if drag?.target == index, !dragging {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Tokens.Colors.selection)
+                .frame(width: Tokens.Size.pageThumbRing, height: layout.thumb.height)
+                .offset(x: dropEdge(for: index) == .leading ? -layout.gap / 2 : layout.gap / 2)
         }
     }
 
@@ -327,10 +316,7 @@ private extension PagesOverview {
         var target: Int?
     }
 
-    static let columns = [
-        GridItem(
-            .adaptive(minimum: Tokens.Size.pageThumb.width, maximum: Tokens.Size.pageThumb.width),
-            spacing: Tokens.Size.pageThumbGap, alignment: .top
-        ),
-    ]
+    var layout: PagesGridLayout {
+        PagesGridLayout(isCompact: chrome.isCompact, width: gridWidth, margin: chrome.margin)
+    }
 }

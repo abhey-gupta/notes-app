@@ -116,7 +116,12 @@ struct SettingsView: View {
                 }
             }
             Section("Pages") {
-                SettingRow(.newPages, "New pages", "Manual: tap + under the last page. Automatic: a blank page is always waiting.") {
+                SettingRow(
+                    .newPages,
+                    "New pages",
+                    "Manual: tap + under the last page. Automatic: a blank page is always waiting.",
+                    controlBelow: true
+                ) {
                     Picker("New pages", selection: $newPages) {
                         Text("Manual").tag(NewPages.manual)
                         Text("Automatic").tag(NewPages.automatic)
@@ -154,37 +159,69 @@ struct SettingsView: View {
 }
 
 /// One setting: its demo, name, one sentence, and its control (a toggle's own label is hidden; the name says it).
+/// Compact (iPhone, #209): name and control on top, the demo full width under them; a wide control
+/// (`controlBelow`) goes under the sentence.
 struct SettingRow<Control: View>: View {
     private let demo: SettingDemo.Kind
     private let title: String
     private let detail: String
+    private let controlBelow: Bool
     private let control: Control
 
-    init(_ demo: SettingDemo.Kind, _ title: String, _ detail: String, @ViewBuilder control: () -> Control) {
+    @Environment(\.chromeLayout) private var chrome
+
+    init(
+        _ demo: SettingDemo.Kind, _ title: String, _ detail: String, controlBelow: Bool = false,
+        @ViewBuilder control: () -> Control
+    ) {
         self.demo = demo
         self.title = title
         self.detail = detail
+        self.controlBelow = controlBelow
         self.control = control()
     }
 
     var body: some View {
-        HStack(spacing: Tokens.Spacing.xl) {
-            SettingDemo(kind: demo)
-                .frame(width: 134, height: 86)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .scaledFont(size: 16.5, weight: .semibold)
-                    .foregroundStyle(Tokens.Colors.textPrimary)
-                Text(detail)
-                    .scaledFont(size: 14)
-                    .foregroundStyle(Tokens.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        if chrome.isCompact {
+            VStack(alignment: .leading, spacing: Tokens.Spacing.m) {
+                HStack(alignment: .top, spacing: Tokens.Spacing.m) {
+                    text
+                    if !controlBelow {
+                        Spacer(minLength: Tokens.Spacing.m)
+                        control.labelsHidden()
+                    }
+                }
+                if controlBelow {
+                    control.labelsHidden()
+                }
+                SettingDemo(kind: demo)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 100)
             }
-            Spacer(minLength: Tokens.Spacing.m)
-            control
-                .labelsHidden()
+            .padding(.vertical, Tokens.Spacing.xs)
+        } else {
+            HStack(spacing: Tokens.Spacing.xl) {
+                SettingDemo(kind: demo)
+                    .frame(width: 134, height: 86)
+                text
+                Spacer(minLength: Tokens.Spacing.m)
+                control
+                    .labelsHidden()
+            }
+            .padding(.vertical, Tokens.Spacing.xs)
         }
-        .padding(.vertical, Tokens.Spacing.xs)
+    }
+
+    private var text: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .scaledFont(size: 16.5, weight: .semibold)
+                .foregroundStyle(Tokens.Colors.textPrimary)
+            Text(detail)
+                .scaledFont(size: 14)
+                .foregroundStyle(Tokens.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

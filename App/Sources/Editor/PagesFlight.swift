@@ -24,11 +24,13 @@ final class PagesFlight {
         var scroll = CGRect.zero
         /// Visible cells' frames in the scroll view's space.
         var cells: [Int: CGRect] = [:]
+        /// The grid's thumb size and spacing (smaller in compact, #209).
+        var layout = PagesGridLayout(isCompact: false, width: 0, margin: Tokens.Spacing.libraryMargin)
 
         /// Where cell `index`'s thumbnail is on screen (window coordinates), if the cell is laid out.
         func thumbFrame(_ index: Int) -> CGRect? {
             guard let cell = cells[index] else { return nil }
-            return CGRect(origin: CGPoint(x: scroll.minX + cell.minX, y: scroll.minY + cell.minY), size: Tokens.Size.pageThumb)
+            return CGRect(origin: CGPoint(x: scroll.minX + cell.minX, y: scroll.minY + cell.minY), size: layout.thumb)
         }
 
         /// Whole thumb inside the scroll view and clear of the template capsule.
@@ -82,8 +84,9 @@ final class PagesFlight {
 
     /// Cells fade in from the anchor outwards, 25 ms per cell of distance.
     func rippleDelay(index: Int, anchor: Int) -> Double {
-        let width = geometry.scroll.width - 2 * Tokens.Spacing.libraryMargin + Tokens.Size.pageThumbGap
-        let columns = max(1, Int(width / (Tokens.Size.pageThumb.width + Tokens.Size.pageThumbGap)))
+        let layout = geometry.layout
+        let width = geometry.scroll.width - 2 * layout.margin + layout.gap
+        let columns = max(1, Int(width / (layout.thumb.width + layout.gap)))
         let distance = max(abs(index % columns - anchor % columns), abs(index / columns - anchor / columns))
         return FlightTiming.rippleDelay(distance: distance)
     }
@@ -126,7 +129,7 @@ final class PagesFlight {
         stage = .flying
         isFlying = true
         let plan = PageFlightView.Plan(
-            from: view.pagePose(capture), to: view.cellPose(capture, cell: cell), opening: true,
+            from: view.pagePose(capture, thumb: cell.size), to: view.cellPose(capture, cell: cell), opening: true,
             paper: paper, snapshot: capture.snapshot, thumb: nil
         )
         view.fly(plan) { [self] in land() }
@@ -178,7 +181,7 @@ final class PagesFlight {
             guard stage == .leaving(target) else { return }
             isFlying = true
             let plan = PageFlightView.Plan(
-                from: view.cellPose(capture, cell: cell), to: view.pagePose(capture), opening: false,
+                from: view.cellPose(capture, cell: cell), to: view.pagePose(capture, thumb: cell.size), opening: false,
                 paper: paper, snapshot: capture.snapshot, thumb: thumb
             )
             view.fly(plan) { [model] in model.dismiss() }
@@ -201,5 +204,32 @@ final class PagesFlight {
                 apply(image)
             }
         }
+    }
+}
+
+/// The overview grid's thumb size and spacing: full size, or (compact, #209) two columns across the
+/// grid, at most full size.
+struct PagesGridLayout: Equatable {
+    var thumb = Tokens.Size.pageThumb
+    var gap = Tokens.Size.pageThumbGap
+    var margin: CGFloat
+    var isCompact: Bool
+
+    init(isCompact: Bool, width: CGFloat, margin: CGFloat) {
+        self.isCompact = isCompact
+        self.margin = margin
+        guard isCompact else { return }
+        gap = 20
+        guard width > 0 else { return }
+        let full = Tokens.Size.pageThumb
+        let side = min(full.width, ((width - 2 * margin - gap) / 2).rounded(.down))
+        thumb = CGSize(width: side, height: (side * full.height / full.width).rounded())
+    }
+
+    var columns: [GridItem] {
+        guard isCompact else {
+            return [GridItem(.adaptive(minimum: thumb.width, maximum: thumb.width), spacing: gap, alignment: .top)]
+        }
+        return Array(repeating: GridItem(.fixed(thumb.width), spacing: gap, alignment: .top), count: 2)
     }
 }

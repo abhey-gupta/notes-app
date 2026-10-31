@@ -7,7 +7,7 @@ import SwiftUI
 /// Import PDF (#119, UI agreed 2026-10-26): a centred card like the new-notebook sheet. Cancel · "Import
 /// PDF" · dark Import pill; the first three pages and "+ N pages"; title (the file name) and folder
 /// (the one open in the library); "24 pages · 3.1 MB". Import hands the draft back; the library writes
-/// the notebook and opens it on page 1.
+/// the notebook and opens it on page 1. Compact (iPhone, #209): full width, the pages strip scrolls.
 struct PDFImportSheet: View {
     let request: PDFImportRequest
     let library: any LibraryModel
@@ -19,6 +19,7 @@ struct PDFImportSheet: View {
     @State private var isImporting = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.chromeLayout) private var chrome
 
     private static let shownPages = 3
     private static let thumbWidth: CGFloat = 104
@@ -43,11 +44,12 @@ struct PDFImportSheet: View {
             footnote
                 .padding(.top, 16)
         }
-        .padding(.horizontal, 30)
+        .padding(.horizontal, chrome.isCompact ? 20 : 30)
         .padding(.top, 24)
         .padding(.bottom, 24)
-        .frame(width: 560)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: chrome.isCompact ? nil : 560)
+        .frame(maxHeight: chrome.isCompact ? .infinity : nil, alignment: .top)
+        .fixedSize(horizontal: false, vertical: !chrome.isCompact)
         .presentationSizing(.fitted)
         .task {
             preview = await PDFImportPreview.load(request.url, count: Self.shownPages, width: Self.thumbWidth, scale: displayScale)
@@ -78,8 +80,23 @@ struct PDFImportSheet: View {
         }
     }
 
-    /// The first pages on the sheet's inset panel, at the notebook's page proportions.
+    /// The first pages on the sheet's inset panel, at the notebook's page proportions; compact, they scroll.
     private var pages: some View {
+        Group {
+            if chrome.isCompact {
+                ScrollView(.horizontal) { pageStrip }
+                    .scrollIndicators(.hidden)
+            } else {
+                pageStrip
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Tokens.Colors.sheetPanel, in: .rect(cornerRadius: Tokens.Radius.preview, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(preview.map { "\($0.pageCount) pages" } ?? "Pages")
+    }
+
+    private var pageStrip: some View {
         let size = preview?.pageSize ?? Notebook.a4Portrait
         let thumb = CGSize(width: Self.thumbWidth, height: (Self.thumbWidth * size.height / size.width).rounded())
         let shown = preview.map { min($0.pageCount, Self.shownPages) } ?? Self.shownPages
@@ -98,10 +115,6 @@ struct PDFImportSheet: View {
         }
         .padding(.horizontal, Tokens.Spacing.xxl)
         .padding(.vertical, 22)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Tokens.Colors.sheetPanel, in: .rect(cornerRadius: Tokens.Radius.preview, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(preview.map { "\($0.pageCount) pages" } ?? "Pages")
     }
 
     /// White paper until the page renders (no spinner), then the page.

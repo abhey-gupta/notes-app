@@ -198,7 +198,7 @@ struct EditorScreen: View {
         return EditorPane(
             pane: pane, session: entry.session, notebook: entry.notebook, library: library, tools: tools, tabs: tabs,
             isFocused: isFocusMode, capsuleRoom: capsuleRoom, isAtTop: isAtTop,
-            fitDesk: isSplit && geometry.axis == .horizontal ? Self.splitDesk : CanvasHostView.defaultFitDesk,
+            fitDesk: fitDesk(split: isSplit && geometry.axis == .horizontal),
             onBarHeight: { barHeights[pane] = $0 }, onBack: { dismiss() }, onCloseTab: closeTab,
             actions: SplitActions(
                 open: { split.open($0, beside: pane, showing: showing) },
@@ -210,6 +210,12 @@ struct EditorScreen: View {
 
     /// Desk each side of a fitted page in a side-by-side pane: the page keeps most of its width.
     private static let splitDesk: CGFloat = 32
+    /// Phone width (#209): the page nearly edge to edge.
+    private static let compactDesk: CGFloat = 8
+
+    private func fitDesk(split: Bool) -> CGFloat {
+        chrome.isCompact ? Self.compactDesk : split ? Self.splitDesk : CanvasHostView.defaultFitDesk
+    }
 
     /// The tools capsule, for the focused pane.
     private func tools(for entry: Entry, isFocusMode: Bool, hidden: Bool) -> some View {

@@ -22,23 +22,27 @@ struct PageThumb: View {
     var chromeAnimation: Animation?
     /// Arrival halo after "Go to page" (#214): 1 while lifted, fading to 0.
     var halo: Double = 0
+    /// Smaller in the compact two-column grid (#209).
+    var size = Tokens.Size.pageThumb
 
-    private static let size = Tokens.Size.pageThumb
     private static let haloWidth: CGFloat = 10
+
     /// Template spacing scaled from page points to thumb points.
-    private static let spacing = Tokens.Size.templateSpacing * Tokens.Size.pageThumb.width / Tokens.Size.pageA4.width
+    private var spacing: CGFloat {
+        Tokens.Size.templateSpacing * size.width / Tokens.Size.pageA4.width
+    }
 
     var body: some View {
         let ringed = (isSelecting ? isSelected : isCurrent) && showsChrome
         VStack(spacing: 10) {
             ZStack {
                 Rectangle().fill(paper.paper.color)
-                PaperPatternView(entry.pattern, color: paper.templateLine.color, spacing: Self.spacing)
+                PaperPatternView(entry.pattern, color: paper.templateLine.color, spacing: spacing)
                 if let url = entry.thumbnail {
                     ThumbnailImage(url: url, version: version)
                 }
             }
-            .frame(width: Self.size.width, height: Self.size.height)
+            .frame(width: size.width, height: size.height)
             .clipShape(.rect(cornerRadius: Tokens.Radius.pageThumb))
             .overlay {
                 RoundedRectangle(cornerRadius: Tokens.Radius.pageThumb + Tokens.Size.pageThumbRing)
@@ -128,7 +132,42 @@ struct TemplateCapsule: View {
     }
 }
 
-/// Header buttons: Select / Done, or in select mode Delete / Cancel.
+/// Compact "New page" (#209): one glass button, the templates in its menu.
+struct TemplateMenuButton: View {
+    let onPick: (PaperStyle) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(PaperStyle.allCases, id: \.self) { style in
+                Button(style.displayName) { onPick(style) }
+                    .accessibilityIdentifier("newPage-\(style.rawValue)")
+            }
+        } label: {
+            GlassCapsule(
+                height: Tokens.Size.templateCapsuleHeight,
+                leading: Tokens.Spacing.xl,
+                trailing: Tokens.Spacing.xl,
+                spacing: Tokens.Spacing.s
+            ) {
+                Image(systemName: "plus")
+                    .scaledFont(size: 15, weight: .semibold)
+                Text("New page")
+                    .scaledFont(size: 15, weight: .medium)
+                Image(systemName: "chevron.down")
+                    .scaledFont(size: 11, weight: .semibold)
+                    .foregroundStyle(Tokens.Colors.textTertiary)
+            }
+            .foregroundStyle(Tokens.Colors.textPrimary)
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel("New page")
+        .accessibilityIdentifier("newPageMenu")
+    }
+}
+
+/// Header buttons: Select / Done, or in select mode Delete / Cancel; compact headers split them across
+/// two rows (`slot`).
 struct OverviewHeaderButtons: View {
     let isSelecting: Bool
     let selectedCount: Int
@@ -137,30 +176,48 @@ struct OverviewHeaderButtons: View {
     let onDelete: () -> Void
     let onCancel: () -> Void
     let onDone: () -> Void
+    var slot = Slot.both
+
+    enum Slot {
+        /// Select or Delete, then Done or Cancel.
+        case both
+        /// Select or Delete.
+        case first
+        /// Done or Cancel.
+        case second
+    }
 
     var body: some View {
         HStack(spacing: Tokens.Spacing.m) {
-            if isSelecting {
-                Button(selectedCount == 1 ? "Delete 1 page" : "Delete \(selectedCount) pages", role: .destructive, action: onDelete)
-                    .buttonStyle(.glassProminent)
-                    .tint(Tokens.Colors.inkRed.color)
-                    .disabled(!canDelete)
-                    .accessibilityIdentifier("pagesDelete")
-                Button("Cancel", action: onCancel)
-                    .buttonStyle(.glass)
-                    .accessibilityIdentifier("pagesCancel")
-            } else {
-                Button("Select", action: onSelect)
-                    .buttonStyle(.glass)
-                    .accessibilityIdentifier("pagesSelect")
-                Button("Done", action: onDone)
-                    .buttonStyle(.glassProminent)
-                    .tint(Tokens.Colors.textPrimary.color)
-                    // Light capsule in dark mode: the label flips with it.
-                    .foregroundStyle(Tokens.Colors.libraryBackground)
-                    .accessibilityIdentifier("pagesDone")
+            if slot != .second {
+                if isSelecting {
+                    Button(selectedCount == 1 ? "Delete 1 page" : "Delete \(selectedCount) pages", role: .destructive, action: onDelete)
+                        .buttonStyle(.glassProminent)
+                        .tint(Tokens.Colors.inkRed.color)
+                        .disabled(!canDelete)
+                        .accessibilityIdentifier("pagesDelete")
+                } else {
+                    Button("Select", action: onSelect)
+                        .buttonStyle(.glass)
+                        .accessibilityIdentifier("pagesSelect")
+                }
+            }
+            if slot != .first {
+                if isSelecting {
+                    Button("Cancel", action: onCancel)
+                        .buttonStyle(.glass)
+                        .accessibilityIdentifier("pagesCancel")
+                } else {
+                    Button("Done", action: onDone)
+                        .buttonStyle(.glassProminent)
+                        .tint(Tokens.Colors.textPrimary.color)
+                        // Light capsule in dark mode: the label flips with it.
+                        .foregroundStyle(Tokens.Colors.libraryBackground)
+                        .accessibilityIdentifier("pagesDone")
+                }
             }
         }
         .font(.chromeTitle)
+        .fixedSize()
     }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 
 /// New notebook (mock §06): title, cover, paper template, paper style. A4 portrait fixed.
 /// Create hands the draft back; the library creates it and opens page 1 in the same step (§8).
+/// Compact (iPhone, #209): one column, the cover preview a small tilted swatch in the title field.
 struct NewNotebookSheet: View {
     let folder: LibraryFolder?
     let onCreate: (NotebookDraft) -> Void
@@ -12,14 +13,22 @@ struct NewNotebookSheet: View {
     @State private var draft = NotebookDraft()
     @FocusState private var titleFocused: Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.chromeLayout) private var chrome
 
     var body: some View {
-        HStack(spacing: 0) {
-            preview
-            form
+        Group {
+            if chrome.isCompact {
+                form
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else {
+                HStack(spacing: 0) {
+                    preview
+                    form
+                }
+                .frame(width: 720, height: 470)
+                .presentationSizing(.fitted)
+            }
         }
-        .frame(width: 720, height: 470)
-        .presentationSizing(.fitted)
         .onAppear {
             draft.folderID = folder?.id
             titleFocused = true
@@ -43,6 +52,17 @@ struct NewNotebookSheet: View {
         .containerShape(.rect(cornerRadius: Tokens.Radius.sheet - 8, style: .continuous))
     }
 
+    /// The cover in the title field (compact): spine-rounded like ``NotebookCover``, no label.
+    private var coverSwatch: some View {
+        UnevenRoundedRectangle(topLeadingRadius: 2, bottomLeadingRadius: 2, bottomTrailingRadius: 5, topTrailingRadius: 5)
+            .fill(draft.cover.style.color)
+            .frame(width: 24, height: 31)
+            .shadow(Tokens.Shadows.pageContact)
+            .rotationEffect(.degrees(-4))
+            .animation(.snappy, value: draft.cover)
+            .accessibilityHidden(true)
+    }
+
     private var form: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
@@ -62,20 +82,25 @@ struct NewNotebookSheet: View {
                 }
             }
 
-            TextField("Untitled", text: $draft.title)
-                .font(.notebookTitle(size: 19))
-                .foregroundStyle(Tokens.Colors.textPrimary)
-                .tint(Tokens.Colors.selection.color)
-                .focused($titleFocused)
-                .submitLabel(.done)
-                .padding(.horizontal, Tokens.Spacing.l)
-                .padding(.vertical, 12)
-                .background(Tokens.Colors.field, in: .rect(cornerRadius: Tokens.Radius.field))
-                .overlay {
-                    RoundedRectangle(cornerRadius: Tokens.Radius.field).strokeBorder(Tokens.Colors.fieldBorder, lineWidth: 0.5)
+            HStack(spacing: Tokens.Spacing.m) {
+                if chrome.isCompact {
+                    coverSwatch
                 }
-                .padding(.top, 22)
-                .accessibilityIdentifier("notebookTitle")
+                TextField("Untitled", text: $draft.title)
+            }
+            .font(.notebookTitle(size: 19))
+            .foregroundStyle(Tokens.Colors.textPrimary)
+            .tint(Tokens.Colors.selection.color)
+            .focused($titleFocused)
+            .submitLabel(.done)
+            .padding(.horizontal, Tokens.Spacing.l)
+            .padding(.vertical, 12)
+            .background(Tokens.Colors.field, in: .rect(cornerRadius: Tokens.Radius.field))
+            .overlay {
+                RoundedRectangle(cornerRadius: Tokens.Radius.field).strokeBorder(Tokens.Colors.fieldBorder, lineWidth: 0.5)
+            }
+            .padding(.top, 22)
+            .accessibilityIdentifier("notebookTitle")
 
             label("Cover")
             HStack(spacing: 2) {
@@ -99,14 +124,16 @@ struct NewNotebookSheet: View {
                     themeOption(theme)
                 }
                 Spacer(minLength: 0)
-                Text("A4 · Portrait")
-                    .scaledFont(size: 13, weight: .medium)
-                    .foregroundStyle(Tokens.Colors.textSecondary)
+                if !chrome.isCompact {
+                    Text("A4 · Portrait")
+                        .scaledFont(size: 13, weight: .medium)
+                        .foregroundStyle(Tokens.Colors.textSecondary)
+                }
             }
             .padding(.top, 20)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 30)
+        .padding(.horizontal, chrome.isCompact ? 20 : 30)
         .padding(.top, 24)
         .padding(.bottom, 20)
     }
@@ -145,7 +172,7 @@ struct NewNotebookSheet: View {
                                 .padding(-2.5)
                         }
                     }
-                    .frame(width: 72, height: 92)
+                    .frame(width: chrome.isCompact ? nil : 72, height: 92)
                 Text(style.displayName)
                     .scaledFont(size: 12, weight: selected ? .semibold : .medium)
                     .foregroundStyle(selected ? Tokens.Colors.textPrimary : Tokens.Colors.textSecondary)

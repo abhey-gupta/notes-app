@@ -2,18 +2,18 @@
 
 # Notespace
 
-Ultra-fast, minimal, beautiful handwritten notes for iPad.
+Ultra-fast, minimal, beautiful handwritten notes for iPad and iPhone.
 
 - Scope and perf budgets: [`docs/SCOPE.md`](docs/SCOPE.md)
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Mockups: [`design/mockups-v1.html`](design/mockups-v1.html), sync: [`design/mockups-sync.html`](design/mockups-sync.html)
+- Mockups: [`design/mockups-v1.html`](design/mockups-v1.html), sync: [`design/mockups-sync.html`](design/mockups-sync.html), iPhone: [`design/mockups-iphone.html`](design/mockups-iphone.html)
 - Tracker: GitHub Issues, milestone "Day 0"
 
 ## Requirements
 
-- Xcode 27.1 (iOS 27.1 SDK, Swift 6.4), deployment target iPadOS 26.0
+- Xcode 27.1 (iOS 27.1 SDK, Swift 6.4), deployment target iOS / iPadOS 26.0
 - `brew install xcodegen swiftformat swiftlint xcbeautify`
-- iPad simulator named `iPad Pro 13 (M5)` (override with `SIM="..."`)
+- iPad simulator named `iPad Pro 13 (M5)` (override with `SIM="..."`, e.g. `SIM="iPhone 18 Pro"`)
 
 ## Commands
 
@@ -21,6 +21,8 @@ Ultra-fast, minimal, beautiful handwritten notes for iPad.
 make gen            # generate Notespace.xcodeproj from project.yml (not committed)
 make open           # gen + open in Xcode
 make build          # build app for the iPad simulator
+make device         # Release build onto the connected test iPad (DEVICE=<udid>)
+make phone          # same onto the test iPhone (IPHONE=<udid>)
 make ipa            # unsigned Release build/Notespace.ipa for sideloading
 make test           # app UI tests + every package's tests on the simulator
 make test-unit      # same without the UI tests (the PR gate)
@@ -35,7 +37,7 @@ make lint / format
 
 CI: GitHub Actions on a self-hosted runner on the dev Mac (`runs-on: [self-hosted, macOS, xcode27]`), service in `~/actions-runner/notespace` (`./svc.sh status/start/stop`). PR gate `ci.yml`: one job (lint, headless packages, simulator tests without UI tests, ~6 min). `ui.yml`: UI tests nightly, on demand, and on PRs touching `App/**`, `Tests/UITests/**` or `project.yml`. Perf gate runs nightly and on PRs labeled `run-perf`; it comments the summary on the PR.
 
-Release: push a `v*` tag → `release.yml` builds the unsigned `.ipa` and attaches it to a GitHub release (manual run: artifact only). Install with AltStore/SideStore, which re-sign it with a free Apple ID (7-day expiry, refreshed over Wi-Fi by AltServer/SideStore).
+Release: push a `v*` tag → `release.yml` builds the unsigned `.ipa` and attaches it to a GitHub release (manual run: artifact only). One universal `.ipa` for iPad and iPhone. Install with AltStore/SideStore, which re-sign it with a free Apple ID (7-day expiry, refreshed over Wi-Fi by AltServer/SideStore).
 
 ## Perf gate
 
