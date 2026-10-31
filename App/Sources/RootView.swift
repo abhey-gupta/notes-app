@@ -22,6 +22,8 @@ struct RootView: View {
     private let sync: SyncModel?
     /// Settings → "Hide status bar" (#191): the bar sits flush at the top edge.
     @AppStorage(SettingsView.hidesStatusBarKey) private var hidesStatusBar = false
+    /// Settings in the library's detail area (#228).
+    @State private var showsSettings = LaunchOptions.showsSettings
     @Environment(\.scenePhase) private var scenePhase
     @Namespace private var zoom
 
@@ -56,7 +58,7 @@ struct RootView: View {
         NavigationStack(path: $path) {
             LibraryScreen(
                 library: library, zoom: zoom, tabs: tabs, showsNewNotebook: $showsNewNotebook, pdfImport: $pdfImport,
-                showsGallery: galleryBinding
+                showsSettings: $showsSettings, showsGallery: galleryBinding
             ) { route in
                 OpenTrace.begin()
                 open(route)
@@ -68,6 +70,11 @@ struct RootView: View {
                         .navigationTransition(.zoom(sourceID: route.transitionID, in: zoom))
                 }
             }
+        }
+        // The editor's ⋯ › Settings: back to the library, Settings showing.
+        .environment(\.showSettings) {
+            showsSettings = true
+            path.removeAll()
         }
         .environment(sync)
         .statusBarHidden(hidesStatusBar)

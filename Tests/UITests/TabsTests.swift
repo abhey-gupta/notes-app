@@ -124,9 +124,7 @@ final class TabsTests: XCTestCase {
     @MainActor
     func testHideStatusBarSetting() {
         let app = launch()
-        let gear = app.buttons["Settings"]
-        XCTAssertTrue(gear.waitForExistence(timeout: 5))
-        gear.tap()
+        app.openSettings()
         let toggle = app.switches["hidesStatusBar"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         let wasOn = toggle.value as? String == "1"
@@ -143,10 +141,9 @@ final class TabsTests: XCTestCase {
         XCTAssertTrue(more.waitForExistence(timeout: 10))
         more.tap()
         app.buttons["Settings"].tap()
-        XCTAssertTrue(app.switches["tapToUndo"].waitForExistence(timeout: 5), "Settings, full screen, over the editor")
-        app.buttons["closeSettings"].tap()
-        XCTAssertTrue(app.switches["tapToUndo"].waitForNonExistence(timeout: 5))
-        more.tap()
-        XCTAssertTrue(app.buttons["Share"].waitForExistence(timeout: 5), "back in the editor: ⋯ opens again")
+        XCTAssertTrue(app.switches["tapToUndo"].waitForExistence(timeout: 5), "back in the library, Settings showing")
+        XCTAssertFalse(more.exists, "the editor has gone")
+        app.closeSettings()
+        XCTAssertTrue(app.buttons["cover-Thermodynamics"].waitForExistence(timeout: 5), "the notebooks again")
     }
 }

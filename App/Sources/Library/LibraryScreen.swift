@@ -3,9 +3,10 @@ import Library
 import os
 import SwiftUI
 
-/// Library (mock §01): serif title, glass search/settings/New, "Continue" recents, covers grid; folders in a
-/// sidebar tree (#117, ``LibrarySidebar``). The sidebar docks beside the covers in wide windows (hide/show,
-/// remembered) and slides over them otherwise. A folder shows its own notebooks; Continue only shows on All.
+/// Library (mock §01): serif title, glass search/New, "Continue" recents, covers grid; folders in a sidebar tree
+/// (#117, ``LibrarySidebar``), Settings at its foot taking the detail area (#228). The sidebar docks beside the
+/// covers in wide windows (hide/show, remembered) and slides over them otherwise. A folder shows its own
+/// notebooks; Continue only shows on All.
 ///
 /// Compact chrome (#118: iPhone, iPad windows under 600 pt): sidebar · search · + on top, the serif title
 /// scrolling with the content, one Continue card at a time, three columns of covers.
@@ -17,6 +18,8 @@ struct LibraryScreen: View {
     @Binding var showsNewNotebook: Bool
     /// A PDF waiting in the import sheet: picked here, or opened in Notespace from Files / the share sheet.
     @Binding var pdfImport: PDFImportRequest?
+    /// Settings in the detail area instead of the notebooks (#228).
+    @Binding var showsSettings: Bool
     /// DEBUG: DesignSystem gallery toggle, surfaced in Settings.
     let showsGallery: Binding<Bool>?
     let open: (EditorRoute) -> Void
@@ -58,6 +61,11 @@ struct LibraryScreen: View {
         docks && !sidebarHidden
     }
 
+    /// The headers' sidebar button, while the sidebar is hidden.
+    private var showSidebarButton: (() -> Void)? {
+        showsDockedSidebar ? nil : { showSidebar() }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if showsDockedSidebar {
@@ -68,7 +76,12 @@ struct LibraryScreen: View {
                     }
                     .transition(.move(edge: .leading))
             }
-            content
+            if showsSettings {
+                SettingsView(showsGallery: showsGallery, showSidebar: showSidebarButton, hugsLeadingEdge: !showsDockedSidebar)
+                    .transition(.opacity)
+            } else {
+                content.transition(.opacity)
+            }
         }
         .overlay { overlaySidebar }
         .onGeometryChange(for: CGFloat.self, of: \.size.width) { screenWidth = $0 }
@@ -137,8 +150,8 @@ struct LibraryScreen: View {
         LibraryHeader(
             query: $query, showsNewNotebook: $showsNewNotebook, pdfImport: $pdfImport,
             title: library.folder(id: folder)?.name ?? "Library", ancestors: ancestors,
-            showSidebar: showsDockedSidebar ? nil : { showSidebar() }, pickFolder: { pick($0) },
-            hugsLeadingEdge: !showsDockedSidebar, showsGallery: showsGallery
+            showSidebar: showSidebarButton, pickFolder: { pick($0) },
+            hugsLeadingEdge: !showsDockedSidebar
         )
     }
 
@@ -178,7 +191,7 @@ struct LibraryScreen: View {
                     .lineLimit(1)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: Tokens.Spacing.m)
-                sortMenu
+                LibrarySortMenu(sort: $sort)
             }
         } else {
             regularHeader
@@ -191,30 +204,8 @@ struct LibraryScreen: View {
                 .sectionLabelStyle()
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: Tokens.Spacing.m)
-            sortMenu
+            LibrarySortMenu(sort: $sort)
         }
-    }
-
-    private var sortMenu: some View {
-        Menu {
-            Picker("Sort", selection: $sort) {
-                Text("Recent").tag(LibrarySort.recent)
-                Text("Title").tag(LibrarySort.title)
-                Text("Created").tag(LibrarySort.created)
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text("Sorted by \(sort.rawValue)")
-                Image(systemName: Symbol.disclosure.name)
-                    .scaledFont(size: 10, weight: .semibold)
-            }
-            .scaledFont(size: 13, weight: .medium)
-            .foregroundStyle(Tokens.Colors.textSecondary)
-            .frame(minHeight: 44)
-            .contentShape(.rect)
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -254,7 +245,8 @@ extension LibraryScreen {
 
     private func sidebar(leadingInset: CGFloat) -> some View {
         LibrarySidebar(
-            library: library, folder: $folder, expanded: expanded, prompt: $prompt, zoom: zoom, leadingInset: leadingInset,
+            library: library, folder: $folder, showsSettings: $showsSettings, expanded: expanded, prompt: $prompt, zoom: zoom,
+            leadingInset: leadingInset,
             hide: hideSidebar, didPick: closeOverlay, open: open
         )
     }
@@ -386,13 +378,4 @@ extension LibraryScreen {
             }
         }
     }
-}
-
-#Preview("Library") {
-    @Previewable @Namespace var zoom
-    @Previewable @State var showsNew = false
-    @Previewable @State var pdfImport: PDFImportRequest?
-    LibraryScreen(
-        library: SampleLibrary(), zoom: zoom, tabs: TabsModel(), showsNewNotebook: $showsNew, pdfImport: $pdfImport, showsGallery: nil
-    ) { _ in }
 }

@@ -8,6 +8,8 @@ import UniformTypeIdentifiers
 /// The footer says how it stands.
 struct SyncSettingsSection: View {
     let sync: SyncModel
+    /// Devices › (shown in place of the settings column).
+    let showDevices: () -> Void
 
     @State private var picksFolder = false
 
@@ -30,10 +32,17 @@ struct SyncSettingsSection: View {
                 Button("Sync Now") { sync.syncNow() }
                     .disabled(sync.isSyncing)
                     .accessibilityIdentifier("syncNow")
-                NavigationLink(value: SettingsRoute.devices) {
+                Button(action: showDevices) {
                     LabeledContent("Devices") {
-                        Text(sync.deviceCount > 0 ? "\(sync.deviceCount)" : "")
+                        HStack(spacing: Tokens.Spacing.s) {
+                            Text(sync.deviceCount > 0 ? "\(sync.deviceCount)" : "")
+                            Image(systemName: "chevron.right")
+                                .scaledFont(size: 13, weight: .semibold)
+                                .foregroundStyle(Tokens.Colors.textTertiary)
+                                .accessibilityHidden(true)
+                        }
                     }
+                    .contentShape(.rect)
                 }
                 .foregroundStyle(Tokens.Colors.textPrimary)
                 .accessibilityIdentifier("syncDevices")
@@ -138,11 +147,6 @@ struct SyncSettingsSection: View {
     static func ago(_ date: Date, now: Date) -> String {
         now.timeIntervalSince(date) < 60 ? "just now" : date.formatted(.relative(presentation: .named))
     }
-}
-
-/// Settings pushes (inside its `NavigationStack`).
-enum SettingsRoute: Hashable {
-    case devices
 }
 
 /// A thin determinate bar: track and blue fill, rounded (no spinners, §1.4).

@@ -63,11 +63,8 @@ final class TapUndoTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-sampleLibrary", "YES", "-resetToolState", "YES"]
         app.launch()
-        let gear = app.buttons["Settings"]
-        XCTAssertTrue(gear.waitForExistence(timeout: 5))
-        gear.tap()
+        app.openSettings()
         let toggle = app.switches["tapToUndo"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         let footer = NSPredicate(format: "label BEGINSWITH %@", "Tap with two fingers to undo")
         XCTAssertTrue(app.staticTexts.containing(footer).firstMatch.exists)
         // Hold to snap shapes (#165) sits beside it, also on by default.
