@@ -124,7 +124,9 @@ struct SyncSettingsSection: View {
         case .receiving:
             "Open notebooks finish updating when you close them."
         case let .uploading(pending):
-            "Sent. iCloud Drive is still uploading \(EditedLabel.notebooks(pending)); other devices see them once it finishes."
+            pending > 0
+                ? "Sent. iCloud Drive is still uploading \(EditedLabel.notebooks(pending)); other devices see them once it finishes."
+                : "Sent. iCloud Drive is still uploading; other devices see the changes once it finishes."
         case .folderUnavailable:
             "The sync folder was moved or deleted. Choose it again to continue."
         case let .failed(message):

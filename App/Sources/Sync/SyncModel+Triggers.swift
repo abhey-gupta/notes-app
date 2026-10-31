@@ -166,8 +166,8 @@ extension SyncModel {
     /// Files still uploading → `uploading`, polled until done; then idle and "Synced just now".
     func checkUploads(_ engine: SyncEngine) async {
         let written = uploading
-        let pending = await Self.pendingNotebooks(written, folder: engine.folder)
-        guard pending > 0 else {
+        let pending = await Self.pending(written, folder: engine.folder)
+        guard pending.files > 0 else {
             // A pass may have added files while this check was out.
             uploading.removeFirst(min(written.count, uploading.count))
             guard uploading.isEmpty else { return await checkUploads(engine) }
@@ -175,10 +175,10 @@ extension SyncModel {
             status = .idle(summary)
             return showDone()
         }
-        uploadPeak = max(uploadPeak, pending)
-        status = .uploading(pending: pending)
+        uploadPeak = max(uploadPeak, pending.files)
+        status = .uploading(pending: pending.notebooks)
         line = .progress(
-            "Uploading \(EditedLabel.notebooks(pending))", fraction: 1 - Double(pending) / Double(max(uploadPeak, 1))
+            Self.uploadingLabel(pending.notebooks), fraction: 1 - Double(pending.files) / Double(max(uploadPeak, 1))
         )
         uploadTask?.cancel()
         uploadTask = Task { [weak self] in
@@ -188,22 +188,27 @@ extension SyncModel {
         }
     }
 
-    /// Notebooks with files in `urls` not uploaded yet (`blobs/<notebook>/…`; log and device files count as
-    /// one), off main and inside the folder's scope.
-    private nonisolated static func pendingNotebooks(_ urls: [URL], folder: SyncFolder) async -> Int {
+    /// "Uploading 1 notebook"; "Uploading…" once only the log and device record remain.
+    static func uploadingLabel(_ notebooks: Int) -> String {
+        notebooks > 0 ? "Uploading \(EditedLabel.notebooks(notebooks))" : "Uploading…"
+    }
+
+    /// What in `urls` is not uploaded yet: the files, and the notebooks among them (`blobs/<notebook>/…`; the
+    /// log and device record belong to no notebook), off main and inside the folder's scope.
+    private nonisolated static func pending(_ urls: [URL], folder: SyncFolder) async -> (files: Int, notebooks: Int) {
         await Task.detached(priority: .utility) {
-            guard let scope = try? folder.beginAccess() else { return 0 }
+            guard let scope = try? folder.beginAccess() else { return (0, 0) }
             defer { scope.end() }
-            var pending: Set<String> = []
+            var files = 0
+            var notebooks: Set<String> = []
             for url in urls where !CoordinatedFileSystem.isUploaded([url]) {
+                files += 1
                 let components = url.pathComponents
                 if let i = components.lastIndex(of: SyncLayout.blobs), i + 1 < components.count {
-                    pending.insert(components[i + 1])
-                } else {
-                    pending.insert("")
+                    notebooks.insert(components[i + 1])
                 }
             }
-            return pending.count
+            return (files, notebooks.count)
         }.value
     }
 }
