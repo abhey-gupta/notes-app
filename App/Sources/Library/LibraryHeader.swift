@@ -24,7 +24,7 @@ struct LibraryHeader: View {
     /// DEBUG: DesignSystem gallery toggle, surfaced in Settings.
     let showsGallery: Binding<Bool>?
 
-    @State private var showsSettings = false
+    @State private var showsSettings = LaunchOptions.showsSettings
     @State private var showsPDFPicker = false
     @State private var isSearching = false
     @FocusState private var searchFocused: Bool
@@ -214,7 +214,7 @@ struct LibraryHeader: View {
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .circle)
         .accessibilityLabel("Settings")
-        .popover(isPresented: $showsSettings) {
+        .fullScreenCover(isPresented: $showsSettings) {
             SettingsView(showsGallery: showsGallery)
         }
     }

@@ -23,6 +23,7 @@ import Tools
 /// - `-insertSamplePhoto YES`: with `-openNotebook`, place a generated photo on the page once the notebook is
 ///   up, as the toolbar flyout would (#157; the system picker can't be driven by UI tests).
 /// - `-newNotebook YES`: start with the new-notebook sheet up.
+/// - `-settings YES`: start with Settings up (#228 screenshots).
 /// - `-importSamplePDF YES`: start with the import sheet up on a generated 24-page PDF (#119).
 /// - `-toolbarDock top|bottom|left|right`: start with the toolbar at that dock.
 /// - `-resetToolState YES`: forget persisted tool settings, toolbar placement, open tabs and the library
@@ -39,6 +40,10 @@ import Tools
 enum LaunchOptions {
     static var showsNewNotebook: Bool {
         flag("newNotebook")
+    }
+
+    static var showsSettings: Bool {
+        flag("settings")
     }
 
     /// `-importSamplePDF YES`: a generated PDF in the import sheet (the system Files picker can't be scripted).

@@ -2,7 +2,7 @@ import DesignSystem
 import SwiftUI
 import Sync
 
-/// Settings › Sync › Devices (#225 mock 01), pushed inside the popover: every device using the folder, this one
+/// Settings › Sync › Devices (#225 mock 01), pushed inside Settings: every device using the folder, this one
 /// first ("This iPad", "Now"), the others by when they were last seen.
 struct DevicesView: View {
     let sync: SyncModel

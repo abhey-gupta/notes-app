@@ -3,9 +3,9 @@ import SwiftUI
 import Sync
 import UniformTypeIdentifiers
 
-/// Settings › Sync (#225 mocks 01, 02): before a folder, one blue "Choose Sync Folder…" row; after, the folder
-/// (Change Folder… / Stop Syncing), a progress row while sending or receiving, Sync Now, Devices ›. The footer
-/// says how it stands.
+/// Settings › Sync (#225 mocks 01, 02; #228): the demo row, with "Choose Folder…" until there is a folder; then
+/// the folder (Change Folder… / Stop Syncing), a progress row while sending or receiving, Sync Now, Devices ›.
+/// The footer says how it stands.
 struct SyncSettingsSection: View {
     let sync: SyncModel
 
@@ -13,6 +13,12 @@ struct SyncSettingsSection: View {
 
     var body: some View {
         Section {
+            SettingRow(.sync, "Sync", "Pick a folder in Files. Every device that uses it keeps the same notebooks.") {
+                if sync.folderName == nil {
+                    Button("Choose Folder…") { picksFolder = true }
+                        .accessibilityIdentifier("chooseSyncFolder")
+                }
+            }
             if let name = sync.folderName {
                 folderRow(name)
                 switch sync.status {
@@ -31,9 +37,6 @@ struct SyncSettingsSection: View {
                 }
                 .foregroundStyle(Tokens.Colors.textPrimary)
                 .accessibilityIdentifier("syncDevices")
-            } else {
-                Button("Choose Sync Folder…") { picksFolder = true }
-                    .accessibilityIdentifier("chooseSyncFolder")
             }
         } header: {
             Text("Sync")
@@ -108,10 +111,7 @@ struct SyncSettingsSection: View {
     private func footer(now: Date) -> String {
         switch sync.status {
         case .off:
-            """
-            Pick a folder in Files — iCloud Drive, Google Drive, Dropbox… Every device that uses the same folder keeps the \
-            same notebooks. Nothing to sign in to.
-            """
+            "iCloud Drive, Google Drive, Dropbox… any folder in Files works. Nothing to sign in to."
         case let .idle(summary):
             if let last = summary.last {
                 "Up to date · \(Self.ago(last, now: now)). Changes you make here appear on your other devices as soon as "
@@ -140,7 +140,7 @@ struct SyncSettingsSection: View {
     }
 }
 
-/// Settings popover pushes (inside its `NavigationStack`).
+/// Settings pushes (inside its `NavigationStack`).
 enum SettingsRoute: Hashable {
     case devices
 }

@@ -1,0 +1,208 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{--blue:#2C4FD6;--ink:#1E2129;--fg2:#6b6e75;--fg3:#9a9ca2;--ui:-apple-system,"SF Pro Text",system-ui,sans-serif;--serif:"New York","Iowan Old Style",Georgia,serif;--paper:#FCFBF7;--desk:#F4F3EF}
+body{font-family:var(--font-sans,var(--ui));margin:0}
+.wrap{display:flex;flex-direction:column;gap:38px;padding:4px 0 10px}
+.cap{margin:0 0 10px 2px}
+.cap b{font-size:15px;color:var(--foreground,#111)}
+.cap span{display:block;font-size:13px;color:var(--muted-foreground,#666);margin-top:3px;line-height:1.45}
+.fit{position:relative;width:716px;height:500px}
+.scr{position:absolute;left:0;top:0;width:1194px;height:834px;transform:scale(.6);transform-origin:0 0;background:var(--desk);border-radius:34px;overflow:hidden;font-family:var(--ui);color:var(--ink);-webkit-font-smoothing:antialiased;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+/* illustration */
+.ill{background:var(--paper);background-image:radial-gradient(circle,rgba(30,33,41,.13) 1px,transparent 1.3px);background-size:14px 14px;position:relative;overflow:hidden}
+.ill svg{width:100%;height:100%;display:block}
+.ink{fill:none;stroke:#1E2129;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.inkl{fill:none;stroke:#1E2129;stroke-width:1.6;stroke-linecap:round;opacity:.55}
+.tap{fill:rgba(44,79,214,.16);stroke:#2C4FD6;stroke-width:1.4}
+.chip{fill:#2C4FD6}.chipt{fill:#fff;font:600 9.5px var(--ui);text-anchor:middle}
+.lbl{fill:#8a8c92;font:500 9px var(--ui);text-anchor:middle;letter-spacing:.2px}
+.pg{fill:#fff;stroke:rgba(30,33,41,.14);stroke-width:1}
+svg g,svg circle,svg rect,svg path{transform-box:fill-box;transform-origin:center}
+/* undo */
+.u-last{stroke-dasharray:1;animation:uLast 6s ease-in-out infinite}
+@keyframes uLast{0%{stroke-dashoffset:1;opacity:1}16%{stroke-dashoffset:0;opacity:1}30%{opacity:1}36%{opacity:0}62%{opacity:0;stroke-dashoffset:0}68%{opacity:1}90%{opacity:1;stroke-dashoffset:0}97%,100%{opacity:0;stroke-dashoffset:0}}
+.u-two{animation:uTwo 6s infinite}
+@keyframes uTwo{0%,22%{opacity:0;transform:scale(.7)}26%{opacity:1;transform:scale(1)}30%{opacity:1;transform:scale(.88)}36%,100%{opacity:0;transform:scale(1)}}
+.u-three{animation:uThree 6s infinite}
+@keyframes uThree{0%,52%{opacity:0;transform:scale(.7)}56%{opacity:1;transform:scale(1)}60%{opacity:1;transform:scale(.88)}66%,100%{opacity:0;transform:scale(1)}}
+.u-l1{animation:uL1 6s infinite}@keyframes uL1{0%,26%{opacity:0}30%,44%{opacity:1}50%,100%{opacity:0}}
+.u-l2{animation:uL2 6s infinite}@keyframes uL2{0%,56%{opacity:0}60%,76%{opacity:1}82%,100%{opacity:0}}
+/* snap */
+.s-wob{stroke-dasharray:1;animation:sWob 5s ease-in-out infinite}
+@keyframes sWob{0%{stroke-dashoffset:1;opacity:1}35%{stroke-dashoffset:0;opacity:1}55%{opacity:1}60%,100%{opacity:0;stroke-dashoffset:0}}
+.s-ring{fill:none;stroke:#2C4FD6;stroke-width:1.5;animation:sRing 5s infinite}
+@keyframes sRing{0%,36%{opacity:0;transform:scale(.4)}40%{opacity:1;transform:scale(1)}47%{opacity:.9;transform:scale(1.7)}54%{opacity:0;transform:scale(2.4)}100%{opacity:0}}
+.s-tip{fill:#2C4FD6;animation:sTip 5s infinite}@keyframes sTip{0%,30%{opacity:0}34%,54%{opacity:1}58%,100%{opacity:0}}
+.s-per{animation:sPer 5s ease-out infinite}
+@keyframes sPer{0%,55%{opacity:0;transform:scale(.93)}62%{opacity:1;transform:scale(1)}90%{opacity:1;transform:scale(1)}97%,100%{opacity:0}}
+/* erase */
+.e-dot{animation:eDot 5s ease-in-out infinite}
+@keyframes eDot{0%{opacity:0;transform:translateY(0)}6%{opacity:1;transform:translateY(0)}30%{transform:translateY(0)}70%{opacity:1;transform:translateY(100px)}78%,100%{opacity:0;transform:translateY(100px)}}
+.e-halo{fill:rgba(44,79,214,.12);animation:eHalo 5s infinite}@keyframes eHalo{0%,28%{opacity:0}32%,70%{opacity:1}76%,100%{opacity:0}}
+.e-hold{fill:none;stroke:#2C4FD6;stroke-width:1.8;stroke-dasharray:1;animation:eHold 5s linear infinite}
+@keyframes eHold{0%,6%{stroke-dashoffset:1;opacity:1}28%{stroke-dashoffset:0;opacity:1}33%,100%{opacity:0;stroke-dashoffset:0}}
+.e1{animation:e1 5s infinite}@keyframes e1{0%,39%{opacity:1}42%,92%{opacity:0}100%{opacity:1}}
+.e2{animation:e2 5s infinite}@keyframes e2{0%,51%{opacity:1}54%,92%{opacity:0}100%{opacity:1}}
+.e3{animation:e3 5s infinite}@keyframes e3{0%,63%{opacity:1}66%,92%{opacity:0}100%{opacity:1}}
+/* pages */
+.p-tap{animation:pTap 6s infinite}@keyframes pTap{0%,22%{opacity:0;transform:scale(.6)}27%{opacity:1;transform:scale(1)}31%{opacity:1;transform:scale(.85)}36%,100%{opacity:0}}
+.p-plus{animation:pPlus 6s infinite}@keyframes pPlus{0%,32%{opacity:1}36%,94%{opacity:0}100%{opacity:1}}
+.p-newM{animation:pNewM 6s ease-out infinite}@keyframes pNewM{0%,33%{opacity:0;transform:translateY(10px)}44%{opacity:1;transform:translateY(0)}90%{opacity:1;transform:translateY(0)}96%,100%{opacity:0}}
+.p-write{stroke-dasharray:1;animation:pWrite 6s ease-in-out infinite}@keyframes pWrite{0%,10%{stroke-dashoffset:1;opacity:1}32%{stroke-dashoffset:0}90%{opacity:1;stroke-dashoffset:0}96%,100%{opacity:0;stroke-dashoffset:0}}
+.p-newA{animation:pNewA 6s ease-out infinite}@keyframes pNewA{0%,36%{opacity:0;transform:translateY(10px)}47%{opacity:1;transform:translateY(0)}90%{opacity:1;transform:translateY(0)}96%,100%{opacity:0}}
+/* status bar */
+.st-sb{animation:stSb 5s ease-in-out infinite}@keyframes stSb{0%,25%{opacity:1;transform:translateY(0)}36%,74%{opacity:0;transform:translateY(-5px)}86%,100%{opacity:1;transform:translateY(0)}}
+.st-up{animation:stUp 5s ease-in-out infinite}@keyframes stUp{0%,25%{transform:translateY(0)}36%,74%{transform:translateY(-15px)}86%,100%{transform:translateY(0)}}
+/* sync */
+.sy1{animation:sy1 5s ease-in-out infinite}@keyframes sy1{0%,6%{opacity:0;transform:translateX(0)}12%{opacity:1}38%{opacity:1;transform:translateX(18px)}44%,100%{opacity:0;transform:translateX(18px)}}
+.sy2{animation:sy2 5s ease-in-out infinite}@keyframes sy2{0%,46%{opacity:0;transform:translateX(0)}52%{opacity:1}78%{opacity:1;transform:translateX(18px)}84%,100%{opacity:0;transform:translateX(18px)}}
+.sy-f{animation:syF 5s infinite}@keyframes syF{0%,38%{transform:scale(1)}42%{transform:scale(1.06)}48%,100%{transform:scale(1)}}
+.dev{fill:#fff;stroke:#3a3d45;stroke-width:1.6}
+.dot{fill:#2C4FD6}
+/* controls */
+.tg{width:51px;height:31px;border-radius:16px;background:#e3e3e6;position:relative;flex:none}
+.tg i{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16)}
+.tg.on{background:#34C759}.tg.on i{left:22px}
+.seg{display:flex;background:rgba(118,118,128,.12);border-radius:9px;padding:2px;flex:none}
+.seg span{padding:6px 14px;font:500 13.5px var(--ui);border-radius:7px;color:var(--ink)}
+.seg span.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.lnk{color:var(--blue);font:500 15px var(--ui);flex:none}
+/* A: sidebar */
+.close{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.75);border:.5px solid rgba(0,0,0,.08);box-shadow:0 6px 18px -8px rgba(20,20,30,.18);display:grid;place-items:center;color:#3a3d45;font:400 17px var(--ui)}
+.side{position:absolute;left:0;top:0;bottom:0;width:320px;border-right:.5px solid rgba(0,0,0,.08);padding:28px 18px;box-sizing:border-box}
+.side h1{font:400 38px var(--serif);letter-spacing:-.4px;margin:26px 0 22px 10px}
+.nv{height:48px;display:flex;align-items:center;gap:13px;padding:0 14px;border-radius:13px;font:400 17px var(--ui);color:var(--ink)}
+.nv.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06),0 0 0 .5px rgba(0,0,0,.05);font-weight:500}
+.nv svg{width:21px;height:21px;fill:none;stroke:#55585f;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.nv.on svg{stroke:var(--blue)}
+.nv .v{margin-left:auto;color:var(--fg3);font-size:15px}
+.det{position:absolute;left:320px;right:0;top:0;bottom:0;overflow:hidden}
+.col{width:620px;margin:62px auto 0}
+.col h2{font:400 32px var(--serif);margin:0;letter-spacing:-.3px}
+.col .sub{font:400 15.5px var(--ui);color:var(--fg2);margin:6px 0 4px}
+.sc{background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05),0 0 0 .5px rgba(0,0,0,.06);margin-top:22px}
+.sc .ill{height:200px;border-bottom:.5px solid rgba(0,0,0,.06)}
+.meta{display:flex;gap:18px;align-items:center;padding:16px 20px 18px}
+.meta .t{flex:1;min-width:0}
+.meta b{display:block;font:600 17px var(--ui)}
+.meta small{display:block;font:400 14.5px var(--ui);color:var(--fg2);margin-top:3px;line-height:1.42}
+/* B: one column */
+.one{width:660px;margin:0 auto;padding-top:28px}
+.one .top{display:flex;align-items:center;margin-left:-82px}
+.one h1{font:400 38px var(--serif);letter-spacing:-.4px;margin:30px 0 4px}
+.hd{font:500 13px var(--ui);color:var(--fg2);letter-spacing:.5px;margin:26px 0 8px 18px}
+.grp{background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 0 0 .5px rgba(0,0,0,.06)}
+.rw{display:flex;align-items:center;gap:18px;padding:14px 18px;position:relative}
+.rw+.rw::before{content:"";position:absolute;left:170px;right:0;top:0;height:.5px;background:rgba(60,60,67,.16)}
+.rw .ill{width:134px;height:86px;border-radius:11px;flex:none;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.08)}
+.rw .t{flex:1;min-width:0}.rw b{display:block;font:600 16.5px var(--ui)}.rw small{display:block;font:400 14px var(--ui);color:var(--fg2);margin-top:3px;line-height:1.4}
+/* mixed: sidebar + compact rows */
+.col .grp{margin-top:22px}
+.cl{min-height:54px;display:flex;align-items:center;gap:12px;padding:0 20px;font:400 16.5px var(--ui);position:relative}
+.cl .lab{flex:1}.cl .val{color:var(--fg2)}.cl .chev{color:#c4c4c8;font-weight:600;font-size:18px}
+.cl.btn{color:var(--blue)}
+.rw+.cl::before,.cl+.cl::before{content:"";position:absolute;left:20px;right:0;top:0;height:.5px;background:rgba(60,60,67,.16)}
+/* C: gallery */
+.gal{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.gc{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.1);color:var(--ink);font-family:var(--ui)}
+.gc .ill{height:168px;border-bottom:.5px solid rgba(0,0,0,.06)}
+.gc .meta{padding:12px 14px 14px;gap:12px}
+.gc .meta b{font-size:15px}.gc .meta small{font-size:12.5px}
+.gc .tg{transform:scale(.85);transform-origin:right center}
+.gc .seg span{padding:5px 9px;font-size:12px}
+.gc .lnk{font-size:13px}
+</style></head><body>
+<div class="wrap" id="root"></div>
+<script>
+const ILL={
+undo:`<svg viewBox="0 0 240 140">
+<path class="ink" d="M44 52c8-10 14 10 22 0s14-10 22 0 14 10 22 0 14-10 22 0"/>
+<path class="ink" d="M150 50c6 4 12-8 18-2s10 6 16 0"/>
+<path class="ink u-last" pathLength="1" d="M44 86c24-12 52 10 84-2s46-8 72 4"/>
+<g class="u-two"><circle class="tap" cx="148" cy="114" r="8"/><circle class="tap" cx="170" cy="108" r="8"/></g>
+<g class="u-three"><circle class="tap" cx="138" cy="116" r="8"/><circle class="tap" cx="158" cy="108" r="8"/><circle class="tap" cx="178" cy="112" r="8"/></g>
+<g class="u-l1"><rect class="chip" x="186" y="16" width="40" height="18" rx="9"/><text class="chipt" x="206" y="28.5">Undo</text></g>
+<g class="u-l2"><rect class="chip" x="186" y="16" width="40" height="18" rx="9"/><text class="chipt" x="206" y="28.5">Redo</text></g>
+</svg>`,
+snap:`<svg viewBox="0 0 240 140">
+<path class="ink s-wob" pathLength="1" d="M124 37C152 40 163 60 160 79C157 100 139 112 117 110C95 108 80 93 82 73C84 53 100 39 120 37"/>
+<circle class="s-ring" cx="120" cy="37" r="6"/>
+<circle class="s-tip" cx="120" cy="37" r="3"/>
+<circle class="ink s-per" cx="121" cy="74" r="36"/>
+</svg>`,
+erase:`<svg viewBox="0 0 240 140">
+<path class="ink e1" d="M58 55c12-8 22 8 34 0s22-8 34 0 22 8 34 0 18-6 26 0"/>
+<path class="ink e2" d="M52 85c10 6 20-10 32-2s18 8 30 0 22-8 34 0 26 6 40-2"/>
+<path class="ink e3" d="M62 115c14-6 26 6 40 0s24-6 36 0 22 4 38-2"/>
+<circle class="e-hold" pathLength="1" cx="120" cy="27" r="10"/>
+<g class="e-dot"><circle class="e-halo" cx="120" cy="27" r="10"/><circle class="dot" cx="120" cy="27" r="3.5"/></g>
+</svg>`,
+pages:`<svg viewBox="0 0 240 140">
+<line x1="120" y1="14" x2="120" y2="128" stroke="rgba(30,33,41,.1)"/>
+<text class="lbl" x="60" y="16">MANUAL</text><text class="lbl" x="180" y="16">AUTOMATIC</text>
+<rect class="pg" x="30" y="26" width="60" height="44" rx="3"/>
+<path class="inkl" d="M38 38h40M38 46h34M38 54h42"/>
+<g class="p-plus"><circle cx="60" cy="90" r="9" fill="#fff" stroke="rgba(30,33,41,.2)"/><path d="M60 85.5v9M55.5 90h9" stroke="#55585f" stroke-width="1.5" stroke-linecap="round"/></g>
+<circle class="tap p-tap" cx="60" cy="90" r="9"/>
+<rect class="pg p-newM" x="30" y="78" width="60" height="44" rx="3"/>
+<rect class="pg" x="150" y="26" width="60" height="44" rx="3"/>
+<path class="inkl" d="M158 38h40M158 46h30"/>
+<path class="ink p-write" pathLength="1" style="stroke-width:1.6" d="M158 55c6-4 10 4 16 0s10-4 16 0 8 3 12 0"/>
+<rect class="pg p-newA" x="150" y="78" width="60" height="44" rx="3"/>
+</svg>`,
+status:`<svg viewBox="0 0 240 140">
+<defs><clipPath id="scrc"><rect x="22" y="14" width="196" height="140" rx="12"/></clipPath></defs>
+<rect x="22" y="14" width="196" height="140" rx="12" fill="#EFEDE7" stroke="rgba(30,33,41,.18)"/>
+<g clip-path="url(#scrc)">
+<g class="st-sb"><text x="36" y="27" style="font:600 8px -apple-system,system-ui" fill="#1E2129">9:41</text>
+<rect x="190" y="21" width="14" height="7" rx="2" fill="none" stroke="#1E2129" stroke-width=".9"/><rect x="191.5" y="22.5" width="9" height="4" rx="1" fill="#1E2129"/>
+<path d="M176 27a5 5 0 0 1 8 0M178 25.5a2.4 2.4 0 0 1 4 0" fill="none" stroke="#1E2129" stroke-width=".9" stroke-linecap="round"/></g>
+<g class="st-up"><rect x="22" y="34" width="196" height="22" fill="#fff"/><line x1="22" y1="56" x2="218" y2="56" stroke="rgba(30,33,41,.12)"/>
+<path d="M36 41l-4 4 4 4" fill="none" stroke="#55585f" stroke-width="1.4" stroke-linecap="round"/>
+<rect x="46" y="40" width="54" height="10" rx="5" fill="#F0EFEA"/><circle cx="186" cy="45" r="1.3" fill="#55585f"/><circle cx="192" cy="45" r="1.3" fill="#55585f"/><circle cx="198" cy="45" r="1.3" fill="#55585f"/>
+<rect x="42" y="66" width="156" height="90" fill="#FCFBF7" stroke="rgba(30,33,41,.08)"/>
+<path class="inkl" d="M54 80h80M54 90h64M54 100h90"/></g></g>
+</svg>`,
+sync:`<svg viewBox="0 0 240 140">
+<rect class="dev" x="26" y="40" width="52" height="70" rx="7"/><path d="M34 56h28M34 64h36M34 72h22" stroke="#c8c6c0" stroke-width="1.4" stroke-linecap="round"/>
+<g class="sy-f"><path d="M104 62h10l4 4h18v24h-32z" fill="#E6EBFB" stroke="#2C4FD6" stroke-width="1.6" stroke-linejoin="round"/></g>
+<text class="lbl" x="120" y="104">FOLDER</text>
+<rect class="dev" x="174" y="48" width="34" height="58" rx="6"/><path d="M186 100h10" stroke="#3a3d45" stroke-width="1.4" stroke-linecap="round"/><path d="M180 60h20M180 67h16" stroke="#c8c6c0" stroke-width="1.4" stroke-linecap="round"/>
+<circle class="dot sy1" cx="83" cy="77" r="3"/>
+<circle class="dot sy2" cx="143" cy="77" r="3"/>
+</svg>`};
+const SET={
+undo:['Tap to undo','Tap with two fingers to undo, three to redo.','tg on'],
+snap:['Hold to snap shapes','Hold the Pencil still at the end of a stroke to make it a perfect shape.','tg on'],
+erase:['Hold to erase','Touch down and hold the Pencil, then erase until you lift it.','tg on'],
+pages:['New pages','Manual: tap + under the last page. Automatic: a blank page is always waiting.','seg'],
+status:['Hide status bar','Hides the time and battery for a calmer page.','tg'],
+sync:['Sync','Pick a folder in Files. Every device that uses it keeps the same notebooks.','lnk']};
+const ctl=k=>{const c=SET[k][2];if(c==='seg')return`<div class="seg"><span class="on">Manual</span><span>Automatic</span></div>`;if(c==='lnk')return`<span class="lnk">Choose Folder…</span>`;return`<div class="${c}"><i></i></div>`};
+const ill=k=>`<div class="ill">${ILL[k]}</div>`;
+const meta=k=>`<div class="meta"><div class="t"><b>${SET[k][0]}</b><small>${SET[k][1]}</small></div>${ctl(k)}</div>`;
+const cap=(t,s)=>`<div class="cap"><b>${t}</b><span>${s}</span></div>`;
+const IC={
+pen:'<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/>',
+page:'<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/>',
+disp:'<rect x="3" y="5" width="18" height="13" rx="2"/><path d="M9 21h6"/>',
+sync:'<path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/>',
+info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.01"/>'};
+const nv=(ic,l,on,v='')=>`<div class="nv ${on?'on':''}"><svg viewBox="0 0 24 24">${IC[ic]}</svg>${l}${v?`<span class="v">${v}</span>`:''}</div>`;
+const side=sel=>{const n=(ic,l,v='')=>nv(ic,l,l===sel,v);return`<div class="side"><div class="close">✕</div><h1>Settings</h1>${n('pen','Writing')}${n('page','Pages')}${n('disp','Display')}${n('sync','Sync',sel==='Sync'?'On':'Off')}${n('info','About')}</div>`};
+const row=(k,desc,c)=>`<div class="rw">${ill(k)}<div class="t"><b>${SET[k][0]}</b><small>${desc||SET[k][1]}</small></div>${c===undefined?ctl(k):c}</div>`;
+const cl=(lab,right='',cls='')=>`<div class="cl ${cls}"><div class="lab">${lab}</div>${right}</div>`;
+const pane=(sel,h,sub,body)=>`<div class="fit"><div class="scr">${side(sel)}<div class="det"><div class="col"><h2>${h}</h2><div class="sub">${sub}</div>${body}</div></div></div></div>`;
+const W=pane('Writing','Writing','How the Pencil and your fingers work on the page.',`<div class="grp">${row('undo')}${row('snap')}${row('erase')}</div>`);
+const P=pane('Pages','Pages','How notebooks grow.',`<div class="grp">${row('pages')}</div>`);
+const S=pane('Sync','Sync','Keep notebooks the same on every device.',`<div class="grp">${row('sync','Up to date · just now. Every device that uses this folder keeps the same notebooks.','')}
+${cl('Folder','<span class="val">Notespace</span><span class="chev" style="font-size:13px">⌃⌄</span>')}${cl('Sync Now','','btn')}${cl('Devices','<span class="val">2</span><span class="chev">›</span>')}</div>`);
+const G=`<div class="gal">${['undo','snap','erase','pages','status','sync'].map(k=>`<div class="gc">${ill(k)}${meta(k)}</div>`).join('')}</div>`;
+document.getElementById('root').innerHTML=
+cap('01 · Writing','Sidebar sections from A, compact rows from B: each row has a small looping demo, the name, one sentence and its control. A section never gets longer than a handful of rows.')+W+
+cap('02 · Pages','A section with a single setting stays a single row.')+P+
+cap('03 · Sync (folder chosen)','The demo row explains the idea; the working rows (Folder, Sync Now, Devices ›) sit under it in the same card. Devices pushes inside the right pane.')+S+
+cap('04 · Every setting’s demo, larger','Animations loop while on screen and become a still final frame when Reduce Motion is on.')+G;
+</script>
+</body></html>

@@ -42,11 +42,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     private func openSettings(_ app: XCUIApplication) {
         app.buttons["Settings"].tap()
-        // Below Gestures, Pages and Display: scroll the popover's form to it.
+        // Below Writing, Pages and Display: scroll the page to it.
         let footer = app.descendants(matching: .any)["syncFooter"]
         XCTAssertTrue(app.switches["tapToUndo"].waitForExistence(timeout: 5))
         for _ in 0 ..< 3 where !footer.exists {
-            app.popovers.firstMatch.swipeUp()
+            app.collectionViews.firstMatch.swipeUp()
         }
         XCTAssertTrue(footer.waitForExistence(timeout: 3))
     }
@@ -63,7 +63,7 @@ final class SyncTests: XCTestCase {
         openSettings(app)
         XCTAssertTrue(app.buttons["chooseSyncFolder"].exists, "off until a folder is chosen")
         XCTAssertFalse(app.buttons["syncNow"].exists)
-        app.otherElements["PopoverDismissRegion"].tap()
+        app.buttons["closeSettings"].tap()
         XCTAssertTrue(app.buttons["chooseSyncFolderCaption"].exists, "the empty library offers the folder")
         app.terminate()
 
@@ -116,7 +116,7 @@ final class SyncTests: XCTestCase {
 
         openSettings(app)
         app.buttons["syncNow"].tap()
-        app.otherElements["PopoverDismissRegion"].tap()
+        app.buttons["closeSettings"].tap()
         let cover = app.buttons["cover-From iPhone"]
         XCTAssertTrue(cover.waitForExistence(timeout: 15), "the other device's notebook is in the library")
         XCTAssertTrue(waitForValue(of: cover, containing: "From Test iPhone"), "its card says who sent it")
@@ -222,7 +222,7 @@ final class SyncTests: XCTestCase {
 
         openSettings(app)
         app.buttons["syncNow"].tap()
-        app.otherElements["PopoverDismissRegion"].tap()
+        app.buttons["closeSettings"].tap()
         XCTAssertTrue(waitForValue(of: cover, containing: "From Test iPhone"), "pulled")
         cover.tap()
         let pill = app.descendants(matching: .any)["conflictPill"]
