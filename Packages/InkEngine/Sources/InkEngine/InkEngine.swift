@@ -52,6 +52,14 @@ public protocol InkEngine: AnyObject {
     /// Renders a page (background + ink) at `size` points × `scale` for thumbnails and raster export.
     /// `nil` only if the size is degenerate or the bitmap can't be allocated.
     func render(page: PageSnapshot, size: CGSize, scale: CGFloat) async -> CGImage?
+    /// Ghost ink (#225): `strokes` (page space) drawn under `page`'s ink as dashed centerlines in the selection
+    /// color, faint and untouchable: a version of the page sync replaced. Empty fades it out.
+    func setGhost(_ strokes: [Stroke], on page: PageID)
+}
+
+public extension InkEngine {
+    /// Engines without ghost ink draw nothing.
+    func setGhost(_: [Stroke], on _: PageID) {}
 }
 
 /// Receives engine output. All callbacks arrive on the main actor.

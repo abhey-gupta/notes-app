@@ -289,7 +289,13 @@ final class Device: Sendable {
         var package = try await package(id)
         let page = try package.loadPage(at: index)
         let content = try StrokeCodec.decodeContent(data)
-        try package.savePage(Page(id: page.id, template: page.template, strokes: content.strokes, images: content.images, rev: page.rev + 1))
+        try package.savePage(Page(
+            id: page.id,
+            template: page.template,
+            strokes: content.strokes,
+            images: content.images,
+            rev: page.rev + 1
+        ))
         try await store.refresh(id)
         return page.rev + 1
     }

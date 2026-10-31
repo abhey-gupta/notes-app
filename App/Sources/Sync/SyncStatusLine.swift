@@ -40,9 +40,8 @@ struct SyncStatusLine: View {
 }
 
 /// The library's empty state on All Notebooks with no search (`applies`), mock 04: `fallback`, then one caption
-/// line. While an empty library adopts the folder: "Bringing in N notebooks…" instead of `fallback` (the glass
-/// card is #225 PR 3). With no folder chosen: "Already using Notespace? Choose your sync folder", which opens
-/// the Files picker.
+/// line. While an empty library adopts the folder: nothing (``AdoptCard`` is over it, the library fills in).
+/// With no folder chosen: "Already using Notespace? Choose your sync folder", which opens the Files picker.
 struct SyncEmptyState<Fallback: View>: View {
     let applies: Bool
     @ViewBuilder let fallback: Fallback
@@ -51,13 +50,9 @@ struct SyncEmptyState<Fallback: View>: View {
     @State private var picksFolder = false
 
     var body: some View {
-        if applies, let sync, let count = sync.adopting {
-            Text("Bringing in \(EditedLabel.notebooks(count))…")
-                .scaledFont(size: 15)
-                .foregroundStyle(Tokens.Colors.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, Tokens.Spacing.xxxl)
-                .accessibilityIdentifier("adoptCaption")
+        if applies, let sync, sync.adoption != nil {
+            Color.clear
+                .frame(height: 1)
         } else if applies, let sync, !sync.hasFolder {
             VStack(alignment: .leading, spacing: 14) {
                 fallback
@@ -82,5 +77,61 @@ struct SyncEmptyState<Fallback: View>: View {
             fallback
                 .padding(.vertical, Tokens.Spacing.xxxl)
         }
+    }
+}
+
+/// A fresh library adopting the folder (mock 04 left): centred over the library, which fills behind it; cloud
+/// glyph, "Bringing in 14 notebooks", "From ‹device›, via ‹provider›. You can start writing meanwhile.", a
+/// 220 pt hairline (pages written) and "4 of 14". It goes once adopt finishes; never shows for an empty folder.
+struct AdoptCard: View {
+    @Environment(SyncModel.self) private var sync: SyncModel?
+
+    var body: some View {
+        ZStack {
+            if let sync, let adoption = sync.adoption {
+                card(adoption, provider: sync.providerName)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.spring(duration: 0.35, bounce: 0), value: sync?.adoption == nil)
+    }
+
+    private func card(_ adoption: Adoption, provider: String?) -> some View {
+        VStack(spacing: Tokens.Spacing.s) {
+            Image(systemName: "icloud")
+                .scaledFont(size: 30, weight: .regular)
+                .foregroundStyle(Tokens.Colors.pillText)
+                .accessibilityHidden(true)
+            Text("Bringing in \(EditedLabel.notebooks(adoption.total))")
+                .scaledFont(size: 18, weight: .semibold)
+                .foregroundStyle(Tokens.Colors.textPrimary)
+                .padding(.top, 6)
+            Text(Self.detail(device: adoption.device, provider: provider))
+                .scaledFont(size: 14)
+                .foregroundStyle(Tokens.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.bottom, Tokens.Spacing.s)
+            Hairline(fraction: adoption.fraction, height: 3)
+                .frame(width: 220)
+            Text("\(min(adoption.done, adoption.total)) of \(adoption.total)")
+                .scaledFont(size: 12.5)
+                .foregroundStyle(Tokens.Colors.textSecondary)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 26)
+        .padding(.top, 26)
+        .padding(.bottom, 22)
+        .frame(maxWidth: 360)
+        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("adoptCard")
+    }
+
+    /// "From Abhey’s iPad Pro, via iCloud Drive. You can start writing meanwhile."
+    static func detail(device: String?, provider: String?) -> String {
+        let via = [device.map { "From \($0)" }, provider.map { device == nil ? "Via \($0)" : "via \($0)" }]
+            .compactMap(\.self).joined(separator: ", ")
+        return via.isEmpty ? "You can start writing meanwhile." : "\(via). You can start writing meanwhile."
     }
 }

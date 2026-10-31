@@ -5,10 +5,10 @@ import UIKit
 
 /// One visible page in content space: paper color, imported artwork (a PDF page, ``ArtworkLayer``, #119),
 /// vector template marks, its photos (#157, one layer each, beneath the highlights), its highlights (#120,
-/// one shape layer each, multiplied with the page beneath, #196, under everything that draws ink), and an
-/// image of its ink (outside ``inkHole``, the part a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no
-/// mask). Pages touch (#162): every page but the first draws a one-pixel hairline in the template mark color
-/// along its top edge, over its image.
+/// one shape layer each, multiplied with the page beneath, #196, under everything that draws ink), ghost ink
+/// (#225: a version of the page sync replaced, dashed), and an image of its ink (outside ``inkHole``, the part
+/// a `PKCanvasView` has drawn; ``HoledImageLayer`` bands, no mask). Pages touch (#162): every page but the
+/// first draws a one-pixel hairline in the template mark color along its top edge, over its image.
 ///
 /// The image is one of (#70's fallback chain, best first): the raster for ``requestedKey``; a stale
 /// raster of the page (an older bucket or content, scaled by the layer) while that renders; the page's
@@ -32,6 +32,10 @@ final class PageLayerView: UIView {
     private let highlightsLayer = CALayer()
     private var highlightLayers: [StrokeID: (stroke: Stroke, layer: CAShapeLayer)] = [:]
     private var liveHighlight: CAShapeLayer?
+    /// Ghost ink (#225, `+Ghost`): another version of the page, dashed, over the highlights and under the ink.
+    let ghostLayer = CALayer()
+    var ghostIDs: [StrokeID] = []
+    var ghostColor: CGColor?
     /// Holds the thumbnail and ink layers.
     private let imageLayer = CALayer()
     /// The scaled-up thumbnail (opaque: paper, template and ink at thumbnail resolution).
@@ -133,6 +137,7 @@ final class PageLayerView: UIView {
         layer.addSublayer(dotsLayer)
         layer.addSublayer(photosLayer)
         layer.addSublayer(highlightsLayer)
+        layer.addSublayer(ghostLayer)
         layer.addSublayer(imageLayer)
         layer.addSublayer(seamLayer)
     }
@@ -163,6 +168,7 @@ final class PageLayerView: UIView {
         dotsLayer.frame = bounds
         photosLayer.frame = bounds
         highlightsLayer.frame = bounds
+        ghostLayer.frame = bounds
         imageLayer.frame = bounds
         inkLayer.frame = imageLayer.bounds
         layoutArtwork(artwork)

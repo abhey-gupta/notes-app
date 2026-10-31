@@ -21,10 +21,7 @@ extension SyncEngine {
         }
         let pending = state.notebooks.filter { (only == nil || $0.key == only) && $0.value.isPending }.keys.sorted()
         let total = pending.reduce(0) { sum, id in sum + (state.notebooks[id]?.pages.values.count { $0.isPending } ?? 0) }
-        var names: [String: String] = [:]
-        if pending.contains(where: { !(state.notebooks[$0]?.from.isEmpty ?? true) }) {
-            names = Dictionary((try? readDevices())?.map { ($0.id, $0.name) } ?? [], uniquingKeysWith: { first, _ in first })
-        }
+        let names = pending.contains { !(state.notebooks[$0]?.from.isEmpty ?? true) } ? deviceNames() : [:]
         var done = 0
         var started = 0
         for id in pending {
@@ -68,6 +65,11 @@ extension SyncEngine {
         if only == nil {
             try await materialiseFolders(&state, removals: true)
         }
+    }
+
+    /// Device names by ID, from the folder's device records.
+    private func deviceNames() -> [String: String] {
+        Dictionary((try? readDevices())?.map { ($0.id, $0.name) } ?? [], uniquingKeysWith: { first, _ in first })
     }
 
     // MARK: Folders

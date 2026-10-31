@@ -97,6 +97,8 @@ final class NotebookSession {
     private var opening: Task<Void, Never>?
     /// Counted in ``openNotebooks`` (from opening the package until the close's last checkpoint).
     private var holdsPackage = false
+    /// Ghost ink per page (`+Conflicts`, #225).
+    var ghosts: [PageID: [Stroke]] = [:]
 
     private static var closing: [NotebookID: Task<Void, Never>] = [:]
 
@@ -168,6 +170,8 @@ final class NotebookSession {
         _ = host
         holdsPackage = true
         Self.writerOpened(notebookID)
+        // Sync may be writing this notebook from a pull: read the package once that is done (#225).
+        await Self.packageWillOpen?(notebookID)
         await Self.closing[notebookID]?.value
         do {
             let url = try await library.documentURL(for: notebookID)
@@ -325,15 +329,6 @@ final class NotebookSession {
         installWidening(on: host, theme: initialTheme)
         return host
     }
-
-    /// "12 strokes" for the page under the indicator (VoiceOver, UI tests).
-    private func currentPageDescription() -> String? {
-        let index = host.state.currentPage
-        guard let residency, residency.pageIDs.indices.contains(index), let page = residency.page(residency.pageIDs[index]) else {
-            return nil
-        }
-        return page.strokes.count == 1 ? "1 stroke" : "\(page.strokes.count) strokes"
-    }
 }
 
 extension NotebookSession {
@@ -352,6 +347,10 @@ extension NotebookSession {
 
     /// Called whenever ``openNotebooks`` changes (``SyncModel``).
     static var openNotebooksDidChange: ((Set<NotebookID>) -> Void)?
+
+    /// Awaited before a notebook's package is read, after it counts as open (``SyncModel``: a pull writing it
+    /// finishes first).
+    static var packageWillOpen: ((NotebookID) async -> Void)?
 
     /// Writers per notebook (normally 0 or 1; a reopen can overlap the previous close).
     private static var writers: [NotebookID: Int] = [:]

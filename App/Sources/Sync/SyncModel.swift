@@ -18,8 +18,11 @@ import UIKit
 ///   active, and once more after every pass that sent something.
 ///
 /// Notebooks open in an editor are kept current in the engine (their page changes wait); when one closes its
-/// deferred changes are written and the title line says "Updated from ‹device›". An empty library adopts
-/// everything in the folder ("Bringing in N notebooks…").
+/// deferred changes are written and the title line says "Updated from ‹device›". An editor opening a notebook
+/// first waits for a write of it already under way (``SyncEngine/willOpen(_:)``). An empty library adopts
+/// everything in the folder (the adopt card, ``adoption``). Notebooks a pull wrote carry "From ‹device›" on
+/// their cards for 2 s (``arrivals``). Pages whose ink was replaced by another device's version show a pill and
+/// their lost strokes as ghost ink in the editor (`+Conflicts`).
 @MainActor
 @Observable
 final class SyncModel {
@@ -49,14 +52,30 @@ final class SyncModel {
     var line: Line?
     /// "iCloud Drive › Notespace"; `nil` until a folder is chosen.
     private(set) var folderName: String?
+
+    /// "iCloud Drive" (the adopt card's "via iCloud Drive").
+    var providerName: String? {
+        folderName?.components(separatedBy: " › ").first
+    }
+
     /// Devices syncing through the folder (this one included), as of the last pass.
     var deviceCount = 0
-    /// Notebooks coming into an empty library ("Bringing in N notebooks…"); `nil` when not adopting.
-    var adopting: Int?
+    /// Notebooks coming into an empty library (the adopt card); `nil` when not adopting.
+    var adoption: Adoption?
+    /// Notebooks a pull just wrote, with the device they came from: "From iPhone" on their cards for 2 s.
+    var arrivals: [NotebookID: SyncDevice] = [:]
+    /// Pages whose ink another device's version replaced, not yet kept or let go (`+Conflicts`).
+    var conflicts: [Conflict] = []
+    /// Devices on the folder by ID, as of the last pass (names and glyphs for cards and the conflict pill).
+    var devicesByID: [String: DeviceRecord] = [:]
 
     static let bookmarkKey = "syncFolder"
     static let debounce = Duration.seconds(10)
     static let doneLineDuration = Duration.seconds(2)
+    /// The adopt card stays at least this long after the last notebook lands.
+    @ObservationIgnored let adoptionLinger = LaunchOptions.syncHold ?? .seconds(1.5)
+    /// How long a card says "From ‹device›".
+    @ObservationIgnored let arrivalDuration = LaunchOptions.syncHold ?? SyncModel.doneLineDuration
 
     @ObservationIgnored let library: StoreLibrary
     /// `-syncRoot`: a fixed folder, no picker, no bookmark (UI tests).
@@ -75,6 +94,12 @@ final class SyncModel {
     @ObservationIgnored var lineRun = 0
     @ObservationIgnored var lastSync: Date?
     @ObservationIgnored var collectedGarbage = false
+    /// Engine calls from the editor (Keep mine, ×, reading conflicts), run by ``kick()`` before the next pass.
+    @ObservationIgnored var calls: [@MainActor (SyncEngine) async -> Void] = []
+    @ObservationIgnored var arrivalsTask: Task<Void, Never>?
+    @ObservationIgnored var adoptionEnd: Task<Void, Never>?
+    /// Conflicts whose pill has shown, and the 30 s after which they go.
+    @ObservationIgnored var conflictTimers: [String: Task<Void, Never>] = [:]
     @ObservationIgnored var debounceTask: Task<Void, Never>?
     @ObservationIgnored var presenterDebounce: Task<Void, Never>?
     @ObservationIgnored var pollTask: Task<Void, Never>?
@@ -101,6 +126,7 @@ final class SyncModel {
         }
         library.didChange = { [weak self] in self?.scheduleSync() }
         NotebookSession.openNotebooksDidChange = { [weak self] ids in self?.openNotebooksChanged(ids) }
+        NotebookSession.packageWillOpen = { [weak self] id in await self?.engine?.willOpen(id) }
         startPolling()
     }
 
@@ -149,7 +175,12 @@ final class SyncModel {
         uploading = []
         status = .off
         line = nil
-        adopting = nil
+        adoption = nil
+        arrivals = [:]
+        conflicts = []
+        conflictTimers.values.forEach { $0.cancel() }
+        conflictTimers = [:]
+        calls = []
         deviceCount = 0
         lastSync = nil
     }
@@ -162,6 +193,8 @@ final class SyncModel {
         deviceCount = 0
         lastSync = nil
         uploading = []
+        conflicts = []
+        calls = []
         guard let url else {
             engine = nil
             status = .folderUnavailable
@@ -205,4 +238,25 @@ final class SyncModel {
 struct SyncSummary: Equatable {
     var last: Date?
     var devices: Int
+}
+
+/// A fresh library adopting the folder (mock 04, the adopt card): "Bringing in 14 notebooks", "From ‹device›",
+/// the pages hairline and "4 of 14".
+struct Adoption: Equatable {
+    var total: Int
+    var done: Int
+    var device: String?
+    var fraction: Double
+}
+
+/// Another device as cards and the conflict pill name it: "iPhone", with its SF Symbol.
+struct SyncDevice: Equatable {
+    var name: String
+    /// `iphone` or `ipad`, by the device's model.
+    var glyph: String
+
+    init(name: String, model: String?) {
+        self.name = name
+        glyph = model?.localizedCaseInsensitiveContains("iphone") == true ? "iphone" : "ipad"
+    }
 }

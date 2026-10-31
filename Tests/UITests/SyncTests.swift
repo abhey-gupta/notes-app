@@ -5,8 +5,10 @@ import Sync
 import XCTest
 
 /// Sync through a Files folder (#225) with `-syncRoot` (no Files picker): the line under the library title and
-/// what lands in the folder, another device's notebook arriving, a fresh library adopting the folder. The other
-/// device is a real ``SyncEngine`` in the test runner with its own library, writing into the same folder.
+/// what lands in the folder, another device's notebook arriving (its card says who sent it), a fresh library
+/// adopting the folder behind the adopt card, and a page the other device replaced (the conflict pill, ghost
+/// ink, Keep mine, ×). The other device is a real ``SyncEngine`` in the test runner with its own library,
+/// writing into the same folder.
 final class SyncTests: XCTestCase {
     private var root: URL!
     private var other: OtherDevice!
@@ -23,12 +25,14 @@ final class SyncTests: XCTestCase {
         other.remove()
     }
 
+    /// `-syncHoldSeconds 12`: the card tag and the adopt card outlast XCUI's polling (and a pull the folder's
+    /// presenter starts before Sync Now).
     @MainActor
     private func launch(_ arguments: [String] = [], syncs: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-resetLibrary", "YES", "-resetToolState", "YES"] + arguments
         if syncs {
-            app.launchArguments += ["-syncRoot", root.path(percentEncoded: false)]
+            app.launchArguments += ["-syncRoot", root.path(percentEncoded: false), "-syncHoldSeconds", "12"]
         }
         app.launch()
         XCTAssertTrue(app.buttons["newNotebook"].waitForExistence(timeout: 10))
@@ -112,12 +116,17 @@ final class SyncTests: XCTestCase {
 
         openSettings(app)
         app.buttons["syncNow"].tap()
+        app.otherElements["PopoverDismissRegion"].tap()
+        let cover = app.buttons["cover-From iPhone"]
+        XCTAssertTrue(cover.waitForExistence(timeout: 15), "the other device's notebook is in the library")
+        XCTAssertTrue(waitForValue(of: cover, containing: "From Test iPhone"), "its card says who sent it")
+        XCTAssertTrue(waitForValue(of: cover, containing: "From Test iPhone", absent: true, timeout: 25), "for a while")
+
+        openSettings(app)
         let devices = app.descendants(matching: .any)["syncDevices"]
         XCTAssertTrue(devices.waitForExistence(timeout: 3))
         devices.tap()
         XCTAssertTrue(app.descendants(matching: .any)["device-Test iPhone"].waitForExistence(timeout: 10), "the other device is listed")
-        app.otherElements["PopoverDismissRegion"].tap()
-        XCTAssertTrue(app.buttons["cover-From iPhone"].waitForExistence(timeout: 15), "the other device's notebook is in the library")
     }
 
     @MainActor
@@ -125,12 +134,130 @@ final class SyncTests: XCTestCase {
         let folder = try await other.store.createFolder(named: "Physics")
         try await other.create("Thermodynamics", pages: 3, in: folder.id)
         try await other.create("Recipes", pages: 1)
+        for n in 1 ... 6 {
+            try await other.create("Notes \(n)", pages: 4)
+        }
         try await other.engine.sync()
 
         let app = launch()
+        let card = app.descendants(matching: .any)["adoptCard"]
+        XCTAssertTrue(card.waitForExistence(timeout: 15), "the adopt card shows")
+        XCTAssertTrue(card.label.contains("Bringing in 8 notebooks"), card.label)
+        XCTAssertTrue(card.label.contains("From Test iPhone"), card.label)
         XCTAssertTrue(app.buttons["cover-Thermodynamics"].waitForExistence(timeout: 15), "adopted")
         XCTAssertTrue(app.buttons["cover-Recipes"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["folder-Physics"].exists, "with its folder")
+        XCTAssertTrue(card.waitForNonExistence(timeout: 25), "the card goes once adopt finishes")
+    }
+
+    @MainActor
+    func testKeepMineBringsBackAPageAnotherDeviceReplaced() async throws {
+        let (app, id) = try await replacedPage()
+        let canvas = app.scrollViews["canvas"]
+        app.buttons["keepMine"].tap()
+        XCTAssertTrue(waitForValue(of: canvas, equal: "2 strokes"), "the page shows this device's version at once, ghost gone")
+        XCTAssertTrue(app.descendants(matching: .any)["conflictPill"].waitForNonExistence(timeout: 5))
+
+        // Every device converges on it: the other device now gets this version.
+        await other.engine.setOpenNotebooks([])
+        var strokes = 0
+        for _ in 0 ..< 30 where strokes != 2 {
+            try await Task.sleep(for: .milliseconds(500))
+            try await other.engine.pull()
+            strokes = try await other.strokeCount(id, page: 0)
+        }
+        XCTAssertEqual(strokes, 2, "the folder's latest version of the page is this device's")
+    }
+
+    @MainActor
+    func testDismissingAConflictKeepsTheOtherVersion() async throws {
+        let (app, _) = try await replacedPage()
+        let canvas = app.scrollViews["canvas"]
+        app.buttons["dismissConflict"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["conflictPill"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(waitForValue(of: canvas, equal: "3 strokes"), "the other version stays, ghost gone")
+
+        app.buttons["Library"].tap()
+        app.buttons["cover-Shared"].tap()
+        XCTAssertTrue(waitForValue(of: canvas, equal: "3 strokes"))
+        XCTAssertFalse(app.descendants(matching: .any)["conflictPill"].exists, "let go for good")
+    }
+
+    /// The other device's notebook "Shared" (one page, one stroke) adopted here; this device adds a stroke and
+    /// sends it; the other device, without taking that version, adds two strokes and sends; this device pulls.
+    /// Returns with "Shared" open on that page: the pill and the ghost of this device's two strokes showing.
+    @MainActor
+    private func replacedPage() async throws -> (XCUIApplication, NotebookID) {
+        let id = try await other.create("Shared", pages: 1)
+        try await other.ink(id, page: 0)
+        try await other.engine.sync()
+
+        let app = launch(["-allowFingerDrawing", "YES"])
+        let cover = app.buttons["cover-Shared"]
+        XCTAssertTrue(cover.waitForExistence(timeout: 15), "adopted")
+        cover.tap()
+        let canvas = app.scrollViews["canvas"]
+        XCTAssertTrue(waitForValue(of: canvas, equal: "1 stroke"))
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5))
+            .press(
+                forDuration: 0.05,
+                thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.55)),
+                withVelocity: .slow,
+                thenHoldForDuration: 0.3
+            )
+        XCTAssertTrue(waitForValue(of: canvas, equal: "2 strokes"), "inked")
+        if app.buttons["Show toolbar"].exists {
+            app.buttons["Show toolbar"].tap()
+        }
+        app.buttons["Library"].tap()
+        waitForEntry(besides: other.engine.device.id)
+
+        // The other device writes the page without taking this version (its editor is open there).
+        await other.engine.setOpenNotebooks([id])
+        try await other.engine.pull()
+        try await other.ink(id, page: 0)
+        try await other.ink(id, page: 0)
+        try await other.engine.push()
+
+        openSettings(app)
+        app.buttons["syncNow"].tap()
+        app.otherElements["PopoverDismissRegion"].tap()
+        XCTAssertTrue(waitForValue(of: cover, containing: "From Test iPhone"), "pulled")
+        cover.tap()
+        let pill = app.descendants(matching: .any)["conflictPill"]
+        XCTAssertTrue(pill.waitForExistence(timeout: 10), "the pill shows on the replaced page")
+        XCTAssertEqual(app.descendants(matching: .any)["conflictMessage"].label, "Replaced by the Test iPhone version")
+        XCTAssertTrue(
+            waitForValue(of: canvas, equal: "3 strokes, replaced version in blue: 2 strokes"),
+            "the other version shows, this device's as ghost ink"
+        )
+        return (app, id)
+    }
+
+    /// Waits until `element`'s value contains `text` (or, `absent`, no longer does).
+    private func waitForValue(of element: XCUIElement, containing text: String, absent: Bool = false, timeout: TimeInterval = 15) -> Bool {
+        let predicate = NSPredicate(format: absent ? "NOT (value CONTAINS %@)" : "value CONTAINS %@", text)
+        return XCTWaiter.wait(for: [expectation(for: predicate, evaluatedWith: element)], timeout: timeout) == .completed
+    }
+
+    private func waitForValue(of element: XCUIElement, equal value: String, timeout: TimeInterval = 15) -> Bool {
+        let predicate = NSPredicate(format: "value == %@", value)
+        return XCTWaiter.wait(for: [expectation(for: predicate, evaluatedWith: element)], timeout: timeout) == .completed
+    }
+
+    /// Waits for a log entry from a device other than `device` (this app's push).
+    private func waitForEntry(besides device: String, timeout: TimeInterval = 15) {
+        let log = root.appending(path: SyncLayout.log)
+        let written = expectation(for: NSPredicate { _, _ in
+            let fm = FileManager.default
+            let devices = (try? fm.contentsOfDirectory(atPath: log.path(percentEncoded: false))) ?? []
+            return devices.contains { name in
+                name != device && ((try? fm.contentsOfDirectory(atPath: log.appending(path: name).path(percentEncoded: false))) ?? [])
+                    .contains { $0.hasSuffix(".json") }
+            }
+        }, evaluatedWith: nil)
+        wait(for: [written], timeout: timeout)
     }
 }
 
@@ -152,8 +279,36 @@ private final class OtherDevice: Sendable {
         )
     }
 
-    func create(_ title: String, pages: Int, in folder: FolderID? = nil) async throws {
+    @discardableResult
+    func create(_ title: String, pages: Int, in folder: FolderID? = nil) async throws -> NotebookID {
         try await store.create(Notebook(title: title, cover: .navy, paper: .dotted, pages: (0 ..< pages).map { _ in PageID() }), in: folder)
+            .id
+    }
+
+    /// Adds a stroke to the page at `index`, checkpointed, and tells the library (as this device's editor would).
+    func ink(_ id: NotebookID, page index: Int) async throws {
+        var package = try await package(id)
+        let page = try package.loadPage(at: index)
+        let y = Float(100 + 40 * page.strokes.count)
+        let stroke = Stroke(tool: .ballpoint, color: .primary, width: 2, samples: (0 ..< 8).map { Sample(x: 100 + Float($0) * 30, y: y) })
+        try package.savePage(Page(
+            id: page.id,
+            template: page.template,
+            strokes: page.strokes + [stroke],
+            images: page.images,
+            rev: page.rev + 1
+        ))
+        try await store.refresh(id)
+    }
+
+    /// Strokes on the page at `index`.
+    func strokeCount(_ id: NotebookID, page index: Int) async throws -> Int {
+        try await package(id).loadPage(at: index).strokes.count
+    }
+
+    private func package(_ id: NotebookID) async throws -> NotebookPackage {
+        guard let entry = await store.snapshot().notebook(id) else { throw CocoaError(.fileNoSuchFile) }
+        return try NotebookPackage.open(at: store.locations.packageURL(for: entry))
     }
 
     func remove() {

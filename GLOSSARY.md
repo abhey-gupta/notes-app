@@ -70,6 +70,14 @@ _Avoid_: Queued, pending (for the concept)
 The same page changed on two devices before either saw the other's change: the later version is shown, and the replaced ink can come back with Keep mine.
 _Avoid_: Merge, collision
 
+**Keep mine**:
+The pill's button on a page in conflict: the page shows this device's replaced version again at once and every device takes it (sent as a new op with a later clock). One undo step. The pill goes on its own after 30 s or with ×, and the replaced version with it.
+_Avoid_: Restore, revert, resolve
+
+**Ghost ink**:
+A page's replaced version drawn faintly under its ink while it is in conflict: dashed lines in the selection blue, never touched, never saved, rendered or exported. Goes with Keep mine, × or the 30 s.
+_Avoid_: Overlay, diff, shadow strokes
+
 ## Changes
 
 **Page edit**:
