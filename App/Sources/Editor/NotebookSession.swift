@@ -97,6 +97,14 @@ final class NotebookSession {
     private var opening: Task<Void, Never>?
 
     private static var closing: [NotebookID: Task<Void, Never>] = [:]
+
+    /// Waits for every closing notebook's last checkpoint (backup after leaving the editor, #174).
+    static func closingFinished() async {
+        for task in closing.values {
+            await task.value
+        }
+    }
+
     private static let log = Logger(subsystem: "com.abhey.notespace", category: "editor")
 
     init(notebook: NotebookSummary, library: any LibraryModel, startsFocused: Bool = false) {

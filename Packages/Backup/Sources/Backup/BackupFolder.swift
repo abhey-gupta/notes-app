@@ -11,6 +11,17 @@ public enum BackupFolder: Hashable, Sendable {
         try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
     }
 
+    /// Where the folder is now (no security scope; for its name). `nil` if the bookmark doesn't resolve.
+    public var resolvedURL: URL? {
+        switch self {
+        case let .bookmark(data):
+            var isStale = false
+            return try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale)
+        case let .url(url):
+            return url
+        }
+    }
+
     /// Resolves the folder and runs `body` inside its security scope.
     /// - Parameter refreshed: Called with a new bookmark when the stored one was stale (folder moved).
     /// - Throws: ``BackupError/folderUnavailable`` if the bookmark doesn't resolve or the folder is gone;

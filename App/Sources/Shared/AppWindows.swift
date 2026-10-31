@@ -11,6 +11,8 @@ import UIKit
 enum AppWindows {
     static let library: any LibraryModel = LaunchOptions.makeLibrary()
     static let tools: ToolState = LaunchOptions.makeToolState()
+    /// Backup to a Files folder (#174); `nil` for in-memory libraries.
+    static let backup: BackupModel? = LaunchOptions.makeBackup(for: library)
 
     private struct Window {
         weak var sessions: SessionStore?

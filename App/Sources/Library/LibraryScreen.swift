@@ -38,6 +38,7 @@ struct LibraryScreen: View {
     static let sidebarHiddenKey = "librarySidebarHidden"
     static let openFoldersKey = "libraryOpenFolders"
     @Environment(\.chromeLayout) private var chrome
+    @Environment(BackupModel.self) private var backup: BackupModel?
 
     /// The sidebar docks from this width (11" landscape is 1194 pt; portrait 834 gets the overlay).
     private static let dockWidth: CGFloat = 1000
@@ -104,6 +105,8 @@ struct LibraryScreen: View {
                         .foregroundStyle(Tokens.Colors.textPrimary)
                         .lineLimit(2)
                         .accessibilityAddTraits(.isHeader)
+                        .padding(.horizontal, margin)
+                    BackupStatusLine()
                         .padding(.horizontal, margin)
                         .padding(.bottom, Tokens.Spacing.xxl)
                 }
@@ -225,7 +228,11 @@ struct LibraryScreen: View {
         let notebooks = shownNotebooks
         if notebooks.isEmpty {
             // Hidden while a slow index load/rebuild is still running: never flash "No notebooks yet".
-            if library.isLoaded {
+            if library.isLoaded, library.notebooks.isEmpty, folder == nil, query.isEmpty, let backup, backup.restorableCount > 0 {
+                RestoreCard(backup: backup, count: backup.restorableCount)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Tokens.Spacing.xxl)
+            } else if library.isLoaded {
                 Text(emptyText)
                     .scaledFont(size: 15)
                     .foregroundStyle(Tokens.Colors.textSecondary)
