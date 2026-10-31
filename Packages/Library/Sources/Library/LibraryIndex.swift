@@ -255,6 +255,8 @@ public enum LibraryError: Error, Hashable, Sendable {
     case notFound(NotebookID)
     /// No folder with this ID.
     case unknownFolder(FolderID)
+    /// A notebook with this ID is already in the library or its trash (adopting a package, #174).
+    case alreadyInLibrary(NotebookID)
     /// Package read/write failed.
     case document(DocumentError)
     /// File system failure at `url`.
@@ -272,6 +274,8 @@ extension LibraryError: LocalizedError {
             "No notebook \(id) in the library."
         case let .unknownFolder(id):
             "No folder \(id)."
+        case let .alreadyInLibrary(id):
+            "Notebook \(id) is already in the library."
         case let .document(error):
             error.localizedDescription
         case let .io(url, reason):
