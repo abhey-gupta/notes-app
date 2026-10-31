@@ -3,9 +3,9 @@ import Library
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Library header (mock §01): serif title (the folder showing, under its breadcrumb, #117) · search · settings ·
-/// New, with a sidebar button while the sidebar is hidden. Compact chrome (#118): sidebar on the left,
-/// search · settings · + on the right; search swaps the row for the field and Cancel. Either way it starts
+/// Library header (mock §01): serif title (the folder showing, under its breadcrumb, #117) · search · New, with a
+/// sidebar button while the sidebar is hidden (Settings lives at the sidebar's foot, #228). Compact chrome
+/// (#118): sidebar on the left, search · + on the right; search swaps the row for the field and Cancel. Either way it starts
 /// clear of an iPadOS window's controls. While sync runs, a quiet line sits under the title (#174 mock 05-D, #225).
 struct LibraryHeader: View {
     @Binding var query: String
@@ -21,10 +21,7 @@ struct LibraryHeader: View {
     var pickFolder: (FolderID?) -> Void = { _ in }
     /// The header starts at the window's leading edge (no docked sidebar), so it clears the window controls.
     var hugsLeadingEdge = true
-    /// DEBUG: DesignSystem gallery toggle, surfaced in Settings.
-    let showsGallery: Binding<Bool>?
 
-    @State private var showsSettings = LaunchOptions.showsSettings
     @State private var showsPDFPicker = false
     @State private var isSearching = false
     @FocusState private var searchFocused: Bool
@@ -80,10 +77,7 @@ struct LibraryHeader: View {
             .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
             GlassChrome(spacing: Tokens.Spacing.s) {
-                HStack(spacing: Tokens.Spacing.m) {
-                    searchField
-                    settingsButton
-                }
+                searchField
             }
             // Outside the glass container: its menu morphs out of the pill, and inside the container
             // the pill's glass kept taps from the menu's first row.
@@ -114,14 +108,11 @@ struct LibraryHeader: View {
                     .accessibilityIdentifier("sidebarButton")
                 Spacer(minLength: Tokens.Spacing.m)
                 GlassChrome(spacing: Tokens.Spacing.s) {
-                    HStack(spacing: Tokens.Spacing.m) {
-                        circleButton("Search", systemImage: Symbol.search.name) {
-                            withAnimation(Tokens.Motion.morph) { isSearching = true }
-                            searchFocused = true
-                        }
-                        .accessibilityIdentifier("searchButton")
-                        settingsButton
+                    circleButton("Search", systemImage: Symbol.search.name) {
+                        withAnimation(Tokens.Motion.morph) { isSearching = true }
+                        searchFocused = true
                     }
+                    .accessibilityIdentifier("searchButton")
                 }
                 newButton
             }
@@ -199,24 +190,6 @@ struct LibraryHeader: View {
             minHeight: 40
         )
         .glassEffect(.regular.interactive(), in: .capsule)
-    }
-
-    private var settingsButton: some View {
-        Button {
-            showsSettings = true
-        } label: {
-            Image(systemName: Symbol.settings.name)
-                .scaledFont(size: 17, weight: .medium)
-                .foregroundStyle(Tokens.Colors.pillText)
-                .frame(width: 40, height: 40)
-                .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
-        .accessibilityLabel("Settings")
-        .fullScreenCover(isPresented: $showsSettings) {
-            SettingsView(showsGallery: showsGallery)
-        }
     }
 
     /// "+" menu: New Notebook, Import PDF… (#119, the Files picker feeds the import sheet).

@@ -1,9 +1,10 @@
 import DesignSystem
 import SwiftUI
 
-/// Settings (#228 mock 02): a full-screen page from the library gear or the editor's ⋯ menu. One centred column
-/// under a serif title; each setting is a row with a small looping demo of what it does, its name, one plain
-/// sentence and its control. A `NavigationStack`, so Sync › Devices pushes inside it (#225).
+/// Settings (#228), in the library's detail area: picked from the Settings row at the foot of the sidebar (or the
+/// editor's ⋯ menu, which goes back to the library first). A serif title where the library's sits, then one
+/// column of rows; each row has a small looping demo of what the setting does, its name, one plain sentence and
+/// its control. Sync › Devices replaces the column in place, with a back button.
 struct SettingsView: View {
     /// `UserDefaults` key of "Tap to undo" (#121): two fingers undo, three redo, on the canvas.
     static let tapToUndoKey = "tapToUndo"
@@ -15,15 +16,19 @@ struct SettingsView: View {
     static let newPagesKey = "newPages"
     /// `UserDefaults` key of "Hide status bar" (#191).
     static let hidesStatusBarKey = "hidesStatusBar"
-    /// The column's width on a wide screen.
+    /// The column's widest.
     private static let columnWidth: CGFloat = 660
 
     /// DEBUG: opens the DesignSystem gallery.
     let showsGallery: Binding<Bool>?
+    /// Shows the sidebar; nil while it's docked and showing.
+    var showSidebar: (() -> Void)?
+    /// The header starts at the window's leading edge (no docked sidebar), so it clears the window controls.
+    var hugsLeadingEdge = true
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(SyncModel.self) private var sync: SyncModel?
-    @State private var path: [SettingsRoute] = []
+    @Environment(\.chromeLayout) private var chrome
+    @State private var showsDevices = false
     @AppStorage(tapToUndoKey) private var tapToUndo = true
     @AppStorage(snapsShapesKey) private var snapsShapes = true
     @AppStorage(holdsToEraseKey) private var holdsToErase = true
@@ -31,54 +36,71 @@ struct SettingsView: View {
     @AppStorage(hidesStatusBarKey) private var hidesStatusBar = false
 
     var body: some View {
-        NavigationStack(path: $path) {
-            GeometryReader { proxy in
-                form
-                    .contentMargins(
-                        .horizontal, max(Tokens.Spacing.xl, (proxy.size.width - Self.columnWidth) / 2), for: .scrollContent
-                    )
-            }
-            .background(Tokens.Colors.libraryBackground)
-            .overlay(alignment: .topLeading) { closeButton }
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: SettingsRoute.self) { _ in
-                if let sync {
+        GeometryReader { proxy in
+            Group {
+                if showsDevices, let sync {
                     DevicesView(sync: sync)
+                } else {
+                    form
                 }
             }
+            // Level with the library's covers; no wider than the column.
+            .contentMargins(.leading, chrome.margin, for: .scrollContent)
+            .contentMargins(.trailing, max(chrome.margin, proxy.size.width - chrome.margin - Self.columnWidth), for: .scrollContent)
+            .scrollContentBackground(.hidden)
         }
-        // A full-screen cover keeps its own status bar: follow "Hide status bar" like the rest of the app.
-        .statusBarHidden(hidesStatusBar)
+        .background { Rectangle().fill(Tokens.Colors.libraryBackground).ignoresSafeArea() }
+        .safeAreaBar(edge: .top) { header }
+        .onChange(of: sync?.folderName) { _, name in
+            if name == nil {
+                showsDevices = false
+            }
+        }
     }
 
-    private var closeButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .scaledFont(size: 16, weight: .medium)
+    /// Where the library header's title sits: a sidebar (or back) button, then the serif title.
+    private var header: some View {
+        HStack(spacing: Tokens.Spacing.m) {
+            if showsDevices {
+                circleButton("Settings", systemImage: "chevron.backward") {
+                    withAnimation(.snappy(duration: 0.25)) { showsDevices = false }
+                }
+                .accessibilityIdentifier("settingsBack")
+            } else if let showSidebar {
+                circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
+                    .accessibilityIdentifier("sidebarButton")
+            }
+            Text(showsDevices ? "Devices" : "Settings")
+                .font(.libraryTitle)
+                .tracking(-0.5)
+                .foregroundStyle(Tokens.Colors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("settingsTitle")
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, chrome.margin + (hugsLeadingEdge ? chrome.windowControls.leading : 0))
+        .padding(.trailing, chrome.margin)
+        .padding(.top, Tokens.Spacing.l)
+        .padding(.bottom, Tokens.Spacing.s)
+    }
+
+    private func circleButton(_ label: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .scaledFont(size: 17, weight: .medium)
                 .foregroundStyle(Tokens.Colors.pillText)
                 .frame(width: 40, height: 40)
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .circle)
-        .padding(.leading, Tokens.Spacing.xxl)
-        .padding(.top, Tokens.Spacing.l)
-        .accessibilityLabel("Close")
-        .accessibilityIdentifier("closeSettings")
+        .accessibilityLabel(label)
     }
 
     private var form: some View {
         Form {
-            Section {
-                Text("Settings")
-                    .font(.libraryTitle)
-                    .foregroundStyle(Tokens.Colors.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 64, leading: Tokens.Spacing.xs, bottom: 0, trailing: 0))
-            }
             Section("Writing") {
                 SettingRow(.tapToUndo, "Tap to undo", "Tap with two fingers to undo, three to redo.") {
                     Toggle("Tap to undo", isOn: $tapToUndo)
@@ -111,13 +133,14 @@ struct SettingsView: View {
                 }
             }
             if let sync {
-                SyncSettingsSection(sync: sync)
+                SyncSettingsSection(sync: sync) {
+                    withAnimation(.snappy(duration: 0.25)) { showsDevices = true }
+                }
             }
             #if DEBUG
                 Section("Developer") {
                     if let showsGallery {
                         Button("Design System gallery") {
-                            dismiss()
                             showsGallery.wrappedValue = true
                         }
                     }
@@ -127,7 +150,6 @@ struct SettingsView: View {
                 LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
             }
         }
-        .scrollContentBackground(.hidden)
     }
 }
 
@@ -172,4 +194,9 @@ enum NewPages: String {
     case manual
     /// A blank page always waits after the last page with content.
     case automatic
+}
+
+extension EnvironmentValues {
+    /// Goes back to the library with Settings showing (#228, the editor's ⋯ menu); `nil` in previews.
+    @Entry var showSettings: (() -> Void)?
 }

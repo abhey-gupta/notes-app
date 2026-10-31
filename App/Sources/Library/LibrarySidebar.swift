@@ -8,10 +8,13 @@ import UniformTypeIdentifiers
 /// Library sidebar (#117, mock B): All Notebooks, then the folder tree to any depth. An open folder lists its
 /// subfolders, then its notebooks (a cover-coloured book; tap opens). Docked beside the covers in wide
 /// windows, over them otherwise (``LibraryScreen``). Covers and notebook rows drop onto a folder row (or
-/// All Notebooks, to unfile); hovering a closed folder springs it open.
+/// All Notebooks, to unfile); hovering a closed folder springs it open. Settings sits at the foot (#228) and
+/// shows in the detail area.
 struct LibrarySidebar: View {
     let library: any LibraryModel
     @Binding var folder: FolderID?
+    /// Settings shows in the detail area instead of the notebooks (#228).
+    @Binding var showsSettings: Bool
     @Binding var expanded: Set<FolderID>
     @Binding var prompt: LibraryPrompt?
     let zoom: Namespace.ID
@@ -53,6 +56,7 @@ struct LibrarySidebar: View {
                 .padding(.bottom, Tokens.Spacing.xxl)
             }
             .scrollIndicators(.hidden)
+            settingsRow
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background { Rectangle().fill(Tokens.Colors.librarySidebar).ignoresSafeArea() }
@@ -77,23 +81,24 @@ struct LibrarySidebar: View {
     }
 
     private func allRow(count: Int) -> some View {
-        row(depth: 0, selected: folder == nil, target: .all) {
+        let selected = folder == nil && !showsSettings
+        return row(depth: 0, selected: selected, target: .all) {
             Button {
                 select(nil)
             } label: {
-                label("All Notebooks", selected: folder == nil, target: .all, count: count) {
+                label("All Notebooks", selected: selected, target: .all, count: count) {
                     Image(systemName: "books.vertical")
                 }
             }
             .buttonStyle(.plain)
-            .rowAccessibility("All Notebooks", count: count, selected: folder == nil)
+            .rowAccessibility("All Notebooks", count: count, selected: selected)
             .accessibilityIdentifier("folder-All Notebooks")
         }
         .dropsNotebooks(on: .all, target: $dropTarget) { library.move($0, to: nil) }
     }
 
     private func folderRow(_ item: LibraryFolder, depth: Int, contents: Contents) -> some View {
-        let selected = folder == item.id
+        let selected = folder == item.id && !showsSettings
         let isOpen = expanded.contains(item.id)
         let hasContents = contents.hasContents(item.id)
         let count = library.notebookCount(inSubtree: item.id)
@@ -165,6 +170,30 @@ struct LibrarySidebar: View {
         }
     }
 
+    /// Pinned under the tree, a hairline above it.
+    private var settingsRow: some View {
+        row(depth: 0, selected: showsSettings, target: nil) {
+            Button {
+                withAnimation(.snappy(duration: 0.25)) { showsSettings = true }
+                didPick()
+            } label: {
+                label("Settings", selected: showsSettings, target: nil, count: nil) {
+                    Image(systemName: Symbol.settings.name)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Settings")
+            .accessibilityAddTraits(showsSettings ? [.isButton, .isSelected] : .isButton)
+            .accessibilityIdentifier("settingsRow")
+        }
+        .padding(.horizontal, Tokens.Spacing.m)
+        .padding(.vertical, Tokens.Spacing.s)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Tokens.Colors.separator).frame(height: 0.5)
+        }
+    }
+
     private var newFolderRow: some View {
         row(depth: 0, selected: false, target: nil) {
             Button {
@@ -178,6 +207,31 @@ struct LibrarySidebar: View {
             .accessibilityIdentifier("newFolder")
         }
     }
+
+    // MARK: Actions
+
+    private func select(_ id: FolderID?) {
+        withAnimation(.snappy(duration: 0.25)) {
+            folder = id
+            showsSettings = false
+            if let id {
+                expanded.insert(id)
+            }
+        }
+        didPick()
+    }
+
+    private func toggle(_ id: FolderID) {
+        withAnimation(.snappy(duration: 0.25)) {
+            if expanded.remove(id) == nil {
+                expanded.insert(id)
+            }
+        }
+    }
+}
+
+extension LibrarySidebar {
+    // MARK: Row parts
 
     private func disclosure(_ name: String, isOpen: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -261,106 +315,6 @@ struct LibrarySidebar: View {
         .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
-
-    // MARK: Actions
-
-    private func select(_ id: FolderID?) {
-        withAnimation(.snappy(duration: 0.25)) {
-            folder = id
-            if let id {
-                expanded.insert(id)
-            }
-        }
-        didPick()
-    }
-
-    private func toggle(_ id: FolderID) {
-        withAnimation(.snappy(duration: 0.25)) {
-            if expanded.remove(id) == nil {
-                expanded.insert(id)
-            }
-        }
-    }
-}
-
-extension LibrarySidebar {
-    // MARK: Tree
-
-    private enum Row: Identifiable {
-        case folder(LibraryFolder, depth: Int)
-        case notebook(NotebookSummary, depth: Int)
-
-        var id: String {
-            switch self {
-            case let .folder(item, _): "f\(item.id)"
-            case let .notebook(notebook, _): "n\(notebook.id)"
-            }
-        }
-    }
-
-    /// Folders and notebooks by parent, built once per render.
-    private struct Contents {
-        let folders: [FolderID?: [LibraryFolder]]
-        let notebooks: [FolderID: [NotebookSummary]]
-
-        @MainActor
-        init(_ library: any LibraryModel) {
-            let all = library.folders
-            let topLevel = Set(all.children(of: nil).map(\.id))
-            folders = Dictionary(grouping: all) { topLevel.contains($0.id) ? nil : $0.parentID }
-            let filed = library.notebooks.compactMap { notebook in notebook.folderID.map { ($0, notebook) } }
-            notebooks = Dictionary(grouping: filed, by: \.0).mapValues { $0.map(\.1).sorted(by: .title) }
-        }
-
-        func hasContents(_ id: FolderID) -> Bool {
-            folders[id] != nil || notebooks[id] != nil
-        }
-    }
-
-    /// The visible tree, depth first: an open folder's subfolders, then its notebooks.
-    private func rows(_ contents: Contents) -> [Row] {
-        var rows: [Row] = []
-        func add(_ parent: FolderID?, depth: Int) {
-            for item in contents.folders[parent] ?? [] {
-                rows.append(.folder(item, depth: depth))
-                guard expanded.contains(item.id) else { continue }
-                add(item.id, depth: depth + 1)
-                rows += (contents.notebooks[item.id] ?? []).map { .notebook($0, depth: depth + 1) }
-            }
-        }
-        add(nil, depth: 0)
-        return rows
-    }
-}
-
-/// Where a dragged notebook would land.
-enum DropTarget: Hashable {
-    /// All Notebooks: no folder.
-    case all
-    case folder(FolderID)
-}
-
-/// A notebook being dragged inside the app (cover or sidebar row → sidebar folder).
-struct NotebookReference: Codable, Transferable {
-    let id: NotebookID
-
-    /// The notebook last picked up, for a drop target to show before the drop loads it (#175).
-    @MainActor static var dragged: NotebookID?
-
-    /// The payload of a drag starting now (`draggable` asks for it as the drag begins).
-    @MainActor static func picking(_ id: NotebookID) -> NotebookReference {
-        dragged = id
-        return NotebookReference(id: id)
-    }
-
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .notebookReference)
-    }
-}
-
-extension UTType {
-    /// Declared in Info.plist (`UTExportedTypeDeclarations`).
-    static let notebookReference = UTType(exportedAs: "com.abhey.notespace.notebook-reference")
 }
 
 private extension View {
