@@ -31,7 +31,7 @@ final class SyncModel {
         case idle(SyncSummary)
         case sending(SyncProgress)
         case receiving(SyncProgress)
-        /// Sent; iCloud Drive is still uploading `pending` notebooks.
+        /// Sent; iCloud Drive is still uploading `pending` notebooks (0: only the log and device record).
         case uploading(pending: Int)
         /// The bookmark no longer resolves: choose the folder again.
         case folderUnavailable
@@ -107,6 +107,7 @@ final class SyncModel {
     @ObservationIgnored var uploadTask: Task<Void, Never>?
     /// Files written that may still be uploading.
     @ObservationIgnored var uploading: [URL] = []
+    /// Most files seen still uploading this round (the hairline's denominator).
     @ObservationIgnored var uploadPeak = 0
     @ObservationIgnored var isBackground = false
     @ObservationIgnored var backgroundTask = UIBackgroundTaskIdentifier.invalid
