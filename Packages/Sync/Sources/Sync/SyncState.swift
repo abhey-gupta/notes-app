@@ -237,6 +237,8 @@ public struct Garbage: Hashable, Sendable, Codable {
 }
 
 /// A file's modification date and size.
+/// A local file's date and size, the marker for the cover. Dates compare at millisecond precision: the state
+/// file stores them as milliseconds, and a finer comparison re-sent every cover after each launch.
 public struct FileStamp: Hashable, Sendable, Codable {
     public var modified: Date
     public var size: Int64
@@ -251,6 +253,19 @@ public struct FileStamp: Hashable, Sendable, Codable {
         guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]),
               values.isRegularFile == true, let modified = values.contentModificationDate else { return nil }
         return FileStamp(modified: modified, size: Int64(values.fileSize ?? 0))
+    }
+
+    private var milliseconds: Int64 {
+        Int64((modified.timeIntervalSince1970 * 1000).rounded())
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.milliseconds == rhs.milliseconds && lhs.size == rhs.size
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(milliseconds)
+        hasher.combine(size)
     }
 }
 

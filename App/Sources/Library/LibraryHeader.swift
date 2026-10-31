@@ -48,7 +48,8 @@ struct LibraryHeader: View {
     }
 
     private var header: some View {
-        // The title stays level with the controls; the sync line grows the header below it.
+        // The title stays level with the controls; the sync line has a fixed slot under the title, so the bar
+        // never changes height (nothing shifts; its scroll-edge effect would follow anything hung below it).
         HStack(alignment: .titleCenter, spacing: Tokens.Spacing.m) {
             if let showSidebar {
                 circleButton("Show Sidebar", systemImage: "sidebar.leading", action: showSidebar)
@@ -74,6 +75,7 @@ struct LibraryHeader: View {
                     }
                     .alignmentGuide(.titleCenter) { $0[VerticalAlignment.center] }
                 SyncStatusLine()
+                    .frame(height: SyncStatusLine.slot, alignment: .top)
             }
             .layoutPriority(1)
             Spacer(minLength: Tokens.Spacing.xxl)
@@ -253,7 +255,7 @@ struct LibraryHeader: View {
     }
 }
 
-/// Compact chrome's serif title, scrolling with the content (#118), with the sync line under it (#225).
+/// Compact chrome's serif title, scrolling with the content (#118), with the sync line's slot under it (#225).
 struct CompactLibraryTitle: View {
     let title: String
 
@@ -266,6 +268,7 @@ struct CompactLibraryTitle: View {
                 .lineLimit(2)
                 .accessibilityAddTraits(.isHeader)
             SyncStatusLine()
+                .frame(height: SyncStatusLine.slot, alignment: .top)
         }
     }
 }

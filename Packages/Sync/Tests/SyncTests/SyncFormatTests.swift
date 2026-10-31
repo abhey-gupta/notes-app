@@ -172,3 +172,13 @@ struct SyncFormatTests {
         #expect(SyncFolder.displayName(for: URL(filePath: "/x/File Provider Storage/Sync", directoryHint: .isDirectory)) == "Sync")
     }
 }
+
+struct FileStampTests {
+    @Test func stampSurvivesTheStateFileRoundTrip() throws {
+        let stamp = FileStamp(modified: Date(timeIntervalSince1970: 1_793_458_846.996_404), size: 34121)
+        let decoded = try #require(SyncJSON.decode(FileStamp.self, from: SyncJSON.encode(stamp)))
+        #expect(decoded == stamp)
+        let twice = try #require(SyncJSON.decode(FileStamp.self, from: SyncJSON.encode(decoded)))
+        #expect(twice == stamp)
+    }
+}

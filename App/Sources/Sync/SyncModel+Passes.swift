@@ -136,11 +136,19 @@ extension SyncModel {
             )
         case .receiving:
             status = .receiving(progress)
-            let from = progress.device.map { "Updating from \($0)" } ?? "Updating \(progress.notebook)"
-            line = .progress(
-                "\(from) · \(progress.done) of \(EditedLabel.pages(progress.total))",
-                fraction: Double(progress.done) / Double(max(progress.total, 1))
-            )
+            // No pages: a metadata-only write (a rename, a settled marker). From another device it is a
+            // moment's "Updating from iPhone…"; this device's own never shows ("0 of 0 pages" said nothing).
+            if progress.total > 0 {
+                let from = progress.device.map { "Updating from \($0)" } ?? "Updating \(progress.notebook)"
+                line = .progress(
+                    "\(from) · \(progress.done) of \(EditedLabel.pages(progress.total))",
+                    fraction: Double(progress.done) / Double(max(progress.total, 1))
+                )
+            } else if let device = progress.device {
+                line = .progress("Updating from \(device)…", fraction: 0)
+            } else {
+                line = nil
+            }
             if adopts {
                 adoptionEnd?.cancel()
                 adoptionEnd = nil

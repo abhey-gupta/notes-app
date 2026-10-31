@@ -2,11 +2,15 @@ import DesignSystem
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Under the library title while sync sends, receives or uploads (#174 mock 05-D, #225 mock 03): "Sending
-/// Thermodynamics · 2 pages" or "Updating from iPhone · 3 of 7 pages" in caption grey with a 120 pt hairline,
-/// then "Synced just now" or "Updated from iPhone" for 2 s, then it folds away. Nothing when idle or off.
+/// Under the library title, in a slot the title block always reserves (#225 mock 03; the slot keeps the bar
+/// from resizing): "Sending Thermodynamics · 2 pages" or "Updating from iPhone · 3 of 7 pages" in caption grey
+/// with a 120 pt hairline, then "Synced just now" or "Updated from iPhone" for 2 s, then it fades. Nothing
+/// when idle or off.
 struct SyncStatusLine: View {
     @Environment(SyncModel.self) private var sync: SyncModel?
+
+    /// The slot’s height: one caption line, drawn tight under the title, with the rest as gap to the content.
+    static let slot: CGFloat = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -21,7 +25,7 @@ struct SyncStatusLine: View {
                             .frame(width: 120)
                     }
                 }
-                .padding(.top, 6)
+                .padding(.top, -4) // up into the serif’s descender room: it belongs to the title, not the content
                 .transition(.opacity)
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("syncStatus")
