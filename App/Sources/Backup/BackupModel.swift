@@ -207,7 +207,7 @@ final class BackupModel {
     /// Back Up Now (and every trigger past its debounce).
     func runNow() {
         debounceTask?.cancel()
-        guard let engine else { return }
+        guard engine != nil else { return }
         backgroundEnd?.cancel()
         if isRunning {
             runsAgain = true
@@ -215,10 +215,12 @@ final class BackupModel {
         }
         isRunning = true
         Task(priority: .utility) {
-            repeat {
+            runsAgain = true
+            // The current engine each time: a folder chosen mid-run gets its own run next.
+            while runsAgain, let engine {
                 runsAgain = false
                 await run(engine)
-            } while runsAgain && self.engine === engine
+            }
             isRunning = false
             if backgroundTask != .invalid {
                 backgroundEnd = Task {
@@ -241,9 +243,12 @@ final class BackupModel {
             runID += 1
             if run.notebooks > 0 {
                 uploading += run.written
-                await checkUploads(engine, summary: run.summary)
-            } else if uploading.isEmpty {
+            }
+            // Polling pauses during runs; any run picks it up again.
+            if uploading.isEmpty {
                 status = .idle(run.summary)
+            } else {
+                await checkUploads(engine, summary: run.summary)
             }
         } catch {
             guard self.engine === engine else { return }
@@ -277,7 +282,9 @@ final class BackupModel {
         let written = uploading
         let pending = await engine.pendingUploads(written)
         guard pending > 0 else {
-            uploading = []
+            // A run may have added files while this check was out.
+            uploading.removeFirst(min(written.count, uploading.count))
+            guard uploading.isEmpty else { return await checkUploads(engine, summary: summary) }
             uploadPeak = 0
             status = .idle(summary)
             return showDone()
