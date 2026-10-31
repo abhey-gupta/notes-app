@@ -165,7 +165,8 @@ private struct BarSurface: View {
 }
 
 /// ⋯: the notebook's options under its title (paper, template, Keep exact colors on Night paper), Share and
-/// Focus mode, then the tab actions with their keyboard shortcuts. DEBUG adds a dock picker.
+/// Focus mode, Settings (full screen, #228), then the tab actions with their keyboard shortcuts. DEBUG adds a dock
+/// picker.
 ///
 /// Compact chrome (#118): Add Photo and Laser Pointer join it (no room on the bar); focus mode (regular
 /// chrome only) leaves it.
@@ -193,6 +194,7 @@ struct MoreMenu: View {
 
     @State private var showsShare = false
     @State private var showsPhotos = false
+    @State private var showsSettings = false
     @State private var presenter = ActivityPresenter()
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -200,6 +202,7 @@ struct MoreMenu: View {
         menu
             .background(ActivityAnchor(presenter: presenter))
             .popover(isPresented: $showsShare) { sharePopover }
+            .fullScreenCover(isPresented: $showsSettings) { SettingsView(showsGallery: nil) }
             .background {
                 Color.clear.popover(isPresented: $showsPhotos) {
                     PhotoFlyout(paper: paper) { data in
@@ -252,6 +255,9 @@ struct MoreMenu: View {
                 } else {
                     Button("Focus mode", systemImage: Symbol.focus.name) { state.enterFocus() }
                 }
+            }
+            Section {
+                Button("Settings", systemImage: Symbol.settings.name) { showsSettings = true }
             }
             if !isCompact {
                 split

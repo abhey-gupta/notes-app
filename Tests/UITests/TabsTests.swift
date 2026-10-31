@@ -135,4 +135,18 @@ final class TabsTests: XCTestCase {
         toggle.switches.firstMatch.tap()
         XCTAssertEqual(toggle.value as? String, wasOn ? "1" : "0", "back to how it was")
     }
+
+    @MainActor
+    func testSettingsFromTheEditorMenu() {
+        let app = launch(["-openNotebook", "Thermodynamics"])
+        let more = app.buttons["More"]
+        XCTAssertTrue(more.waitForExistence(timeout: 10))
+        more.tap()
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(app.switches["tapToUndo"].waitForExistence(timeout: 5), "Settings, full screen, over the editor")
+        app.buttons["closeSettings"].tap()
+        XCTAssertTrue(app.switches["tapToUndo"].waitForNonExistence(timeout: 5))
+        more.tap()
+        XCTAssertTrue(app.buttons["Share"].waitForExistence(timeout: 5), "back in the editor: ⋯ opens again")
+    }
 }
