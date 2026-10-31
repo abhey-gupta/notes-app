@@ -96,6 +96,8 @@ public final class PencilKitInkEngine: NSObject, InkEngine {
     var hasSeenPencil = false
 
     var pageViews: [PageID: PageLayerView] = [:]
+    /// Ghost ink per page (`+Ghost`, #225).
+    var ghosts: [PageID: [Stroke]] = [:]
     var isSettingDrawing = false
     var eraserProgress: EraserProgress?
     /// Full canvas rebuilds so far (tests check the commit echo path doesn't rebuild).

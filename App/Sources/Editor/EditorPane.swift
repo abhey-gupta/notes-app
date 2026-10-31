@@ -5,9 +5,9 @@ import Library
 import SwiftUI
 import Tools
 
-/// One notebook in the editor (#175): its canvas, its own bar, the lasso context bar, the widen hint and
-/// the pages overview, all inside the pane's frame. The editor shows one pane, or two in split view;
-/// ``EditorScreen`` places them and owns what they share (the tools capsule, focus mode).
+/// One notebook in the editor (#175): its canvas, its own bar, the lasso context bar, the widen hint, sync's
+/// conflict pill (#225) and the pages overview, all inside the pane's frame. The editor shows one pane, or two
+/// in split view; ``EditorScreen`` places them and owns what they share (the tools capsule, focus mode).
 struct EditorPane: View {
     let pane: OpenTabs.Pane
     let session: NotebookSession
@@ -97,6 +97,10 @@ struct EditorPane: View {
                 }
             }
             .animation(FlightTiming.segment(0, 0.3, opening: chromeHidden, reduceMotion: reduceMotion), value: chromeHidden)
+            // Sync conflicts (#225): ghost ink always, the pill unless the pages overview is up.
+            ConflictLayer(session: session)
+                .opacity(chromeHidden ? 0 : 1)
+                .chromeGlass(for: notebook.theme.style)
             if pages.isPresented {
                 PagesOverview(
                     model: pages, state: state, viewport: viewport, title: notebook.title, paper: notebook.theme.style

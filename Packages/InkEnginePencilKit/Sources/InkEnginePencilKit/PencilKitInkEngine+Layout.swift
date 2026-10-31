@@ -129,6 +129,7 @@ extension PencilKitInkEngine {
                 markScale: markScale, colors: colors
             )
             layoutArtwork(view, page: page, screenScale: screenScale)
+            refreshGhost(view, page: page.id)
             let canvas = canvas(for: page.id)
             guard var snapshot else { continue }
             refreshPhotos(view, snapshot: snapshot)

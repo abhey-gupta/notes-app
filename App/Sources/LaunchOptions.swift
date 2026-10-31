@@ -14,6 +14,8 @@ import Tools
 ///   instead of the container's. Perf tests point it at fixture libraries the test runner builds (#15).
 /// - `-syncRoot <path>`: sync through this folder (created if missing) instead of a bookmarked one; no Files
 ///   picker (#225 UI tests). Simulator Release builds honor it too.
+/// - `-syncHoldSeconds <s>`: the cards' "From ‹device›" tag and the adopt card stay this long (UI tests poll
+///   slower than their 2 s / 1.5 s).
 /// - `-seedNotebooks <n>`: if the on-disk library is empty, fill it with n mock-shaped notebooks.
 /// - `-openNotebook <title>`: start in the editor for that notebook (`first` = most recent).
 /// - `-focusMode YES`: with `-openNotebook`, start in focus mode (compact pill, other chrome hidden).
@@ -106,6 +108,16 @@ enum LaunchOptions {
             }
         #endif
         return StoreLibrary()
+    }
+
+    /// `-syncHoldSeconds`: how long sync's transient card tag and adopt card stay; `nil` for the defaults.
+    static var syncHold: Duration? {
+        #if DEBUG
+            let seconds = UserDefaults.standard.double(forKey: "syncHoldSeconds")
+            return seconds > 0 ? .seconds(seconds) : nil
+        #else
+            nil
+        #endif
     }
 
     /// Sync for the on-disk library (none for in-memory ones); `-syncRoot` fixes its folder.

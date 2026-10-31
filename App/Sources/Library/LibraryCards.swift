@@ -10,6 +10,12 @@ struct RecentCard: View {
     var isOpen = false
     let action: () -> Void
 
+    @Environment(SyncModel.self) private var sync: SyncModel?
+
+    private var arrival: SyncDevice? {
+        sync?.arrivals[notebook.id]
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
@@ -31,18 +37,22 @@ struct RecentCard: View {
                     .foregroundStyle(Tokens.Colors.textPrimary)
                     .lineLimit(2)
                     .padding(.top, 12)
-                Text(EditedLabel.recent(notebook, isOpen: isOpen))
-                    .font(.meta)
-                    .foregroundStyle(Tokens.Colors.textSecondary)
-                    .lineLimit(2)
-                    .padding(.top, 3)
+                HStack(spacing: 6) {
+                    Text(EditedLabel.recent(notebook, isOpen: isOpen))
+                        .font(.meta)
+                        .foregroundStyle(Tokens.Colors.textSecondary)
+                        .lineLimit(arrival == nil ? 2 : 1)
+                        .layoutPriority(1)
+                    ArrivalTag(device: arrival)
+                }
+                .padding(.top, 3)
             }
             .contentShape(.rect)
         }
         .buttonStyle(PressableStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(notebook.title)
-        .accessibilityValue(EditedLabel.recent(notebook, isOpen: isOpen))
+        .accessibilityValue(ArrivalTag.value(EditedLabel.recent(notebook, isOpen: isOpen), arrival))
         .accessibilityHint("Opens the notebook")
         .accessibilityIdentifier("recent-\(notebook.title)")
     }
@@ -133,6 +143,12 @@ struct CoverTile: View {
     var isOpen = false
     let action: () -> Void
 
+    @Environment(SyncModel.self) private var sync: SyncModel?
+
+    private var arrival: SyncDevice? {
+        sync?.arrivals[notebook.id]
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
@@ -146,10 +162,14 @@ struct CoverTile: View {
                     // Narrow compact covers: one line, else long words break mid-word.
                     .lineLimit(width < Tokens.Size.cover.width ? 1 : 2)
                     .padding(.top, 12)
-                Text(EditedLabel.pages(notebook.pageCount, isOpen: isOpen))
-                    .font(.meta)
-                    .foregroundStyle(Tokens.Colors.textSecondary)
-                    .padding(.top, 3)
+                HStack(spacing: 6) {
+                    Text(EditedLabel.pages(notebook.pageCount, isOpen: isOpen))
+                        .font(.meta)
+                        .foregroundStyle(Tokens.Colors.textSecondary)
+                        .fixedSize()
+                    ArrivalTag(device: arrival)
+                }
+                .padding(.top, 3)
             }
             .frame(width: width, alignment: .leading)
             .contentShape(.rect)
@@ -157,9 +177,39 @@ struct CoverTile: View {
         .buttonStyle(PressableStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(notebook.title)
-        .accessibilityValue([folder, EditedLabel.pages(notebook.pageCount, isOpen: isOpen)].compactMap(\.self).joined(separator: ", "))
+        .accessibilityValue(ArrivalTag.value(
+            [folder, EditedLabel.pages(notebook.pageCount, isOpen: isOpen)].compactMap(\.self).joined(separator: ", "), arrival
+        ))
         .accessibilityHint("Opens the notebook")
         .accessibilityIdentifier("cover-\(notebook.title)")
+    }
+}
+
+/// "[iPhone] From iPhone" after a card's meta line for 2 s once another device's changes landed (#225, mock
+/// 03-c); nothing otherwise. The meta line keeps its room; a long device name truncates.
+struct ArrivalTag: View {
+    let device: SyncDevice?
+
+    var body: some View {
+        ZStack {
+            if let device {
+                HStack(spacing: 4) {
+                    Image(systemName: device.glyph)
+                        .scaledFont(size: 11, weight: .medium)
+                    Text("From \(device.name)")
+                        .font(.meta)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Tokens.Colors.selection)
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: device)
+    }
+
+    /// A card's accessibility value with the tag: "4 pages, From iPhone".
+    static func value(_ value: String, _ device: SyncDevice?) -> String {
+        device.map { "\(value), From \($0.name)" } ?? value
     }
 }
 

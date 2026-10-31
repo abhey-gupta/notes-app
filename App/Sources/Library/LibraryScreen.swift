@@ -128,6 +128,7 @@ struct LibraryScreen: View {
             open(EditorRoute(id: notebook.id, source: .cover))
         }
         .background { Rectangle().fill(Tokens.Colors.libraryBackground).ignoresSafeArea() }
+        .overlay { AdoptCard() }
         .safeAreaBar(edge: .top) { header }
     }
 

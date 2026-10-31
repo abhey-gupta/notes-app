@@ -18,10 +18,12 @@ extension SyncModel {
         started = true
         guard let engine else { return }
         if let devices = try? await engine.devices() {
+            devicesByID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             deviceCount = Self.active(devices, me: engine.device.id).count
             lastSync = devices.first { $0.id == engine.device.id }?.lastSeen
             status = .idle(summary)
         }
+        loadConflicts()
         syncNow()
     }
 
@@ -60,6 +62,9 @@ extension SyncModel {
     func openNotebooksChanged(_ ids: Set<NotebookID>) {
         let closed = openNotebooks.subtracting(ids)
         openNotebooks = ids
+        for id in closed {
+            engine?.didClose(id)
+        }
         if let engine {
             let previous = openUpdate
             openUpdate = Task { [weak self] in

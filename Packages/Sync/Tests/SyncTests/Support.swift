@@ -1,3 +1,4 @@
+import Dispatch
 import Document
 import Foundation
 import InkModel
@@ -8,8 +9,8 @@ import Testing
 
 /// The real folder (``CoordinatedFileSystem`` over a temp directory) as one device sees it, with faults:
 /// files that arrive late (``delay(_:lists:)``, ``hold(_:)``), evicted files that download only after
-/// ``SyncFileSystem/startDownload(_:)`` and a later listing, listings missing names (``dropOnce(_:)``).
-/// Records every path written.
+/// ``SyncFileSystem/startDownload(_:)`` and a later listing, listings missing names (``dropOnce(_:)``), a copy
+/// out of the folder that stalls mid-pull (``stallCopyOut(_:)``). Records every path written.
 final class FaultyFileSystem: SyncFileSystem {
     private struct Faults {
         /// Path prefix → visible from this many `list` calls on.
@@ -21,10 +22,13 @@ final class FaultyFileSystem: SyncFileSystem {
         var lists = 0
         var writes: [String] = []
         var downloadRequests: [String] = []
+        var stalled: String?
+        var stalling = false
     }
 
     let inner: CoordinatedFileSystem
     private let faults = Mutex(Faults())
+    private let stallRelease = DispatchSemaphore(value: 0)
 
     init(root: URL) {
         inner = CoordinatedFileSystem(root: root, timeout: .seconds(10))
@@ -52,6 +56,20 @@ final class FaultyFileSystem: SyncFileSystem {
     /// The next listing that has `name` leaves it out.
     func dropOnce(_ name: String) {
         _ = faults.withLock { $0.dropped.insert(name) }
+    }
+
+    /// The next copy out of a path under `prefix` blocks (the engine's thread with it) until ``releaseStall()``.
+    func stallCopyOut(_ prefix: String) {
+        faults.withLock { $0.stalled = prefix }
+    }
+
+    /// A stalled copy has started.
+    var isStalling: Bool {
+        faults.withLock { $0.stalling }
+    }
+
+    func releaseStall() {
+        stallRelease.signal()
     }
 
     var writes: [String] {
@@ -111,6 +129,15 @@ final class FaultyFileSystem: SyncFileSystem {
 
     func copyOut(_ path: String, to local: URL) throws(SyncError) {
         guard !hidden(path), !evicted(path) else { throw .failed("not downloaded: \(path)") }
+        let stalls = faults.withLock { f in
+            guard let prefix = f.stalled, path.hasPrefix(prefix) else { return false }
+            f.stalled = nil
+            f.stalling = true
+            return true
+        }
+        if stalls {
+            stallRelease.wait()
+        }
         try inner.copyOut(path, to: local)
     }
 
@@ -254,6 +281,23 @@ final class Device: Sendable {
             rev: page.rev + 1
         ))
         try await store.refresh(id)
+    }
+
+    /// Writes the stroke file `data` into the page at `index` as an editor would (a checkpoint at the next
+    /// `rev`), then tells the library. Returns the page's new `rev`.
+    func write(_ data: Data, to id: NotebookID, page index: Int) async throws -> UInt64 {
+        var package = try await package(id)
+        let page = try package.loadPage(at: index)
+        let content = try StrokeCodec.decodeContent(data)
+        try package.savePage(Page(
+            id: page.id,
+            template: page.template,
+            strokes: content.strokes,
+            images: content.images,
+            rev: page.rev + 1
+        ))
+        try await store.refresh(id)
+        return page.rev + 1
     }
 
     /// The stroke file of the page at `index` (nil: no ink).
