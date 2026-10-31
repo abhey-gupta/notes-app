@@ -6,6 +6,8 @@ struct SettingsView: View {
     static let tapToUndoKey = "tapToUndo"
     /// `UserDefaults` key of "Hold to snap shapes" (#165).
     static let snapsShapesKey = "snapsShapes"
+    /// `UserDefaults` key of "Hold to erase" (#211).
+    static let holdsToEraseKey = "holdsToErase"
     /// `UserDefaults` key of "New pages" (#172).
     static let newPagesKey = "newPages"
     /// `UserDefaults` key of "Hide status bar" (#191).
@@ -17,6 +19,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(tapToUndoKey) private var tapToUndo = true
     @AppStorage(snapsShapesKey) private var snapsShapes = true
+    @AppStorage(holdsToEraseKey) private var holdsToErase = true
     @AppStorage(newPagesKey) private var newPages = NewPages.manual
     @AppStorage(hidesStatusBarKey) private var hidesStatusBar = false
 
@@ -27,10 +30,17 @@ struct SettingsView: View {
                     .accessibilityIdentifier("tapToUndo")
                 Toggle("Hold to snap shapes", isOn: $snapsShapes)
                     .accessibilityIdentifier("snapsShapes")
+                Toggle("Hold to erase", isOn: $holdsToErase)
+                    .accessibilityIdentifier("holdsToErase")
             } header: {
                 Text("Gestures")
             } footer: {
-                Text("Tap with two fingers to undo, three to redo. Hold the Pencil still at a stroke's end to make it a perfect shape.")
+                Text(
+                    """
+                    Tap with two fingers to undo, three to redo. Hold the Pencil still at a stroke's end to make it a perfect \
+                    shape, or where it touches down to erase until you lift it.
+                    """
+                )
             }
             Section {
                 Picker("New pages", selection: $newPages) {

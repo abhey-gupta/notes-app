@@ -32,6 +32,7 @@ struct EditorPane: View {
     @State private var barHeight: CGFloat = 0
     @AppStorage(SettingsView.tapToUndoKey) private var tapToUndo = true
     @AppStorage(SettingsView.snapsShapesKey) private var snapsShapes = true
+    @AppStorage(SettingsView.holdsToEraseKey) private var holdsToErase = true
     @AppStorage(SettingsView.newPagesKey) private var newPages = NewPages.manual
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -137,8 +138,10 @@ struct EditorPane: View {
                 notebook.theme = theme
             }
         }
-        .onChange(of: snapsShapes) { _, on in
-            session.setTool(tools.active, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: on)
+        .onChange(of: [snapsShapes, holdsToErase]) {
+            session.setTool(
+                tools.active, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: snapsShapes, holdsToErase: holdsToErase
+            )
         }
         .onChange(of: tapToUndo) { _, on in session.host.allowsTapUndo = on }
         .onChange(of: newPages) { _, mode in session.addsPagesAutomatically = mode == .automatic }
@@ -165,7 +168,9 @@ struct EditorPane: View {
 
     /// Settings and the current tool, applied to a session when it comes on screen.
     private func configure(_ session: NotebookSession) {
-        session.setTool(tools.active, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: snapsShapes)
+        session.setTool(
+            tools.active, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: snapsShapes, holdsToErase: holdsToErase
+        )
         session.host.allowsTapUndo = tapToUndo
         session.addsPagesAutomatically = newPages == .automatic
         session.host.margins.top = topMargin

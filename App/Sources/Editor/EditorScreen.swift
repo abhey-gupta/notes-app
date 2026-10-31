@@ -44,6 +44,7 @@ struct EditorScreen: View {
     /// A tab dragged over the page: the half it would land on.
     @State private var dropSide: OpenTabs.Pane?
     @AppStorage(SettingsView.snapsShapesKey) private var snapsShapes = true
+    @AppStorage(SettingsView.holdsToEraseKey) private var holdsToErase = true
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -148,7 +149,9 @@ struct EditorScreen: View {
         }
         .onChange(of: tools.active) { _, tool in
             for entry in entries {
-                entry.session.setTool(tool, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: snapsShapes)
+                entry.session.setTool(
+                    tool, allowsFingerDrawing: LaunchOptions.allowsFingerDrawing, snapsShapes: snapsShapes, holdsToErase: holdsToErase
+                )
             }
         }
         .onChange(of: scenePhase) { _, phase in

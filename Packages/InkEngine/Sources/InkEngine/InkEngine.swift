@@ -67,6 +67,9 @@ public protocol InkEngineDelegate: AnyObject {
     func engine(_ engine: any InkEngine, didReceiveLasso path: [CGPoint], to page: PageID)
     /// A pen, eraser or lasso gesture began (focus-mode chrome collapse; new eraser gesture).
     func engineDidBeginStroke(_ engine: any InkEngine)
+    /// A pen touch was held still where it went down (#211): switch to the eraser until it lifts. Once the
+    /// eraser is set, the touch erases like an eraser stroke (from a new ``engineDidBeginStroke(_:)``).
+    func engineDidHoldToErase(_ engine: any InkEngine)
     /// `page` shows its ink sharp (final raster or vectors drawn); fires on every such event. The app's
     /// `canvas.firstSharpTile` signpost ends on the first one after an open.
     func engine(_ engine: any InkEngine, didShowSharpInkOn page: PageID)

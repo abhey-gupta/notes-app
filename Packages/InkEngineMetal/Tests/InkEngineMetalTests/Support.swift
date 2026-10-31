@@ -37,6 +37,8 @@ final class Recorder: InkEngineDelegate {
         begins += 1
     }
 
+    func engineDidHoldToErase(_: any InkEngine) {}
+
     func engine(_: any InkEngine, didShowSharpInkOn page: PageID) {
         sharp.append(page)
     }

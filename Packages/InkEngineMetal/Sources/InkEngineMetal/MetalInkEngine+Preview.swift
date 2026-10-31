@@ -69,6 +69,7 @@ private final class PreviewHostView: UIView, InkEngineDelegate {
     func engine(_: any InkEngine, didReceiveEraser _: [Sample], to _: PageID) {}
     func engine(_: any InkEngine, didReceiveLasso _: [CGPoint], to _: PageID) {}
     func engineDidBeginStroke(_: any InkEngine) {}
+    func engineDidHoldToErase(_: any InkEngine) {}
     func engine(_: any InkEngine, didShowSharpInkOn _: PageID) {}
 }
 

@@ -114,6 +114,7 @@ final class SessionStore {
 
     private func install(_ session: NotebookSession) -> Entry {
         session.onErased = { [tools] in tools.finishedErasing() }
+        session.onHoldErase = { [tools] in tools.holdToErase() }
         let pencil = PencilGestures(tools: tools, state: session.state)
         pencil.install(on: session.host)
         return Entry(session: session, pencil: pencil)
